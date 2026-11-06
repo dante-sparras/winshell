@@ -39,10 +39,15 @@ function Invoke-DotnetTest {
     param(
         [Parameter(Mandatory)][string] $Filter,
         [Parameter(Mandatory)][string] $ResultsDirectory,
-        [int] $Seed = 1
+        [int] $Seed = 1,
+        [switch] $Serial
     )
     # A native hang timeout ends the run and names the test. More threads than cores expose contention.
-    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
+    # -m:1 is MSBuild's node count, so a Slow run starts one VSTest project after the previous one finishes.
+    # Each project still writes its own results file.
+    $nodes = @()
+    if ($Serial) { $nodes = @('-m:1') }
+    dotnet test (Join-Path $script:Root 'winshell.slnx') --no-build --nologo @nodes --filter $Filter --logger trx --results-directory $ResultsDirectory --blame-hang-timeout 3m --blame-hang-dump-type none -- "xUnit.Seed=$Seed" xUnit.MaxParallelThreads=2x | Out-Host
     $LASTEXITCODE
 }
 
@@ -56,7 +61,7 @@ function Invoke-MainTest {
     Write-Host "Test order seed: $Seed. To run this order again: pwsh scripts/check.ps1 -Tier $Tier -Seed $Seed"
     $results = Join-Path ([IO.Path]::GetTempPath()) ('winshell-test-results-' + [guid]::NewGuid().ToString('N'))
     try {
-        $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Tier $Tier) -ResultsDirectory $results -Seed $Seed
+        $exit = Invoke-DotnetTest -Filter (Get-MainTestFilter -Tier $Tier) -ResultsDirectory $results -Seed $Seed -Serial:($Tier -eq 'Slow')
         if ($exit -ne 0) { return $exit }
         $outcome = Read-TestResult -Directory $results -ProjectCount $ProjectCount
         if ($outcome.Passed -gt 0 -and $outcome.Failed -eq 0 -and $outcome.Complete) { return 0 }
