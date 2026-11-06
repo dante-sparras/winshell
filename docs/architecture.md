@@ -44,7 +44,7 @@ Only a feature may consume its own backend contracts and implementations. Anothe
 
 Test service policy against fake backends on a real `EventQueue`. Fakes supply platform results and signals; the real service supplies the behavior under test. Keep tests that own distinct platform, transport or lifecycle contracts. Preserve assertion strength when moving tests to their new owner.
 
-Media keeps one type per job, the split from #1102. `ISmtcLink` (#1306) stays the seam a test uses to reach one session.
+Media keeps one type per job, the split from #1102. `ISmtcLink` (#1306) stays the seam `SmtcSession` uses to reach Windows' session.
 
 ## Shell
 
