@@ -4,12 +4,10 @@ internal static class KillCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        var choice = InstanceSelection.Select(options);
+        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Kill, Instances.RunDir);
         if (choice.Info is not { } info)
         {
-            Console.Error.WriteLine(choice.Error == InstanceSelection.NoneRunning
-                ? InstanceSelection.NoneToKill
-                : choice.Error);
+            Console.Error.WriteLine(choice.Error);
             return choice.Code;
         }
 

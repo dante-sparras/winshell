@@ -17,7 +17,7 @@ internal static class IpcCommand
             IpcOps.Listen => IpcRequest.ForListen(args[1], args[2]),
             _ => throw new UnreachableException($"No ipc command \"{args[0]}\".")
         };
-        var choice = InstanceSelection.Select(options);
+        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Running, Instances.RunDir);
         if (choice.Info is not { } info)
         {
             Console.Error.WriteLine(choice.Error);

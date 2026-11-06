@@ -4,7 +4,7 @@ internal static class ReloadCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        var choice = InstanceSelection.Select(options);
+        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Running, Instances.RunDir);
         if (choice.Info is not { } info)
         {
             Console.Error.WriteLine(choice.Error);
