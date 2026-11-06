@@ -153,7 +153,10 @@ internal sealed class ShellPlatform : IDisposable
 
     // Screens and the work area
 
-    /// <summary>Raised on the shell's thread when Explorer may have made a taskbar window.</summary>
+    /// <summary>
+    /// Raised on the shell's thread when a panel hears <c>TaskbarCreated</c> or the display changes. The taskbar
+    /// module decides whether that hides a new taskbar window.
+    /// </summary>
     internal event Action? TaskbarMayHaveChanged;
 
     internal void TaskbarCreated()
