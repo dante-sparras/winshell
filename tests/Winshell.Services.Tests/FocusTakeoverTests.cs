@@ -43,10 +43,11 @@ public sealed class FocusTakeoverTests
         using var tapped = new EventWaitHandle(false, EventResetMode.ManualReset, tappedName);
         using var blocked = new EventWaitHandle(false, EventResetMode.ManualReset, blockedName);
         using var holder = StartHolder(stopName, steadyName, tappedName, blockedName, errors);
-        await using var window = await PumpedWindow.Open();
+        PumpedWindow? window = null;
         var passed = false;
         try
         {
+            window = await PumpedWindow.Open();
             Assert.NotEqual(0, window.Handle);
             var grants = 0;
             Wait.Until(() =>
@@ -82,14 +83,42 @@ public sealed class FocusTakeoverTests
         }
         finally
         {
-            stop.Set();
-            Wait.Until(() => holder.HasExited, "the focus holder to exit");
-            if (previous != 0 && previous != window.Handle && Win32.IsWindow(previous))
-                Focus.Take(previous);
-            if (passed && holder.ExitCode != 0)
-                Assert.Fail("The focus holder did not restore the foreground lock (" + holder.ExitCode + "). " +
-                            errors);
+            await ReleaseHolder(stop, holder, previous, window, passed, errors);
         }
+    }
+
+    /// <summary>
+    /// Stops the holder and puts the previous window back. This still runs when opening the test window throws,
+    /// and when the test deadline has already cancelled the wait: that wait would return at once and leave the
+    /// holder's session lock held.
+    /// </summary>
+    private static async Task ReleaseHolder(EventWaitHandle stop, Process holder, nint previous, PumpedWindow? window,
+        bool passed, StringBuilder errors)
+    {
+        stop.Set();
+        try
+        {
+            // Leaving the loop unlocks the session and restores the timeout. Kill is only for a holder that
+            // never notices stop; process exit still releases the foreground lock.
+            if (!holder.HasExited && !holder.WaitForExit(5000))
+                holder.Kill(true);
+        }
+        finally
+        {
+            try
+            {
+                if (previous != 0 && (window == null || previous != window.Handle) && Win32.IsWindow(previous))
+                    Focus.Take(previous);
+            }
+            finally
+            {
+                if (window != null)
+                    await window.DisposeAsync();
+            }
+        }
+
+        if (passed && holder.HasExited && holder.ExitCode != 0)
+            Assert.Fail("The focus holder did not restore the foreground lock (" + holder.ExitCode + "). " + errors);
     }
 
     /// <summary>
@@ -248,20 +277,31 @@ public sealed class FocusTakeoverTests
                                              {
                                                  // A timeout of zero lets every process take the foreground, so the refusal this test
                                                  // exists for never happens. Ten seconds covers this run. Restore zero on every exit,
-                                                 // including a failure to create the window.
+                                                 // including a failure to create the window. A timeout that is still zero must not
+                                                 // reach the foreground lock: that lock alone would look like the refusal.
                                                  uint previous = 0;
                                                  bool imposed = false;
+                                                 bool canLock = false;
                                                  IntPtr hwnd = IntPtr.Zero;
                                                  try
                                                  {
                                                      if (!ReadLock(ref previous))
-                                                         Console.WriteLine("could not read the foreground lock timeout: " + Marshal.GetLastWin32Error());
-                                                     else if (previous == 0)
+                                                     {
+                                                         var error = Marshal.GetLastWin32Error();
+                                                         Console.WriteLine("could not read the foreground lock timeout: " + error);
+                                                         throw new Win32Exception(error);
+                                                     }
+                                                     if (previous == 0)
                                                      {
                                                          imposed = WriteLock(10000);
                                                          if (!imposed)
-                                                             Console.WriteLine("could not set the foreground lock timeout: " + Marshal.GetLastWin32Error());
+                                                         {
+                                                             var error = Marshal.GetLastWin32Error();
+                                                             Console.WriteLine("could not set the foreground lock timeout: " + error);
+                                                             throw new Win32Exception(error);
+                                                         }
                                                      }
+                                                     canLock = previous != 0 || imposed;
                                                      Console.WriteLine("foreground-lock-timeout=" + previous);
                                                      hwnd = CreateWindowExW(0, "STATIC", "winshell-focus-holder", 0x00CF0000 | 0x10000000,
                                                          0, 0, 80, 40, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(null), IntPtr.Zero);
@@ -280,7 +320,7 @@ public sealed class FocusTakeoverTests
                                                              Tap();
                                                              if (GetForegroundWindow() != hwnd)
                                                                  SetForegroundWindow(hwnd);
-                                                             if (GetForegroundWindow() == hwnd)
+                                                             if (GetForegroundWindow() == hwnd && canLock)
                                                              {
                                                                  // Attached SetForegroundWindow can finish after this process has stopped
                                                                  // defending the foreground. Lock so that call fails instead of landing late.
