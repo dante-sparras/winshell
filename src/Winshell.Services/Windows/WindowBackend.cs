@@ -1,4 +1,3 @@
-using Winshell.Input;
 using Winshell.Native;
 
 namespace Winshell.Windows;
@@ -284,36 +283,12 @@ internal sealed class WindowBackend : IWindowBackend
 
     // Requests
 
-    /// <summary>
-    /// Brings a window to the front and focuses it. Windows lets a program take the foreground only in some cases, so
-    /// when asking fails, Winshell attaches to the foreground thread's input, and as a last resort taps an unassigned key.
-    /// </summary>
+    /// <summary>Brings a window to the front and focuses it.</summary>
     public void Activate(nint hwnd)
     {
         if (Win32.IsIconic(hwnd))
             TopLevelWindows.Restore(hwnd);
-        if (Win32.SetForegroundWindow(hwnd) && Win32.GetForegroundWindow() == hwnd)
-            return;
-        var foreground = Win32.GetForegroundWindow();
-        var current = Win32.GetCurrentThreadId();
-        var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
-        if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
-            try
-            {
-                TopLevelWindows.Raise(hwnd);
-                Win32.SetForegroundWindow(hwnd);
-            }
-            finally
-            {
-                Win32.AttachThreadInput(current, other, false);
-            }
-
-        if (Win32.GetForegroundWindow() != hwnd)
-        {
-            // A key press makes this process the one that had the last input, which may take the foreground.
-            KeyMask.Tap();
-            Win32.SetForegroundWindow(hwnd);
-        }
+        Focus.Take(hwnd);
     }
 
     /// <summary>Asks the window to close, as its close button does.</summary>
