@@ -102,12 +102,21 @@ public sealed class FocusTakeoverTests
     {
         if (holder.HasExited)
             Assert.Fail("The focus holder exited early (" + holder.ExitCode + "). " + errors);
-        if (ForegroundProcess() != (uint)holder.Id || !tapped.WaitOne(0))
+        // The holder injects again only while tapped is clear. A foreground it has already lost has to be
+        // cleared here, or the holder stops and this wait runs out its patience.
+        var holderInFront = ForegroundProcess() == (uint)holder.Id;
+        if (!holderInFront || !tapped.WaitOne(0))
+        {
+            if (!holderInFront)
+                tapped.Reset();
             return Refusal.Waiting;
+        }
+
         steady.Set();
         if (ForegroundProcess() != (uint)holder.Id)
         {
             steady.Reset();
+            tapped.Reset();
             return Refusal.Waiting;
         }
 
@@ -267,11 +276,15 @@ public sealed class FocusTakeoverTests
                                                          // signal after taking focus, and only a new tap makes this process the last input.
                                                          if (!steady.WaitOne(0) && !tapped.WaitOne(0) && !blocked.WaitOne(0))
                                                          {
+                                                             LockSetForegroundWindow(2);
                                                              Tap();
                                                              if (GetForegroundWindow() != hwnd)
                                                                  SetForegroundWindow(hwnd);
                                                              if (GetForegroundWindow() == hwnd)
                                                              {
+                                                                 // Attached SetForegroundWindow can finish after this process has stopped
+                                                                 // defending the foreground. Lock so that call fails instead of landing late.
+                                                                 LockSetForegroundWindow(1);
                                                                  tapped.Set();
                                                                  attempts = 0;
                                                              }
@@ -286,6 +299,7 @@ public sealed class FocusTakeoverTests
                                                  }
                                                  finally
                                                  {
+                                                     LockSetForegroundWindow(2);
                                                      if (hwnd != IntPtr.Zero)
                                                          DestroyWindow(hwnd);
                                                      if (imposed && !WriteLock(0))
@@ -331,6 +345,7 @@ public sealed class FocusTakeoverTests
                                              static extern bool GetLock(uint action, uint param, ref uint value, uint winIni);
                                              [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
                                              static extern bool SetLock(uint action, uint param, IntPtr value, uint winIni);
+                                             [DllImport("user32.dll")] static extern bool LockSetForegroundWindow(uint code);
                                              [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
                                              [DllImport("user32.dll", SetLastError = true)] static extern bool SetForegroundWindow(IntPtr hwnd);
                                              [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint count, INPUT[] inputs, int size);
