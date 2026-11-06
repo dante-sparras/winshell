@@ -10,24 +10,71 @@ namespace Winshell.Native;
 internal readonly record struct HookedKey(int VirtualKey, bool Up, nint ExtraInfo);
 
 /// <summary>
-/// The low-level keyboard hook, on a <see cref="HookThread"/>. Windows calls one static procedure, so each hook
-/// started here calls the handler given last: the process keeps one.
+/// The process's one low-level keyboard hook, on a thread of its own. A second call does nothing until the first hook
+/// is disposed: Windows calls one static procedure, so the process keeps one.
 /// </summary>
 internal static unsafe class LowLevelKeyboard
 {
+    private static readonly Lock Gate = new();
+    private static Slot? Owner;
     private static Func<HookedKey, bool>? Handler;
 
-    /// <summary>Starts the hook on a thread of its own. Null if Windows refused it.</summary>
+    /// <summary>
+    /// Installs the hook. Null when one is already installed or Windows refused it. Disposing the result removes it.
+    /// </summary>
     /// <param name="onKey">
     /// Runs on the hook thread with each key, and returns true to swallow it. Its exception lets the key through and
     /// does not reach Windows, so it logs its own.
     /// </param>
-    /// <param name="name">The hook thread's name.</param>
-    /// <param name="lost">Runs as <see cref="HookThread.Start"/> describes.</param>
-    internal static HookThread? Start(Func<HookedKey, bool> onKey, string name, Action lost)
+    /// <param name="lost">
+    /// Runs on the hook thread when that thread ends without the hook being disposed. Windows can also remove the
+    /// hook and leave the thread running, and then this does not run.
+    /// </param>
+    internal static IDisposable? Start(Func<HookedKey, bool> onKey, Action? lost = null)
     {
-        Volatile.Write(ref Handler, onKey);
-        return HookThread.Start(Win32.WH_KEYBOARD_LL, &Proc, name, lost);
+        var slot = new Slot(lost);
+        lock (Gate)
+        {
+            if (Owner is not null)
+                return null;
+            Owner = slot;
+            Volatile.Write(ref Handler, onKey);
+        }
+
+        // The procedure can run before Start returns. Do not hold the gate while waiting for the thread.
+        var thread = HookThread.Start(Win32.WH_KEYBOARD_LL, &Proc, "Winshell keyboard hook", () => OnLost(slot));
+        lock (Gate)
+        {
+            if (!ReferenceEquals(Owner, slot) || thread is null)
+            {
+                if (ReferenceEquals(Owner, slot))
+                {
+                    Owner = null;
+                    Volatile.Write(ref Handler, null);
+                }
+
+                thread?.Stop();
+                return null;
+            }
+
+            slot.Arm(thread);
+            return slot;
+        }
+    }
+
+    private static void OnLost(Slot slot)
+    {
+        Action? lost;
+        lock (Gate)
+        {
+            if (!ReferenceEquals(Owner, slot))
+                return;
+            Owner = null;
+            Volatile.Write(ref Handler, null);
+            lost = slot.Lost;
+        }
+
+        lost?.Invoke();
     }
 
     [UnmanagedCallersOnly]
@@ -50,5 +97,32 @@ internal static unsafe class LowLevelKeyboard
         }
 
         return Win32.CallNextHookEx(0, code, wParam, lParam);
+    }
+
+    private sealed class Slot(Action? lost) : IDisposable
+    {
+        private HookThread? _thread;
+
+        public Action? Lost { get; } = lost;
+
+        public void Arm(HookThread thread)
+        {
+            _thread = thread;
+        }
+
+        public void Dispose()
+        {
+            HookThread? thread;
+            lock (Gate)
+            {
+                if (!ReferenceEquals(Owner, this))
+                    return;
+                thread = _thread;
+                Owner = null;
+                Volatile.Write(ref Handler, null);
+            }
+
+            thread?.Stop();
+        }
     }
 }

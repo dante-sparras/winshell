@@ -1,7 +1,7 @@
 namespace Winshell.Native;
 
 /// <summary>
-/// Hosts one low-level hook on a thread of its own. Windows removes a low-level hook that misses its timeout,
+/// Hosts one low-level hook on a thread of its own, for the hooks in this assembly. Windows removes a low-level hook that misses its timeout,
 /// without telling anyone, so a busy loop thread must not be the one that serves it. The thread installs the hook,
 /// waits in GetMessage, and unhooks on WM_QUIT. The procedure runs on that thread, so it must not touch state that
 /// belongs to the loop thread; it posts work to the loop instead.
