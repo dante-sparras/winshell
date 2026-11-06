@@ -38,11 +38,3 @@ internal interface IHotkeyListener
 
     void OnReleased();
 }
-
-/// <summary>Claims and releases hotkeys for one shell process.</summary>
-internal interface IHotkeyRegistrar
-{
-    HotkeyClaim Claim(IHotkeyListener listener, HotkeySequence? sequence);
-
-    void Release(IHotkeyListener listener);
-}

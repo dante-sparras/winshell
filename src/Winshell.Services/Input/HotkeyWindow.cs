@@ -75,9 +75,14 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
         }
 
         if (!target.Register(id, chord.Win32Modifiers | ModNoRepeat, (uint)chord.VirtualKey, out var code))
+        {
+            // A refused chord must not leave the window up when it is the only reason the window exists.
+            DestroyIfIdle();
             return code == ErrorAlreadyRegistered
                 ? HotkeyClaim.Taken($"{chord.Text} is already in use by Windows or another app.")
                 : HotkeyClaim.Invalid($"{chord.Text} could not be registered ({code}).");
+        }
+
         lock (_lock)
         {
             if (_disposed || _target != target)
@@ -99,29 +104,20 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
         }
     }
 
-    /// <summary>
-    /// Unregisters each chord <paramref name="inUse"/> no longer wants. With none left, the window goes.
-    /// <paramref name="inUse"/> runs under this window's lock: it may take the book's lock, and must not call back into
-    /// this window, so the order is always this lock, then the book's.
-    /// </summary>
-    public void UnregisterUnused(Func<OsChord, bool> inUse)
+    /// <summary>Gives one chord back. With none left, the window goes.</summary>
+    public void Unregister(OsChord chord)
     {
-        List<int> ids = [];
+        int id;
         HotkeyTarget? target;
         lock (_lock)
         {
-            foreach (var (chord, id) in _ids)
-                if (!inUse(chord))
-                    ids.Add(id);
-            foreach (var id in ids)
-                if (_chords.Remove(id, out var chord))
-                    _ids.Remove(chord);
+            if (!_ids.Remove(chord, out id))
+                return;
+            _chords.Remove(id);
             target = _target;
         }
 
-        if (target is not null)
-            foreach (var id in ids)
-                target.Unregister(id);
+        target?.Unregister(id);
         DestroyIfIdle();
     }
 
