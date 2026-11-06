@@ -234,9 +234,9 @@ internal sealed class WindowBackend : IWindowBackend
     }
 
     /// <summary>
-    /// Moves a window onto the monitor with this device name. Its logical size and its offset in the work area stay,
-    /// and a maximized window is maximized again on the monitor it lands on. The shell is per-monitor aware, so the
-    /// rectangle and the placement use the same pixels.
+    /// Moves a window onto the monitor with this device name. <see cref="WindowOnScreen"/> keeps its logical size
+    /// and its offset in the work area, and a maximized window is maximized again on the monitor it lands on. The
+    /// shell is per-monitor aware, so the rectangle and the placement use the same pixels.
     /// </summary>
     public void MoveToMonitor(nint hwnd, string deviceName)
     {
@@ -255,30 +255,17 @@ internal sealed class WindowBackend : IWindowBackend
         var hasPlacement = TopLevelWindows.TryPlacement(hwnd, out var placement);
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
-        // The placement is in workspace coordinates and the monitor frames are in screen coordinates. A restored
-        // window shows the difference as a constant. A minimized or maximized one does not, so it takes the offset
-        // of the primary monitor's work area.
-        var bias = (X: 0, Y: 0);
-        if (hasPlacement && !minimized && !maximized)
-            bias = (current.Left - placement.Normal.Left, current.Top - placement.Normal.Top);
-        else if (hasPlacement && monitors.FirstOrDefault(m => m.Info.IsPrimary) is { } primary)
-            bias = WindowRules.WorkspaceOffset(primary.Bounds, primary.Work,
-                ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
-        var sourceRect = WindowRules.RectangleToMove(minimized, maximized, current,
-            WindowRules.Shift(placement.Normal, bias.X, bias.Y));
-        if (sourceRect.Width <= 0 || sourceRect.Height <= 0)
+        var primary = monitors.FirstOrDefault(m => m.Info.IsPrimary);
+        var window = new WindowToMove(current, hasPlacement ? placement.Normal : default, hasPlacement, minimized,
+            maximized, ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
+        if (!WindowOnScreen.TryMove(window, MonitorFrame.Of(source.Bounds, source.Work, source.Scale),
+                MonitorFrame.Of(target.Bounds, target.Work, target.Scale), primary?.Bounds ?? default,
+                primary?.Work ?? default, out var place))
             return;
-        var next = WindowRules.MoveOnto(sourceRect, Frame(source), Frame(target));
         if (hasPlacement)
-            TopLevelWindows.Place(hwnd, placement, WindowRules.Shift(next, -bias.X, -bias.Y), minimized, maximized);
+            TopLevelWindows.Place(hwnd, placement, place.Workspace, minimized, maximized);
         else
-            TopLevelWindows.Move(hwnd, next);
-    }
-
-    private static MonitorFrame Frame(ConnectedMonitor monitor)
-    {
-        var area = monitor.Work.Width > 0 && monitor.Work.Height > 0 ? monitor.Work : monitor.Bounds;
-        return new MonitorFrame(area.Left, area.Top, area.Right, area.Bottom, monitor.Scale);
+            TopLevelWindows.Move(hwnd, place.Screen);
     }
 
     // Requests
