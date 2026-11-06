@@ -1,5 +1,3 @@
-using Tomlyn.Parsing;
-
 namespace Winshell.Core.Tests;
 
 /// <summary><see cref="TomlDocument"/> reads a file's text as plain values and edits one key, leaving the rest of the text.</summary>
@@ -23,7 +21,7 @@ public sealed class TomlDocumentTests
 
     private static void AssertParses(string text)
     {
-        Assert.False(SyntaxParser.Parse(text).HasErrors, text);
+        Assert.True(TomlDocument.TryParse("settings.toml", text, out _, out var error), error);
     }
 
     private static int Count(string text, string value)
@@ -228,6 +226,16 @@ public sealed class TomlDocumentTests
         Assert.Contains("# Above other.", document.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("[other]", document.ToString(), StringComparison.Ordinal);
         Assert.Equal(["name"], document.Values.Keys);
+    }
+
+    [Fact]
+    public void A_key_is_located_where_the_file_defines_it()
+    {
+        var document = Parse("# note\nname = \"mine\"\n\nsize = 1\n");
+
+        Assert.Equal("settings.toml[2:1]", document.LocationOf("name"));
+        Assert.Equal("settings.toml[4:1]", document.LocationOf("size"));
+        Assert.Equal("settings.toml", document.LocationOf("missing"));
     }
 
     [Fact]

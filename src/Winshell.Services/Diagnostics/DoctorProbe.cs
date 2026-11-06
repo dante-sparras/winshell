@@ -84,24 +84,13 @@ internal static class DoctorProbe
     /// <summary>Why this file cannot be loaded, or null when it is missing or loads.</summary>
     private static string? UserFileProblem(string path)
     {
-        if (!File.Exists(path))
-            return null;
-        string text;
-        try
+        var load = TomlDocument.Load(path);
+        return load.Kind switch
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
-            if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
-                return $"{path}: {why}";
-            using var reader = new StreamReader(stream);
-            text = reader.ReadToEnd();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return $"{path}: could not be read: {e.Message}";
-        }
-
-        return TomlSyntax.TryLoad(path, text, out _, out _, out var error) ? null : error;
+            TomlRead.Missing or TomlRead.Parsed => null,
+            TomlRead.Unreadable => $"{path}: could not be read: {load.Message}",
+            _ => load.Describe(path)
+        };
     }
 
     /// <summary>
