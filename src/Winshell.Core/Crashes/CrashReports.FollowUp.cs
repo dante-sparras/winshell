@@ -35,21 +35,25 @@ internal sealed partial class CrashReports
     /// <summary>Records an exit that was not a crash.</summary>
     public static void MarkClean(string stateFile, DateTimeOffset when)
     {
-        for (;;)
-        {
-            var state = ReadState(stateFile);
-            if (Put(stateFile, when, state.Shown, state.Text))
-                return;
-        }
+        Update(stateFile, when, null);
     }
 
     /// <summary>Records that <paramref name="reportPath"/> was shown, so the next start does not show it again.</summary>
     public static void MarkShown(string stateFile, string reportPath)
     {
-        for (;;)
+        Update(stateFile, null, reportPath);
+    }
+
+    /// <summary>
+    /// Sets what is given and keeps the rest. Instances share the record, so another can save it between this read
+    /// and write; then it is read again, a few times at most, and the mark is dropped after that.
+    /// </summary>
+    private static void Update(string stateFile, DateTimeOffset? clean, string? shown)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
         {
             var state = ReadState(stateFile);
-            if (Put(stateFile, state.Clean, reportPath, state.Text))
+            if (Put(stateFile, clean ?? state.Clean, shown ?? state.Shown, state.Text))
                 return;
         }
     }
@@ -85,9 +89,8 @@ internal sealed partial class CrashReports
     private static bool Put(string stateFile, DateTimeOffset? clean, string? shown, string? expected)
     {
         // Edit the file that is there. A file that is not TOML is replaced with the record alone.
-        if (!TomlDocument.TryParse(stateFile, expected ?? "", out var document, out _)
-            && !TomlDocument.TryParse(stateFile, "", out document, out var error))
-            throw new IOException(error);
+        if (expected is null || !TomlDocument.TryParse(stateFile, expected, out var document, out _))
+            document = TomlDocument.Empty(stateFile);
         if (clean is { } when)
             document.Set("clean", when.ToString("o", CultureInfo.InvariantCulture));
         if (shown is { Length: > 0 })

@@ -95,9 +95,9 @@ public sealed class ShellInstanceTests
     [Fact]
     public void A_published_instance_is_listed_and_a_clean_close_marks_it_exited()
     {
-        var instance = ShellInstance.Open(Program, new Log());
+        var instance = ShellInstance.Open("mine", Program, new Log());
         Assert.True(instance.TryOpenPipe());
-        instance.Publish("mine");
+        instance.Publish();
 
         var row = Assert.Single(Rows(instance));
         Assert.True(row.Alive);
@@ -117,11 +117,11 @@ public sealed class ShellInstanceTests
     public void A_listed_instance_has_its_log_on_disk()
     {
         var log = new Log();
-        var instance = ShellInstance.Open(Program, log);
+        var instance = ShellInstance.Open("mine", Program, log);
         Assert.True(instance.TryOpenPipe());
         log.Info("shell", "Shell ID: \"mine\"");
 
-        instance.Publish("mine");
+        instance.Publish();
 
         using var reader = new StreamReader(new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read,
             FileShare.ReadWrite | FileShare.Delete));
@@ -132,7 +132,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public void A_start_that_is_abandoned_leaves_nothing_behind()
     {
-        var instance = ShellInstance.Open(Program, new Log());
+        var instance = ShellInstance.Open("mine", Program, new Log());
         Assert.True(instance.TryOpenPipe());
 
         instance.Abandon();
@@ -146,7 +146,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public void A_start_whose_name_is_taken_listens_on_another()
     {
-        var instance = ShellInstance.Open(Program, new Log());
+        var instance = ShellInstance.Open("mine", Program, new Log());
         using var held = IpcServer.OpenFirst(instance.Pipe);
         var taken = instance.Pipe;
 
@@ -160,7 +160,7 @@ public sealed class ShellInstanceTests
     public void A_secret_in_a_log_line_is_taken_out_of_the_file()
     {
         var log = new Log();
-        var instance = ShellInstance.Open(Program, log);
+        var instance = ShellInstance.Open("mine", Program, log);
         log.Warn("shell", "sync --password SENTINEL-PASSWORD");
         string text;
         using (var stream = new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read,
@@ -177,9 +177,9 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public void A_crash_writes_one_fatal_report_and_keeps_the_next_start_from_calling_it_clean()
+    public void A_crash_writes_one_fatal_report_that_names_the_shell_and_keeps_the_next_start_from_calling_it_clean()
     {
-        var instance = ShellInstance.Open(Program, new Log());
+        var instance = ShellInstance.Open("mine", Program, new Log());
         var error = new InvalidOperationException("SENTINEL crash");
         var before = File.Exists(ShellInstance.ExitState) ? File.ReadAllText(ShellInstance.ExitState) : null;
 
@@ -190,7 +190,10 @@ public sealed class ShellInstanceTests
 
         var reports = Directory.GetFiles(ShellLocations.CrashRoot).Select(File.ReadAllText)
             .Where(r => r.Contains("SENTINEL crash", StringComparison.Ordinal)).ToList();
-        Assert.Contains("Winshell closed: yes", Assert.Single(reports), StringComparison.Ordinal);
+        var report = Assert.Single(reports);
+        Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);
+        Assert.Contains("Shell id: mine" + Environment.NewLine, report, StringComparison.Ordinal);
+        Assert.Contains($"Config: {Program}" + Environment.NewLine, report, StringComparison.Ordinal);
         Assert.Equal(before, File.Exists(ShellInstance.ExitState) ? File.ReadAllText(ShellInstance.ExitState) : null);
     }
 

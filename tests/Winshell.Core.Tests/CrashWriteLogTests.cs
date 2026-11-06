@@ -20,10 +20,8 @@ public sealed class CrashWriteLogTests : IDisposable
 
     private CrashReports Reports(string folder)
     {
-        return new CrashReports(folder)
-        {
-            Log = new Log { Sink = (level, category, message) => _lines.Add($"{level} {category}: {message}") }
-        };
+        return new CrashReports(folder,
+            new Log { Sink = (level, category, message) => _lines.Add($"{level} {category}: {message}") });
     }
 
     [Fact]

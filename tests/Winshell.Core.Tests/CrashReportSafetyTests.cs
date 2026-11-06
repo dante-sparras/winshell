@@ -10,6 +10,9 @@ namespace Winshell.Core.Tests;
 /// </summary>
 public sealed class CrashReportSafetyTests : IDisposable
 {
+    /// <summary>How many reports the folder keeps, as docs/development.md says.</summary>
+    private const int Keep = 50;
+
     private readonly string _root =
         Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
 
@@ -122,7 +125,7 @@ public sealed class CrashReportSafetyTests : IDisposable
             "12:00:05.000 DEBUG scene: password=SENTINEL-LOG-5",
             "12:00:06.000  INFO window: closed"
         ]);
-        var crashes = new CrashReports(Folder()) { LogPath = log };
+        var crashes = new CrashReports(Folder(), logPath: log);
 
         var text = File.ReadAllText(crashes.Write("a window", new InvalidOperationException("x"))!.Path);
 
@@ -219,13 +222,13 @@ public sealed class CrashReportSafetyTests : IDisposable
         };
         foreach (var name in others)
             File.WriteAllText(Path.Combine(folder, name), "not a crash report");
-        var crashes = new CrashReports(folder) { Keep = 1 };
+        var crashes = new CrashReports(folder);
 
-        crashes.Write("first", new InvalidOperationException("x"));
-        var last = crashes.Write("second", new InvalidOperationException("x"))!.Path;
+        var written = Enumerable.Range(0, Keep + 1)
+            .Select(i => crashes.Write($"report {i}", new InvalidOperationException("x"))!.Path).ToList();
 
         var left = Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToList();
-        Assert.Equal(others.Append(Path.GetFileName(last)).Order(StringComparer.Ordinal), left);
+        Assert.Equal(others.Concat(written.Skip(1).Select(Path.GetFileName)).Order(StringComparer.Ordinal), left);
     }
 
     [Fact]
@@ -241,8 +244,10 @@ public sealed class CrashReportSafetyTests : IDisposable
         var link = Folder();
         Junction(link, target);
 
-        var through = new CrashReports(link) { Keep = 1 };
-        Assert.NotNull(through.Write("through the junction", new InvalidOperationException("x")));
+        // Enough to push the moved reports past what the folder keeps.
+        var through = new CrashReports(link);
+        for (var i = 0; i < Keep; i++)
+            Assert.NotNull(through.Write("through the junction", new InvalidOperationException("x")));
 
         Assert.All(moved, path => Assert.True(File.Exists(path)));
         Assert.True(File.Exists(Path.Combine(target, "0000-user-notes.txt")));
@@ -258,13 +263,13 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Reports_written_in_the_same_instant_are_kept_newest_first()
     {
         var instant = new DateTimeOffset(2031, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        var crashes = new CrashReports(Folder()) { Keep = 1, Time = new FakeTimeProvider(instant) };
+        var crashes = new CrashReports(Folder()) { Time = new FakeTimeProvider(instant) };
 
-        for (var i = 0; i < 20; i++)
-        {
-            var path = crashes.Write("same instant", new InvalidOperationException("x"))!.Path;
-            Assert.Equal([path], Directory.GetFiles(Folder()));
-        }
+        var paths = Enumerable.Range(0, Keep + 20)
+            .Select(_ => crashes.Write("same instant", new InvalidOperationException("x"))!.Path).ToList();
+
+        Assert.Equal(paths.TakeLast(Keep).Order(StringComparer.OrdinalIgnoreCase),
+            Directory.GetFiles(Folder()).Order(StringComparer.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -274,14 +279,16 @@ public sealed class CrashReportSafetyTests : IDisposable
         var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2))
             .ToUniversalTime());
         time.SetLocalTimeZone(ZoneAt(2));
-        var crashes = new CrashReports(Folder()) { Keep = 1, Time = time };
+        var crashes = new CrashReports(Folder()) { Time = time };
 
-        crashes.Write("before", new InvalidOperationException("x"));
+        var before = Enumerable.Range(0, Keep)
+            .Select(_ => crashes.Write("before", new InvalidOperationException("x"))!.Path).ToList();
         time.SetUtcNow(new DateTimeOffset(2031, 10, 26, 2, 10, 0, TimeSpan.FromHours(1)).ToUniversalTime());
         time.SetLocalTimeZone(ZoneAt(1));
         var later = crashes.Write("after", new InvalidOperationException("x"))!.Path;
 
-        Assert.Equal([later], Directory.GetFiles(Folder()));
+        Assert.Equal(before.Skip(1).Append(later).Order(StringComparer.OrdinalIgnoreCase),
+            Directory.GetFiles(Folder()).Order(StringComparer.OrdinalIgnoreCase));
         Assert.Contains("Time: 2031-10-26 02:10:00.000 +01:00", File.ReadAllText(later), StringComparison.Ordinal);
     }
 
@@ -293,29 +300,34 @@ public sealed class CrashReportSafetyTests : IDisposable
     [Fact]
     public void Two_writers_sharing_the_folder_never_overwrite_each_other()
     {
-        // As two instances would: separate writers, each with its own lock, on one folder at one instant.
+        // As two instances would: separate writers, each with its own lock, on one folder at one instant. Together
+        // they write no more than the folder keeps, so every report is still there to count.
         var instant = new DateTimeOffset(2032, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var writers = Enumerable.Range(0, 4).Select(_ => new CrashReports(Folder())
-            { Keep = 1000, Time = new FakeTimeProvider(instant) }).ToList();
+            { Time = new FakeTimeProvider(instant) }).ToList();
+        var each = Keep / writers.Count;
+        var total = each * writers.Count;
         using var start = new Barrier(writers.Count);
 
         var paths = writers.AsParallel().WithDegreeOfParallelism(writers.Count).SelectMany((writer, w) =>
         {
             start.SignalAndWait();
-            return Enumerable.Range(0, 25)
+            return Enumerable.Range(0, each)
                 .Select(i => writer.Write($"writer {w}", new InvalidOperationException($"{w}/{i}"))!.Path).ToList();
         }).ToList();
 
-        Assert.Equal(100, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-        Assert.Equal(100, Directory.GetFiles(Folder()).Length);
+        Assert.Equal(total, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(total, Directory.GetFiles(Folder()).Length);
         var messages = Directory.GetFiles(Folder()).Select(File.ReadAllText).Select(t =>
             t[t.IndexOf("InvalidOperationException: ", StringComparison.Ordinal)..].Split('\n')[0].Trim()).ToList();
-        Assert.Equal(100, messages.Distinct().Count());
+        Assert.Equal(total, messages.Distinct().Count());
 
-        // The next write brings the folder back to what it keeps.
-        var keeping = new CrashReports(Folder()) { Keep = 10 };
-        var newest = keeping.Write("after", new InvalidOperationException("x"))!.Path;
-        Assert.Equal(10, Directory.GetFiles(Folder()).Length);
+        // Writing past what the folder keeps brings it back to that.
+        var keeping = new CrashReports(Folder());
+        var newest = "";
+        for (var i = total; i <= Keep; i++)
+            newest = keeping.Write("after", new InvalidOperationException("x"))!.Path;
+        Assert.Equal(Keep, Directory.GetFiles(Folder()).Length);
         Assert.True(File.Exists(newest));
     }
 

@@ -180,7 +180,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
         var error = load.Describe(_path);
         // No file yet is an empty document, so the assigned keys can create it.
         if (load.Kind == TomlRead.Missing)
-            TomlDocument.TryParse(_path, "", out document, out error);
+            document = TomlDocument.Empty(_path);
         if (document is null)
         {
             Error = error;
