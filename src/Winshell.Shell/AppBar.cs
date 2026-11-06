@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell;
@@ -38,32 +37,19 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
     public RECT Reserve(Edges edge, int thickness, RECT monitor)
     {
         using var explorerFirst = ShellPlatform.ExplorerFirst();
-        var abd = new APPBARDATA
-            { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window, uCallbackMessage = Message };
+        var side = Side(edge);
         if (!Registered)
         {
-            Registered = Win32.SHAppBarMessage(Win32.ABM_NEW, ref abd) != 0;
+            Registered = AppBars.Register(window, Message);
             if (!Registered)
                 // No app bar host, as when Explorer is not running: keep the window where the zone would be.
                 return monitor;
             Held[window] = 0;
         }
 
-        abd.uEdge = edge switch
-        {
-            Edges.Left => Win32.ABE_LEFT,
-            Edges.Right => Win32.ABE_RIGHT,
-            Edges.Bottom => Win32.ABE_BOTTOM,
-            _ => Win32.ABE_TOP
-        };
-        abd.rc = monitor;
-        Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
-        var moved = _reservation.Reserve(Strip(edge, thickness, abd.rc), desired =>
-        {
-            abd.rc = desired;
-            Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
-            return abd.rc;
-        });
+        var offered = AppBars.Query(window, side, monitor);
+        var moved = _reservation.Reserve(Strip(edge, thickness, offered), desired =>
+            AppBars.Reserve(window, side, desired));
         // Explorer moves the work area a moment later; place the panels again then.
         if (moved)
             platform.WorkAreaMayHaveChanged();
@@ -74,10 +60,9 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
     {
         if (!Registered)
             return;
-        var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window };
         using (ShellPlatform.ExplorerFirst())
         {
-            Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
+            AppBars.Remove(window);
         }
 
         Registered = false;
@@ -93,10 +78,7 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
         using (ShellPlatform.ExplorerFirst())
         {
             foreach (var window in Held.Keys)
-            {
-                var abd = new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = window };
-                Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd);
-            }
+                AppBars.Remove(window);
         }
 
         Held.Clear();
@@ -116,27 +98,35 @@ internal sealed class AppBar(nint window, ShellPlatform platform, Action place)
 
         if (msg != Message)
             return null;
-        switch ((uint)wParam)
+        if (AppBars.PositionChanged(wParam))
         {
-            case Win32.ABN_POSCHANGED:
-                // A burst of these places the panel once. Explorer does not send one notice per own request,
-                // so each may be another bar. A short grant is asked for once more, and that same rectangle
-                // sends no notice.
-                _reservation.NoteExternalChange();
-                if (!_placePosted)
+            // A burst of these places the panel once. Explorer does not send one notice per own request,
+            // so each may be another bar. A short grant is asked for once more, and that same rectangle
+            // sends no notice.
+            _reservation.NoteExternalChange();
+            if (!_placePosted)
+            {
+                _placePosted = true;
+                platform.Loop.Post(() =>
                 {
-                    _placePosted = true;
-                    platform.Loop.Post(() =>
-                    {
-                        _placePosted = false;
-                        place();
-                    });
-                }
-
-                break;
+                    _placePosted = false;
+                    place();
+                });
+            }
         }
 
         return 0;
+    }
+
+    private static AppBarEdge Side(Edges edge)
+    {
+        return edge switch
+        {
+            Edges.Left => AppBarEdge.Left,
+            Edges.Right => AppBarEdge.Right,
+            Edges.Bottom => AppBarEdge.Bottom,
+            _ => AppBarEdge.Top
+        };
     }
 
     /// <summary>The strip of <paramref name="offered"/> that is <paramref name="thickness"/> pixels deep along an edge.</summary>

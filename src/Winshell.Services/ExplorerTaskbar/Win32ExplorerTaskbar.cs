@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using Winshell.Native;
 
 namespace Winshell.ExplorerTaskbar;
@@ -57,8 +56,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         {
             saved.Edge = edge;
             saved.Rect = rect;
-            var abd = AppBar(hwnd);
-            saved.Removed = Win32.SHAppBarMessage(Win32.ABM_REMOVE, ref abd) != 0;
+            saved.Removed = AppBars.Remove(hwnd);
         }
 
         Win32.ShowWindow(hwnd, Win32.SW_HIDE);
@@ -72,15 +70,11 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
             Win32.ShowWindow(saved.Hwnd, Win32.SW_SHOWNA);
         if (!saved.Removed)
             return;
-        var abd = AppBar(saved.Hwnd);
-        abd.uCallbackMessage = Callback();
-        abd.uEdge = saved.Edge;
-        abd.rc = saved.Rect;
-        if (Win32.SHAppBarMessage(Win32.ABM_NEW, ref abd) == 0)
+        if (!AppBars.Register(saved.Hwnd, Callback()))
             return;
-        Win32.SHAppBarMessage(Win32.ABM_QUERYPOS, ref abd);
-        abd.uEdge = saved.Edge;
-        Win32.SHAppBarMessage(Win32.ABM_SETPOS, ref abd);
+        // Reserve the free part of the saved edge. The edge is named again: the query is its own call.
+        var offered = AppBars.Query(saved.Hwnd, saved.Edge, saved.Rect);
+        AppBars.Reserve(saved.Hwnd, saved.Edge, offered);
     }
 
     private static uint Callback()
@@ -92,23 +86,13 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
 
     internal static bool Autohide(nint hwnd)
     {
-        var abd = AppBar(hwnd);
-        var state = (uint)Win32.SHAppBarMessage(Win32.ABM_GETSTATE, ref abd);
-        return (state & Win32.ABS_AUTOHIDE) != 0;
+        return AppBars.Autohide(hwnd);
     }
 
-    internal static bool TryPosition(nint hwnd, bool primary, out uint edge, out RECT rect)
+    internal static bool TryPosition(nint hwnd, bool primary, out AppBarEdge edge, out RECT rect)
     {
-        if (primary)
-        {
-            var abd = AppBar(hwnd);
-            if (Win32.SHAppBarMessage(Win32.ABM_GETTASKBARPOS, ref abd) != 0 && abd.rc.Width > 0 && abd.rc.Height > 0)
-            {
-                edge = abd.uEdge;
-                rect = abd.rc;
-                return true;
-            }
-        }
+        if (primary && AppBars.TryPosition(hwnd, out edge, out rect))
+            return true;
 
         if (Win32.GetWindowRect(hwnd, out rect) && rect.Width > 0 && rect.Height > 0)
         {
@@ -116,28 +100,24 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
             return true;
         }
 
-        edge = Win32.ABE_BOTTOM;
+        edge = AppBarEdge.Bottom;
         rect = default;
         return false;
     }
 
-    private static uint EdgeOf(nint hwnd, RECT window)
+    /// <summary>The edge a taskbar window sits on, from where it is on its monitor. Explorer did not say.</summary>
+    private static AppBarEdge EdgeOf(nint hwnd, RECT window)
     {
         var monitor = Monitors.TryRead(Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST), out var info)
             ? info.Bounds
             : window;
         if (window.Height <= window.Width)
             return Math.Abs(window.Top - monitor.Top) < Math.Abs(monitor.Bottom - window.Bottom)
-                ? Win32.ABE_TOP
-                : Win32.ABE_BOTTOM;
+                ? AppBarEdge.Top
+                : AppBarEdge.Bottom;
         return Math.Abs(window.Left - monitor.Left) < Math.Abs(monitor.Right - window.Right)
-            ? Win32.ABE_LEFT
-            : Win32.ABE_RIGHT;
-    }
-
-    private static APPBARDATA AppBar(nint hwnd)
-    {
-        return new APPBARDATA { cbSize = (uint)Marshal.SizeOf<APPBARDATA>(), hWnd = hwnd };
+            ? AppBarEdge.Left
+            : AppBarEdge.Right;
     }
 
     /// <summary>Explorer's windows of that class. A shell's tray host makes a <c>Shell_TrayWnd</c> of its own.</summary>
@@ -179,7 +159,7 @@ internal sealed class Win32ExplorerTaskbar : IExplorerTaskbar
         public nint Hwnd;
         public bool WasVisible;
         public bool Removed;
-        public uint Edge;
+        public AppBarEdge Edge;
         public RECT Rect;
     }
 }
