@@ -37,16 +37,16 @@ internal static class IpcCommand
         }
 
         // A listen prints each signal, and ends without a value when the shell quits.
-        try
+        await foreach (var reply in IpcClient.Request(info.Pipe, request))
         {
-            await foreach (var response in IpcClient.Request(info.Pipe, request))
-                if (Print(response) != 0)
-                    return 1;
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            Console.Error.WriteLine(InstanceCall.CouldNotReach(info, e));
-            return 1;
+            if (reply.Failure is { } failure)
+            {
+                Console.Error.WriteLine(failure.Sentence(info.Id));
+                return 1;
+            }
+
+            if (reply.Response is { } response && Print(response) != 0)
+                return 1;
         }
 
         return 0;

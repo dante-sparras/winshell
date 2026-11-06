@@ -34,7 +34,7 @@ public class InstanceCallTests
     }
 
     [Fact]
-    public async Task A_call_this_winshell_refuses_names_the_instance_and_the_reason()
+    public async Task A_call_this_winshell_rejects_names_the_instance_and_the_reason()
     {
         await using var shell = IpcServer.OpenFirst(_pipe);
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
@@ -49,7 +49,7 @@ public class InstanceCallTests
 
         Assert.Equal(
             new InstanceCall.Answer(null,
-                $"Could not reach instance abc123: {IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text)}"),
+                $"Rejected instance abc123: {IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text)}"),
             answer);
         await answering;
     }

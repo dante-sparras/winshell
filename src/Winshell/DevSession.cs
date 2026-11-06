@@ -139,19 +139,6 @@ internal static class DevSession
     {
         if (ShellOf(project) is not { } shell)
             return;
-        var request = IpcRequest.ForBuild(notice, project.ProjectFile);
-        try
-        {
-            await foreach (var response in IpcClient.Request(shell.Pipe, request))
-            {
-                if (!response.Ok)
-                    Console.Error.WriteLine($"Could not update the notice: {response.Error}");
-                return;
-            }
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            Console.Error.WriteLine($"Could not update the notice: {e.Message}");
-        }
+        await BuildNotice.Show(shell, notice, project.ProjectFile);
     }
 }

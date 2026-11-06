@@ -55,8 +55,13 @@ public sealed class ShellInstanceTests
 
     private static async Task<IpcResponse> Ask(string pipe, IpcRequest request)
     {
-        await foreach (var response in IpcClient.Request(pipe, request, TestContext.Current.CancellationToken))
-            return response;
+        await foreach (var reply in IpcClient.Request(pipe, request, TestContext.Current.CancellationToken))
+        {
+            if (reply.Failure is { } failure)
+                throw new InvalidOperationException(failure.Reason);
+            return reply.Response!;
+        }
+
         throw new InvalidOperationException("The server closed the pipe without answering.");
     }
 
@@ -368,9 +373,17 @@ public sealed class ShellInstanceTests
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
         var answering = AnswerOnce(shell, $$"""{"ok":true,"winshell":"{{other}}"}""");
 
-        var error = await Assert.ThrowsAsync<IOException>(() => Ask(pipe, IpcRequest.ForShow(false)));
+        IpcReply reply = default;
+        await foreach (var next in IpcClient.Request(pipe, IpcRequest.ForShow(false),
+                           TestContext.Current.CancellationToken))
+        {
+            reply = next;
+            break;
+        }
 
-        Assert.Equal(IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text), error.Message);
+        Assert.NotNull(reply.Failure);
+        Assert.Equal(IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text), reply.Failure.Value.Reason);
+        Assert.True(reply.Failure.Value.Rejected);
         await answering;
     }
 
