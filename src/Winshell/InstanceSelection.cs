@@ -98,8 +98,7 @@ internal static class InstanceSelection
             if (error is not null)
                 return Result.Miss(error);
             // With -c or -p a project is always found, or the error above says why not.
-            var match = instances.FirstOrDefault(i =>
-                ConfigurationInstances.BuildOf(i.ConfigPath, project!) is not null);
+            var match = project!.InstancesOf(ConfigurationBuild.Run, instances).FirstOrDefault();
             return match is null
                 ? Result.Miss($"No running instance of {project!.Program}.")
                 : Result.Found(match);

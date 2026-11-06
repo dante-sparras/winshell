@@ -40,7 +40,7 @@ public sealed class StartupService : ObservableObject
     /// </summary>
     internal static string? SignInCommand(string program, string? supervisor)
     {
-        if (SignInEntry.ProjectFolder(program) is not { } project || supervisor is null ||
+        if (ConfigurationProject.FolderOf(program) is not { } project || supervisor is null ||
             !SignInEntry.IsHost(supervisor))
             return null;
         return WindowsStartupRegistry.CommandFor(supervisor, ["run", "-p", project]);
@@ -52,7 +52,7 @@ public sealed class StartupService : ObservableObject
             return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
         if (Environment.ProcessPath is not { } exe)
             return null;
-        if (SignInEntry.ProjectFolder(exe) is null)
+        if (ConfigurationProject.FolderOf(exe) is null)
             return new WindowsStartupRegistry(
                 WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)));
         if (SignInCommand(exe, ProcessImage.SupervisingWinshell()) is not { } command)
