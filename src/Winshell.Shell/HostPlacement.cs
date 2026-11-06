@@ -58,8 +58,7 @@ internal sealed class HostPlacement
     /// <summary>Puts the panel on its screen. The edge module decides the screen, the reservation and the z-order.</summary>
     internal void PlacePanel()
     {
-        if (Edge is { } edge && edge.Place(Panel, _visible, _host.Released))
-            Scale = edge.Scale;
+        Edge?.Place(Panel, _visible, _host.Released);
     }
 
     public void SetPopup(PopupPlacement placement)

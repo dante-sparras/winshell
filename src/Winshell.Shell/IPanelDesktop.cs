@@ -43,10 +43,11 @@ internal interface IPanelDesktop
     void Remove(nint window);
 
     /// <summary>
-    /// Moves the window to <paramref name="rect"/>. <paramref name="topmost"/> false puts it behind other windows, as
-    /// when a fullscreen app covers its screen.
+    /// Moves the window to <paramref name="rect"/> at <paramref name="scale"/>. The scale is applied before the window
+    /// moves, because the move reports the size, and a DPI change during it keeps the scale it started with.
+    /// <paramref name="topmost"/> false puts it behind other windows, as when a fullscreen app covers its screen.
     /// </summary>
-    void Move(RECT rect, bool topmost);
+    void Move(RECT rect, bool topmost, double scale);
 
     /// <summary>The work area may have moved, so panels that follow other bars place again.</summary>
     void WorkAreaMayHaveChanged();

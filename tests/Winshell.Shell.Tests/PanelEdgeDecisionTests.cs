@@ -14,6 +14,9 @@ public class PanelEdgeDecisionTests
     private static readonly PanelMonitor Second =
         new("second", new RECT(2560, 1080, 5120, 2520), new RECT(2560, 1080, 5120, 2472), 1);
 
+    private static readonly PanelMonitor Scaled =
+        new("scaled", new RECT(0, 0, 1920, 1080), new RECT(0, 80, 1920, 1080), 2);
+
     /// <summary>A desktop that records the edge it was asked for and where the window went.</summary>
     private sealed class Desktop : IPanelDesktop
     {
@@ -31,13 +34,17 @@ public class PanelEdgeDecisionTests
 
         public bool? Topmost { get; private set; }
 
+        public double Scale { get; private set; }
+
         public int TaskbarNotes { get; private set; }
 
         public List<Action> Posted { get; } = [];
 
         public PanelMonitor? Find(string id)
         {
-            return id == Second.Id ? Second : null;
+            if (id == Second.Id)
+                return Second;
+            return id == Scaled.Id ? Scaled : null;
         }
 
         public PanelMonitor? Primary()
@@ -78,10 +85,11 @@ public class PanelEdgeDecisionTests
             Removes++;
         }
 
-        public void Move(RECT rect, bool topmost)
+        public void Move(RECT rect, bool topmost, double scale)
         {
             Moved = rect;
             Topmost = topmost;
+            Scale = scale;
         }
 
         public void WorkAreaMayHaveChanged()
@@ -130,6 +138,19 @@ public class PanelEdgeDecisionTests
         Assert.Equal(1, desktop.Registers);
         Assert.True(desktop.Topmost);
         edge.Remove();
+    }
+
+    [Fact]
+    public void A_panel_moves_at_the_scale_of_the_monitor_it_is_on()
+    {
+        var desktop = new Desktop();
+        var edge = new PanelEdge(8, desktop, () => { });
+
+        edge.Place(Panel(Edges.Top | Edges.Left, Scaled.Id), true, false);
+
+        // 320 by 48 logical pixels at scale 2, against the work area's top.
+        Assert.Equal(2, desktop.Scale);
+        Assert.Equal(new RECT(0, 80, 640, 176), desktop.Moved);
     }
 
     [Fact]

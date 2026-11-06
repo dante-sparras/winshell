@@ -21,9 +21,6 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
     private bool _registered;
     private bool _placePosted;
 
-    /// <summary>The scale of the screen the last placement found, or 1 before that.</summary>
-    internal double Scale { get; private set; } = 1;
-
     /// <summary>
     /// Puts the panel on its screen. <paramref name="released"/> is a placement that arrived after the panel was
     /// gone, which reserves nothing. Returns whether it moved the window.
@@ -35,9 +32,9 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
         var monitor = (p.Screen is { } screen ? desktop.Find(screen.Id) : null) ?? desktop.Primary();
         if (monitor is not { } found)
             return false;
-        Scale = found.Scale;
+        var scale = found.Scale;
         var edge = EdgeFor(p.Anchors);
-        var size = (int)Math.Round(p.ReservedSize * Scale);
+        var size = (int)Math.Round(p.ReservedSize * scale);
         RECT area;
         if (p.CoversScreen)
         {
@@ -54,8 +51,8 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
             area = found.Area;
         }
 
-        var rect = DesktopSpace.Anchor(area, p, Scale);
-        desktop.Move(rect, p.AboveWindows && !desktop.FullscreenOn(found.Id));
+        var rect = DesktopSpace.Anchor(area, p, scale);
+        desktop.Move(rect, p.AboveWindows && !desktop.FullscreenOn(found.Id), scale);
         return true;
     }
 

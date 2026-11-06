@@ -46,8 +46,10 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
         AppBars.Remove(window);
     }
 
-    public void Move(RECT rect, bool topmost)
+    public void Move(RECT rect, bool topmost, double scale)
     {
+        // UpdateSize runs inside the move and divides by this. A DPI change during the move keeps it too.
+        host.Placement.Scale = scale;
         host.Placement.SetExStyle(Win32.WS_EX_TOPMOST, topmost);
         // HWND_NOTOPMOST would put it above every window that is not topmost, so over the fullscreen app.
         var after = topmost ? Win32.HWND_TOPMOST : Win32.HWND_BOTTOM;
