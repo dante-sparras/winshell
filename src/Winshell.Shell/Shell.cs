@@ -177,134 +177,87 @@ public sealed partial class Shell : IDisposable
 
     private static void Run(ShellConfiguration configuration, ShellOptions options)
     {
-        var arguments = ShellArguments.Parse(Environment.GetCommandLineArgs().Skip(1));
-        var program = Environment.ProcessPath!;
-        // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
-        // The child keeps --after and waits itself, so a reload's handoff still lets the old process go first.
-        if (arguments.Daemonize)
-        {
-            try
-            {
-                StandardHandles.KeepFromChildren();
-                using var child = Process.Start(arguments.DetachedStart(program));
-            }
-            catch (Exception e) when (e is Win32Exception or InvalidOperationException)
-            {
-                StartupError.Report($"Could not start \"{program}\": {e.Message}", null);
-                Environment.ExitCode = 1;
-            }
+        InstanceStart.Run(new InstanceLaunch(
+                Environment.ProcessPath!,
+                [.. Environment.GetCommandLineArgs().Skip(1)],
+                options.ShellId,
+                options.DataDir,
+                options.StateDir,
+                options.CacheDir,
+                Log.Default,
+                instance => instance.Crashing = () => _current?.ReleaseForCrash()),
+            session => RunHost(configuration, options, session));
+    }
 
-            return;
-        }
-
-        // A reload: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
-        if (arguments.After is { } previous)
-            Instances.WaitForExit(previous);
-        var identity = ShellIdentity.Resolve(program, ConfigPaths.Root(), options.ShellId, options.DataDir,
-            options.StateDir, options.CacheDir);
-        // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
-        using var duplicate = arguments.NoDuplicate
-            ? DuplicateHold.TryClaim(DuplicateHold.ShellMutexName(identity.ShellId),
-                i => string.Equals(i.ShellId, identity.ShellId, StringComparison.OrdinalIgnoreCase))
-            : default;
-        if (arguments.NoDuplicate && !duplicate.Acquired)
-            return;
-
-        var log = Log.Default;
-        var instance = ShellInstance.Open(program, log, arguments.Verbose);
-        instance.Crashes.ShellId = identity.ShellId;
-        instance.Crashing = () => _current?.ReleaseForCrash();
-        log.Info("shell",
-            $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{program}\"");
-        log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
-        log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
-        if (!instance.TryOpenPipe())
-        {
-            instance.Abandon();
-            StartupError.Report("The control pipe is already taken.", null);
-            Environment.ExitCode = 1;
-            return;
-        }
-
+    /// <summary>The WinUI host. <see cref="InstanceStart"/> calls it once this process owns its pipe.</summary>
+    private static void RunHost(ShellConfiguration configuration, ShellOptions options, InstanceSession session)
+    {
+        var instance = session.Instance;
+        var log = session.Log;
+        var identity = session.Identity;
+        var arguments = session.Arguments;
         Exception? failed = null;
-        try
+        ComWrappersSupport.InitializeComWrappers();
+        Application.Start(_ =>
         {
-            ComWrappersSupport.InitializeComWrappers();
-            Application.Start(_ =>
+            var queue = DispatcherQueue.GetForCurrentThread();
+            SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(queue));
+            var application = new ShellApplication(() =>
             {
-                var queue = DispatcherQueue.GetForCurrentThread();
-                SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(queue));
-                var application = new ShellApplication(() =>
+                // Thrown from here it would cross into WinUI, which ends the process with nothing reported.
+                try
                 {
-                    // Thrown from here it would cross into WinUI, which ends the process with nothing reported.
-                    try
+                    var loop = new DispatcherLoop(queue, log);
+                    loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, "Winshell",
+                        "Something in Winshell failed. It is still running."));
+                    var shell = new Shell(loop, log, options, identity, arguments);
+                    shell.LogPath = instance.LogPath;
+                    _current = shell;
+                    var notices = new ShellNotices(
+                        loop,
+                        log,
+                        instance.Crashes,
+                        (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
+                        path => OpenToRead.Open(path, log),
+                        ShellNotices.WindowsIsQuiet);
+                    shell.Notices = notices;
+                    // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
+                    if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
+                        TomlFile.ErrorChanged += notices.ShowConfigError;
+                    if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
+                        XamlReload.Watch(shell, project);
+                    session.Serve(loop, new Control(shell), notices.Hide);
+                    // winshell.exe is a console program: Ctrl+C would end it with no Dispose, so it quits instead.
+                    Console.CancelKeyPress += (_, e) =>
                     {
-                        var loop = new DispatcherLoop(queue, log);
-                        loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, "Winshell",
-                            "Something in Winshell failed. It is still running."));
-                        var shell = new Shell(loop, log, options, identity, arguments);
-                        shell.LogPath = instance.LogPath;
-                        _current = shell;
-                        var notices = new ShellNotices(
-                            loop,
-                            log,
-                            instance.Crashes,
-                            (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
-                            path => OpenToRead.Open(path, log),
-                            ShellNotices.WindowsIsQuiet);
-                        shell.Notices = notices;
-                        // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
-                        if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
-                            TomlFile.ErrorChanged += notices.ShowConfigError;
-                        if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
-                            XamlReload.Watch(shell, project);
-                        instance.Listen(loop, new Control(shell), notices.Hide);
-                        instance.Publish(identity.ShellId);
-                        // winshell.exe is a console program: Ctrl+C would end it with no Dispose, so it quits instead.
-                        Console.CancelKeyPress += (_, e) =>
-                        {
-                            e.Cancel = true;
-                            loop.Post(shell.Quit);
-                        };
-                        configuration.Start(shell);
-                        ShellInstance.Quietly(() =>
-                            notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
-                    }
-                    catch (Exception e) when (e is not OutOfMemoryException)
-                    {
-                        instance.ReportFatal(e);
-                        failed = e;
-                        // Windows go first: WinUI crashes on the way out with any still open.
-                        queue.TryEnqueue(() =>
-                        {
-                            ShellInstance.Quietly(() => _current?.Dispose());
-                            Application.Current.Exit();
-                        });
-                    }
-                });
-                application.UnhandledException += (_, e) =>
+                        e.Cancel = true;
+                        loop.Post(shell.Quit);
+                    };
+                    configuration.Start(shell);
+                    ShellInstance.Quietly(() =>
+                        notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
+                }
+                catch (Exception e) when (e is not OutOfMemoryException)
                 {
-                    ShellInstance.Quietly(() => instance.Crashing?.Invoke());
-                    instance.ReportFatal(e.Exception);
-                };
-                GC.KeepAlive(application);
+                    instance.ReportFatal(e);
+                    failed = e;
+                    // Windows go first: WinUI crashes on the way out with any still open.
+                    queue.TryEnqueue(() =>
+                    {
+                        ShellInstance.Quietly(() => _current?.Dispose());
+                        Application.Current.Exit();
+                    });
+                }
             });
-        }
-        catch (Exception e) when (instance.ReportFatal(e))
-        {
-            throw;
-        }
-        finally
-        {
-            instance.MarkCleanExit();
-            instance.Close();
-        }
-
+            application.UnhandledException += (_, e) =>
+            {
+                ShellInstance.Quietly(() => instance.Crashing?.Invoke());
+                instance.ReportFatal(e.Exception);
+            };
+            GC.KeepAlive(application);
+        });
         if (failed is not null)
-        {
-            StartupError.Report(failed.Message, null);
-            Environment.ExitCode = 1;
-        }
+            session.Failure = failed;
     }
 
     /// <summary>

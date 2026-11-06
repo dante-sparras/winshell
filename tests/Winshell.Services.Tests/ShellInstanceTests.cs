@@ -5,6 +5,7 @@ using System.Text.Json;
 namespace Winshell.Services.Tests;
 
 /// <summary>The life of an instance, with the control pipe and its protocol, and no shell behind it.</summary>
+[Collection(InstanceRunCollection.Name)]
 public sealed class ShellInstanceTests
 {
     private const string Program = @"C:\shells\mine.exe";
