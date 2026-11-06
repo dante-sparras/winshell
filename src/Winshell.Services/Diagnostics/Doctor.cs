@@ -98,10 +98,17 @@ public static class Doctor
             Guard("dpi", "DPI",
                 () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath),
                     DoctorProbe.Monitors())),
-            Guard("signIn", "Sign-in", () => Packaging.IsPackaged
-                ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
-                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(),
-                    context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
+            Guard("signIn", "Sign-in", () =>
+            {
+                if (Packaging.IsPackaged)
+                    return DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State);
+                // The doctor already knows which configuration it is checking. A sign-in command with no -p and no -c
+                // starts whichever configuration winshell run would, and that is a different verdict.
+                var project = context.ConfigFile is { } file ? Path.GetDirectoryName(file) : null;
+                return DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(),
+                    context.ExePath, File.Exists, DoctorProbe.ResolveLinks, project,
+                    project is null ? null : SignInEntry.BareFolder(context.ConfigRoot), context.ConfigRoot);
+            }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes",

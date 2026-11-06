@@ -4,6 +4,7 @@ using System.Security;
 using System.Text;
 using Microsoft.Win32;
 using Winshell.Native;
+using Winshell.Session;
 
 namespace Winshell.Diagnostics;
 
@@ -198,14 +199,7 @@ internal static class DoctorProbe
     /// <summary>The file a path names in the end, past symbolic links, or the path itself when it is no link or cannot be read.</summary>
     public static string ResolveLinks(string path)
     {
-        try
-        {
-            return File.ResolveLinkTarget(path, true)?.FullName ?? path;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return path;
-        }
+        return SignInEntry.Resolve(path);
     }
 
     /// <summary>Lists crash reports. A missing folder has none. A folder that cannot be listed says why.</summary>

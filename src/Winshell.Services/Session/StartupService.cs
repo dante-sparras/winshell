@@ -1,12 +1,13 @@
+using Winshell.Native;
 using Winshell.Updates;
 
 namespace Winshell.Session;
 
 /// <summary>
-/// Whether Winshell runs when the current user signs in. An unpackaged Winshell is a <c>Winshell</c> value under the
-/// user's <c>Run</c> key. A packaged Winshell is the package's startup task. Windows' Startup apps page lists either
-/// and can turn it off. Nothing is registered until the shell sets <see cref="RunAtSignIn"/>, and Winshell never
-/// changes what that page chose.
+/// Whether this configuration runs when the current user signs in. An unpackaged Winshell is a <c>Winshell</c> value
+/// under the user's <c>Run</c> key; the value starts this install's <c>winshell.exe</c> running this configuration. A
+/// packaged Winshell is the package's startup task. Windows' Startup apps page lists either and can turn it off.
+/// Nothing is registered until the shell sets <see cref="RunAtSignIn"/>, and Winshell never changes what that page chose.
 /// </summary>
 public sealed class StartupService : ObservableObject
 {
@@ -24,30 +25,53 @@ public sealed class StartupService : ObservableObject
     }
 
     /// <summary>
-    /// The service the running shell uses: the package's startup task when packaged, else the <c>Run</c> value for this
-    /// process's command. Tests construct the service with a fake instead.
+    /// The service the running shell uses: the package's startup task when packaged; for a configuration program, the
+    /// <c>Run</c> value that starts it under the <c>winshell.exe</c> supervising this process; otherwise the <c>Run</c>
+    /// value for this process's command. Tests construct the service with a fake instead.
     /// </summary>
     internal static StartupService ForThisProcess(Log log)
     {
         return new StartupService(log, RegistryForThisProcess());
     }
 
+    /// <summary>
+    /// The sign-in command for the configuration program <paramref name="program"/> supervised by
+    /// <paramref name="supervisor"/>, or null when <paramref name="program"/> is not a configuration program or
+    /// <paramref name="supervisor"/> is not <c>winshell.exe</c>.
+    /// </summary>
+    internal static string? SignInCommand(string program, string? supervisor)
+    {
+        if (SignInEntry.ProjectFolder(program) is not { } project || supervisor is null ||
+            !SignInEntry.IsHost(supervisor))
+            return null;
+        return WindowsStartupRegistry.CommandFor(supervisor, ["run", "-p", project]);
+    }
+
     private static IStartupRegistry? RegistryForThisProcess()
     {
         if (Packaging.IsPackaged)
             return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
-        return Environment.ProcessPath is { } exe
-            ? new WindowsStartupRegistry(
-                WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)))
-            : null;
+        if (Environment.ProcessPath is not { } exe)
+            return null;
+        if (SignInEntry.ProjectFolder(exe) is null)
+            return new WindowsStartupRegistry(
+                WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)));
+        if (SignInCommand(exe, ProcessImage.SupervisingWinshell()) is not { } command)
+            return null;
+        return new WindowsStartupRegistry(command, bareFolder: SignInEntry.BareFolder(),
+            configRoot: ConfigPaths.Root());
     }
 
-    /// <summary>Whether this shell can register itself: false when it does not run as <c>winshell.exe</c>.</summary>
+    /// <summary>
+    /// Whether this shell can register itself to run at sign-in. False when a packaged shell has no startup task, and
+    /// false when this process is a configuration program that no <c>winshell.exe</c> is supervising.
+    /// </summary>
     public bool Available => _registry is not null;
 
     /// <summary>
-    /// Whether this Winshell is registered to run at sign-in. Setting it adds or removes the entry, and setting it
-    /// when the entry starts another <c>winshell.exe</c> points the entry here.
+    /// Whether this configuration is registered to run at sign-in. Setting it adds or removes the entry, and setting
+    /// it when the entry starts another install or another configuration points the entry here: this install's
+    /// <c>winshell.exe run</c> of this configuration.
     /// </summary>
     public bool RunAtSignIn
     {
@@ -56,7 +80,8 @@ public sealed class StartupService : ObservableObject
         {
             if (_registry is null)
             {
-                _log.Warn("startup", "RunAtSignIn needs a shell started by winshell.exe.");
+                _log.Warn("startup",
+                    "Run at sign-in needs the winshell.exe that is supervising this configuration.");
                 return;
             }
 
@@ -77,8 +102,9 @@ public sealed class StartupService : ObservableObject
     public bool TurnedOffInWindows => _turnedOff;
 
     /// <summary>
-    /// True when the entry is there but starts Winshell another way: a <c>winshell.exe</c> in another folder, as after
-    /// an update unzipped somewhere new, or other arguments. <see cref="RunAtSignIn"/> is false until it is set.
+    /// True when the entry is there but starts another install or another configuration: a <c>winshell.exe</c> in
+    /// another folder, as after an update unzipped somewhere new, or a different configuration.
+    /// <see cref="RunAtSignIn"/> is false until it is set.
     /// </summary>
     public bool RegisteredElsewhere => _elsewhere;
 

@@ -1,6 +1,8 @@
 using Microsoft.Win32;
+using Winshell.Diagnostics;
 using Winshell.Session;
 using StartupTaskState = Windows.ApplicationModel.StartupTaskState;
+using static Winshell.Diagnostics.DoctorSignIn;
 
 namespace Winshell.Services.Tests;
 
@@ -144,6 +146,130 @@ public sealed class StartupRegistryTests : IDisposable
     public void Arguments_are_quoted_the_way_Windows_splits_a_command_line(string arg, string quoted)
     {
         Assert.Equal(quoted, WindowsStartupRegistry.Quote(arg));
+    }
+
+    [Fact]
+    public void The_install_sign_in_entry_for_this_configuration_is_on_and_the_doctor_agrees()
+    {
+        // install.ps1 -AutoStart quotes a part only when it contains a space, and names no configuration.
+        const string winshell = @"C:\Program Files\Winshell\winshell.exe";
+        const string windowed = @"C:\Program Files\Winshell\winshellw.exe";
+        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
+        const string play = @"C:\Users\a\AppData\Roaming\winshell\play";
+        const string root = @"C:\config";
+        const string otherExe = @"C:\Other\winshell.exe";
+        var conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
+        var install = string.Join(' ', new[] { conhost, "--headless", winshell, "--no-build", "--no-duplicate" }
+            .Select(part => part.Any(char.IsWhiteSpace) ? "\"" + part + "\"" : part));
+        var supervised = $"{conhost} --headless \"{winshell}\" run -p {project} --no-build --no-duplicate";
+        var program = project + @"\bin\shell\work.exe";
+
+        Assert.Equal(supervised, WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", project]));
+        Assert.Equal(supervised, StartupService.SignInCommand(program, winshell));
+        Assert.Equal(supervised, StartupService.SignInCommand(project + @"\bin\shell.next\work.exe", windowed));
+        Assert.Null(StartupService.SignInCommand(program, null));
+        Assert.Null(StartupService.SignInCommand(program, @"C:\Program Files\dotnet\dotnet.exe"));
+
+        bool Exists(string path)
+        {
+            return path == winshell || path == otherExe;
+        }
+
+        var run = _testKey + @"\Run";
+        var approved = _testKey + @"\StartupApproved";
+        var registry = new WindowsStartupRegistry(supervised, run, approved, project);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
+        }
+
+        var startup = new StartupService(_log, registry);
+        Assert.True(startup.RunAtSignIn);
+        Assert.False(startup.RegisteredElsewhere);
+        Assert.Equal(CheckStatus.Pass,
+            SignIn(install, false, winshell, Exists, projectFolder: project, bareFolder: project).Status);
+
+        startup.RunAtSignIn = false;
+        using (var key = Registry.CurrentUser.OpenSubKey(run))
+        {
+            Assert.Null(key?.GetValue(SignInEntry.Name));
+        }
+
+        Assert.False(startup.RunAtSignIn);
+
+        startup.RunAtSignIn = true;
+        using (var key = Registry.CurrentUser.OpenSubKey(run))
+        {
+            Assert.Equal(supervised, key?.GetValue(SignInEntry.Name));
+        }
+
+        Assert.Equal(CheckStatus.Pass,
+            SignIn(supervised, false, winshell, Exists, projectFolder: project, bareFolder: project).Status);
+
+        var playCommand = WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", play]);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, playCommand, RegistryValueKind.String);
+        }
+
+        startup.Refresh();
+        Assert.False(startup.RunAtSignIn);
+        Assert.True(startup.RegisteredElsewhere);
+        var otherConfiguration =
+            SignIn(playCommand, false, winshell, Exists, projectFolder: project, bareFolder: project);
+        Assert.Equal(CheckStatus.Warn, otherConfiguration.Status);
+        Assert.Equal("The sign-in entry does not start this configuration.", otherConfiguration.Message);
+
+        var playRegistry = new WindowsStartupRegistry(
+            WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", play]), run, approved, project);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
+        }
+
+        var playStartup = new StartupService(_log, playRegistry);
+        Assert.False(playStartup.RunAtSignIn);
+        Assert.Equal(CheckStatus.Warn,
+            SignIn(install, false, winshell, Exists, projectFolder: play, bareFolder: project).Status);
+
+        var otherInstall = $"{conhost} --headless {otherExe} run -p {project} --no-build --no-duplicate";
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, otherInstall, RegistryValueKind.String);
+        }
+
+        startup.Refresh();
+        Assert.False(startup.RunAtSignIn);
+        Assert.True(startup.RegisteredElsewhere);
+        var other = SignIn(otherInstall, false, winshell, Exists, projectFolder: project, bareFolder: project);
+        Assert.Equal(CheckStatus.Warn, other.Status);
+        Assert.Contains("another winshell.exe", other.Message, StringComparison.Ordinal);
+
+        var byName = WindowsStartupRegistry.CommandFor(winshell, ["run", "-c", "work"]);
+        var named = new WindowsStartupRegistry(
+            WindowsStartupRegistry.CommandFor(winshell, ["run", "-p", root + @"\work"]),
+            run, approved, configRoot: root);
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, byName, RegistryValueKind.String);
+        }
+
+        var namedStartup = new StartupService(_log, named);
+        Assert.True(namedStartup.RunAtSignIn);
+        Assert.Equal(CheckStatus.Pass,
+            SignIn(byName, false, winshell, Exists, projectFolder: root + @"\work", configRoot: root).Status);
+
+        using (var key = Registry.CurrentUser.CreateSubKey(run))
+        {
+            key.SetValue(SignInEntry.Name, WindowsStartupRegistry.CommandFor(winshell, ["run", "-c", "play"]),
+                RegistryValueKind.String);
+        }
+
+        namedStartup.Refresh();
+        Assert.False(namedStartup.RunAtSignIn);
+        Assert.Equal(CheckStatus.Warn,
+            SignIn(WindowsStartupRegistry.CommandFor(winshell, ["run", "-c", "play"]), false, winshell, Exists,
+                projectFolder: root + @"\work", configRoot: root).Status);
     }
 
     [Fact]
