@@ -20,7 +20,6 @@ See also the [command line](command-line.md).
 | [Winshell.Power](winshell-power.md) | The battery, the power mode, monitor brightness, idle time and keeping the PC awake. |
 | [Winshell.Session](winshell-session.md) | Locking the Windows session, and running at sign-in. |
 | [Winshell.Tray](winshell-tray.md) | The icons apps add to the notification area. |
-| [Winshell.Updates](winshell-updates.md) | A portable Winshell checking GitHub Releases. |
 | [Winshell.Windows](winshell-windows.md) | App windows and virtual desktops. |
 | [Winshell.Winland](winshell-winland.md) | Monitors, workspaces and windows from Winland. |
 
