@@ -7,6 +7,8 @@ namespace Winshell.Core.Tests;
 /// </summary>
 public sealed class TomlLimitsTests
 {
+    private const int Megabyte = 1024 * 1024;
+
     private sealed class Settings(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
         public string Name
@@ -29,14 +31,6 @@ public sealed class TomlLimitsTests
     [Fact]
     public void The_budgets_sit_above_a_preferences_file()
     {
-        Assert.Equal(1024 * 1024, DataLimits.MaxTextBytes);
-        Assert.Null(DataLimits.FileBytes(DataLimits.MaxTextBytes, DataLimits.MaxTextBytes));
-        Assert.Null(DataLimits.FileBytes(-1, DataLimits.MaxTextBytes));
-        Assert.Contains(
-            "above the limit of ",
-            DataLimits.FileBytes(DataLimits.MaxTextBytes + 1, DataLimits.MaxTextBytes),
-            StringComparison.Ordinal);
-
         const string Preferences = """
                                    colorScheme = "system"
                                    accentColor = ""
@@ -70,7 +64,7 @@ public sealed class TomlLimitsTests
     [Fact]
     public void Text_past_1_MiB_is_not_parsed()
     {
-        var text = "# " + new string('x', DataLimits.MaxTextBytes);
+        var text = "# " + new string('x', Megabyte);
 
         Assert.False(TomlDocument.TryParse("big.toml", text, out var document, out var error));
         Assert.Null(document);
@@ -85,7 +79,7 @@ public sealed class TomlLimitsTests
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
         Assert.Equal("kept", settings.Name);
 
-        var oversized = Encoding.UTF8.GetBytes("name = \"" + new string('x', DataLimits.MaxTextBytes) + "\"\n");
+        var oversized = Encoding.UTF8.GetBytes("name = \"" + new string('x', Megabyte) + "\"\n");
         File.WriteAllBytes(fixture.FilePath, oversized);
 
         Wait.Until(() => settings.Error.Length > 0, "the file past the limit", fixture.Loop.Process);
@@ -103,8 +97,8 @@ public sealed class TomlLimitsTests
     public void The_limit_counts_bytes_and_not_characters()
     {
         // Fewer characters than the limit, more bytes.
-        var accented = Encoding.UTF8.GetBytes("name = \"" + new string('é', DataLimits.MaxTextBytes / 2) + "\"\n");
-        Assert.True(accented.Length > DataLimits.MaxTextBytes);
+        var accented = Encoding.UTF8.GetBytes("name = \"" + new string('é', Megabyte / 2) + "\"\n");
+        Assert.True(accented.Length > Megabyte);
         using var fixture = new TomlFixture("name = \"kept\"");
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
 
@@ -120,7 +114,7 @@ public sealed class TomlLimitsTests
     {
         using var fixture = new TomlFixture("name = \"kept\"");
         using var settings = new Settings(fixture.FilePath, fixture.Loop, fixture.Log);
-        File.WriteAllText(fixture.FilePath, "name = \"" + new string('x', DataLimits.MaxTextBytes) + "\"\n");
+        File.WriteAllText(fixture.FilePath, "name = \"" + new string('x', Megabyte) + "\"\n");
         Wait.Until(() => settings.Error.Length > 0, "the file past the limit", fixture.Loop.Process);
 
         File.WriteAllText(fixture.FilePath, "name = \"kept\"");
@@ -145,5 +139,57 @@ public sealed class TomlLimitsTests
         settings.Name = "next";
         fixture.Loop.Process();
         Assert.Equal(bomb, File.ReadAllBytes(fixture.FilePath));
+    }
+
+    [Fact]
+    public void Loading_a_file_names_what_went_wrong()
+    {
+        var dir = Directory.CreateTempSubdirectory("winshell-toml-load-");
+        var missing = Path.Combine(dir.FullName, "missing.toml");
+        var bad = Path.Combine(dir.FullName, "bad.toml");
+        var big = Path.Combine(dir.FullName, "big.toml");
+        var marked = Path.Combine(dir.FullName, "marked.toml");
+        var plain = Path.Combine(dir.FullName, "plain.toml");
+        try
+        {
+            Assert.Equal(TomlRead.Missing, TomlDocument.Load(missing).Kind);
+
+            File.WriteAllText(bad, "name =\n");
+            var invalid = TomlDocument.Load(bad);
+            Assert.Equal(TomlRead.Invalid, invalid.Kind);
+            Assert.Equal(1, invalid.Line);
+            Assert.True(invalid.Column > 0);
+            Assert.Contains($"{bad}[{invalid.Line}:{invalid.Column}]:", invalid.Describe(bad),
+                StringComparison.Ordinal);
+
+            File.WriteAllBytes(big, new byte[Megabyte + 1]);
+            var tooLarge = TomlDocument.Load(big);
+            Assert.Equal(TomlRead.TooLarge, tooLarge.Kind);
+            Assert.Contains("above the limit of 1048576", tooLarge.Message, StringComparison.Ordinal);
+            Assert.StartsWith($"{big}: file is ", tooLarge.Describe(big), StringComparison.Ordinal);
+
+            using (new FileStream(bad, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var blocked = TomlDocument.Load(bad);
+                Assert.Equal(TomlRead.Unreadable, blocked.Kind);
+                Assert.True(blocked.Message.Length > 0);
+            }
+
+            var withMark = new byte[] { 0xEF, 0xBB, 0xBF };
+            File.WriteAllBytes(marked, [.. withMark, .. "name = \"mine\"\n"u8]);
+            var parsed = TomlDocument.Load(marked);
+            Assert.Equal(TomlRead.Parsed, parsed.Kind);
+            Assert.True(parsed.Bom);
+            Assert.Equal("mine", parsed.Document!.Values["name"]);
+
+            File.WriteAllBytes(plain, "name = \"mine\"\n"u8.ToArray());
+            var withoutMark = TomlDocument.Load(plain);
+            Assert.Equal(TomlRead.Parsed, withoutMark.Kind);
+            Assert.False(withoutMark.Bom);
+        }
+        finally
+        {
+            dir.Delete(true);
+        }
     }
 }

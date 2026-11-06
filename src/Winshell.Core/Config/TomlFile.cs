@@ -2,9 +2,6 @@ using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
-using System.Text;
-using Tomlyn.Parsing;
-using Tomlyn.Syntax;
 
 namespace Winshell;
 
@@ -136,57 +133,54 @@ public abstract class TomlFile : ObservableObject, IDisposable
         // The write on its way reads the file too, and keeps what was assigned.
         if (_writePending)
             return;
-        var (text, _, problem) = ReadFile();
-        if (problem.Length > 0)
+        var load = TomlDocument.Load(_path);
+        switch (load.Kind)
         {
-            // A file past the limit is still the user's file. Any other failed read says nothing about it: an editor
-            // can hold the file while it saves.
-            if (!DataLimits.IsFileLimit(problem))
-            {
-                _log.Debug("io", $"TomlFile: failed to read {_path}: {problem}");
+            case TomlRead.Unreadable:
+                // An editor can hold the file while it saves. That says nothing about the file.
+                _log.Debug("io", $"TomlFile: failed to read {_path}: {load.Message}");
                 return;
-            }
-
-            _text = null;
-            Error = $"{_path}: {problem}";
-            Loaded = false;
-            Warn($"failed to read {Error}");
-            return;
+            case TomlRead.TooLarge:
+                // A file past the limit is still the user's file.
+                _text = null;
+                Error = load.Describe(_path);
+                Loaded = false;
+                Warn($"failed to read {Error}");
+                return;
+            case TomlRead.Missing:
+                _text = null;
+                Error = "";
+                Loaded = false;
+                return;
+            case TomlRead.Invalid:
+                if (load.Text == _text)
+                    return;
+                _text = load.Text;
+                Error = load.Describe(_path);
+                Loaded = false;
+                Warn($"failed to parse {Error}");
+                return;
+            case TomlRead.Parsed:
+                if (load.Text == _text)
+                    return;
+                _text = load.Text;
+                Error = "";
+                Apply(load.Document!, false);
+                _assigned.Clear();
+                Loaded = true;
+                return;
         }
-
-        if (text is null)
-        {
-            _text = null;
-            Error = "";
-            Loaded = false;
-            return;
-        }
-
-        if (text == _text)
-            return;
-        _text = text;
-        if (!TomlDocument.TryParse(_path, text, out var document, out var error))
-        {
-            Error = error;
-            Loaded = false;
-            Warn($"failed to parse {error}");
-            return;
-        }
-
-        Error = "";
-        Apply(document, text, false);
-        _assigned.Clear();
-        Loaded = true;
     }
 
     private void Write()
     {
         _writePending = false;
-        var (text, bom, problem) = ReadFile();
-        var error = $"{_path}: {problem}";
-        TomlDocument? document = null;
-        if (problem.Length == 0)
-            TomlDocument.TryParse(_path, text ?? "", out document, out error);
+        var load = TomlDocument.Load(_path);
+        var document = load.Document;
+        var error = load.Describe(_path);
+        // No file yet is an empty document, so the assigned keys can create it.
+        if (load.Kind == TomlRead.Missing)
+            TomlDocument.TryParse(_path, "", out document, out error);
         if (document is null)
         {
             Error = error;
@@ -197,8 +191,8 @@ public abstract class TomlFile : ObservableObject, IDisposable
 
         Error = "";
         // A file that has not changed was applied already, and its refused values reported.
-        if (text != _text)
-            Apply(document, text ?? "", true);
+        if (load.Text != _text)
+            Apply(document, true);
         var read = document.Values;
         foreach (var key in _keys)
         {
@@ -208,7 +202,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
         }
 
         var next = document.ToString();
-        if (next != text && !Put(next, text, bom))
+        if (next != load.Text && !Put(next, load.Text, load.Bom))
             return;
         _text = next;
         _assigned.Clear();
@@ -238,13 +232,11 @@ public abstract class TomlFile : ObservableObject, IDisposable
     /// refused, is reported and left: nothing writes a key that was not assigned, so the file keeps it as it is. So is a
     /// key no property reads that looks like a misspelling of one.
     /// </summary>
-    private void Apply(TomlDocument document, string text, bool keepAssigned)
+    private void Apply(TomlDocument document, bool keepAssigned)
     {
-        DocumentSyntax? syntax = null;
-
         string Where(string name)
         {
-            return TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name);
+            return document.LocationOf(name);
         }
 
         // A key like none of these may be another reader's: a configuration can share preferences.toml.
@@ -399,33 +391,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
         }
 
         return converted is not null;
-    }
-
-    /// <summary>The text, or null for no file, or why it could not be read.</summary>
-    private (string? Text, bool Bom, string Problem) ReadFile()
-    {
-        try
-        {
-            // Share the file so a save can replace it while this read is open.
-            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
-            // The length is known before the bytes are. A file past the limit is not copied into a string.
-            if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
-                return (null, false, why);
-            Span<byte> start = stackalloc byte[3];
-            var bom = stream.Read(start) == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;
-            stream.Position = 0;
-            using var reader = new StreamReader(stream, Encoding.UTF8, true);
-            return (reader.ReadToEnd(), bom, "");
-        }
-        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
-        {
-            return (null, false, "");
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return (null, false, e.Message);
-        }
     }
 
     /// <summary>Stops following the file. A write that was on its way runs now.</summary>

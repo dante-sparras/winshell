@@ -6,9 +6,96 @@ using Tomlyn;
 using Tomlyn.Model;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
-using static Winshell.TomlSyntax;
 
 namespace Winshell;
+
+/// <summary>What reading a TOML file from disk found.</summary>
+internal enum TomlRead
+{
+    /// <summary>The file is not there.</summary>
+    Missing,
+
+    /// <summary>The file is past 1 MiB, so it was not read.</summary>
+    TooLarge,
+
+    /// <summary>The file could not be read.</summary>
+    Unreadable,
+
+    /// <summary>The text is not TOML. <see cref="TomlLoad.Line"/> and <see cref="TomlLoad.Column"/> name the first error.</summary>
+    Invalid,
+
+    /// <summary>The file parsed. <see cref="TomlLoad.Document"/> is set.</summary>
+    Parsed
+}
+
+/// <summary>
+/// A TOML file read from disk. <see cref="Document"/> is set only for <see cref="TomlRead.Parsed"/>.
+/// <see cref="Text"/> is the file with a UTF-8 byte order mark stripped, including when the text is not TOML.
+/// </summary>
+internal readonly struct TomlLoad
+{
+    private TomlLoad(TomlRead kind, TomlDocument? document, string? text, bool bom, string message, int line,
+        int column)
+    {
+        Kind = kind;
+        Document = document;
+        Text = text;
+        Bom = bom;
+        Message = message;
+        Line = line;
+        Column = column;
+    }
+
+    public TomlRead Kind { get; }
+
+    public TomlDocument? Document { get; }
+
+    public string? Text { get; }
+
+    public bool Bom { get; }
+
+    /// <summary>The error detail, without the path. Empty when the file parsed or is missing.</summary>
+    public string Message { get; }
+
+    /// <summary>The 1-based line of a syntax error, or 0 when the error has no position.</summary>
+    public int Line { get; }
+
+    /// <summary>The 1-based column of a syntax error, or 0 when the error has no position.</summary>
+    public int Column { get; }
+
+    /// <summary><c>path[line:column]: message</c>, or <c>path: message</c> when the error has no position.</summary>
+    public string Describe(string where)
+    {
+        return Line > 0
+            ? string.Create(CultureInfo.InvariantCulture, $"{where}[{Line}:{Column}]: {Message}")
+            : $"{where}: {Message}";
+    }
+
+    public static TomlLoad Missing()
+    {
+        return new TomlLoad(TomlRead.Missing, null, null, false, "", 0, 0);
+    }
+
+    public static TomlLoad TooLarge(string message)
+    {
+        return new TomlLoad(TomlRead.TooLarge, null, null, false, message, 0, 0);
+    }
+
+    public static TomlLoad Unreadable(string message)
+    {
+        return new TomlLoad(TomlRead.Unreadable, null, null, false, message, 0, 0);
+    }
+
+    public static TomlLoad Invalid(string text, bool bom, string message, int line, int column)
+    {
+        return new TomlLoad(TomlRead.Invalid, null, text, bom, message, line, column);
+    }
+
+    public static TomlLoad Parsed(TomlDocument document, string text, bool bom)
+    {
+        return new TomlLoad(TomlRead.Parsed, document, text, bom, "", 0, 0);
+    }
+}
 
 /// <summary>
 /// A TOML file's text, read and edited as plain values: string, bool, long, double,
@@ -18,19 +105,65 @@ namespace Winshell;
 /// tables, or a dotted key already in the file is the value: only what changed in it is updated, in place. When that
 /// would write a part the file has elsewhere a second time, such as a key of a table that is under its own header, or
 /// leave a part that null takes out, the value is written again whole instead, inline, where a key the file does not
-/// have yet goes: at the end of its top-level keys, under its comment.
+/// have yet goes: at the end of its top-level keys, under its comment. <see cref="Load"/> reads a file and says when
+/// it is missing, too large, unreadable, or not TOML, and <see cref="LocationOf"/> says where a key is defined.
 /// </summary>
-internal sealed class TomlDocument
+internal sealed partial class TomlDocument
 {
+    private readonly string _where;
     private DocumentSyntax _document;
     private readonly string _newline;
     private IReadOnlyDictionary<string, object?>? _values;
 
-    private TomlDocument(DocumentSyntax document, TomlTable table)
+    private TomlDocument(string where, DocumentSyntax document, TomlTable table)
     {
+        _where = where;
         _document = document;
         _newline = NewlineOf(document);
         _values = PlainTable(table);
+    }
+
+    /// <summary>
+    /// Reads <paramref name="path"/>. A file that is missing, past 1 MiB, unreadable, or not TOML comes back as that
+    /// <see cref="TomlLoad.Kind"/> and no document. The text of a file that is not TOML is still
+    /// <see cref="TomlLoad.Text"/>.
+    /// </summary>
+    public static TomlLoad Load(string path)
+    {
+        string text;
+        bool bom;
+        try
+        {
+            // Share the file so a save can replace it while this read is open. The length is known before the bytes
+            // are: a file past the limit is not copied into a string.
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            if (FileBytes(stream.Length, MaxTextBytes) is { } why)
+                return TomlLoad.TooLarge(why);
+            Span<byte> start = stackalloc byte[3];
+            bom = stream.Read(start) == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;
+            stream.Position = 0;
+            using var reader = new StreamReader(stream, Encoding.UTF8, true);
+            text = reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return TomlLoad.Missing();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return TomlLoad.Unreadable(e.Message);
+        }
+
+        if (!TryLoad(text, out var syntax, out var table, out var message, out var line, out var column))
+            return TomlLoad.Invalid(text, bom, message, line, column);
+        return TomlLoad.Parsed(new TomlDocument(path, syntax, table), text, bom);
+    }
+
+    /// <summary><c>path[line:column]</c> of where <paramref name="key"/> is first defined, or the path when it is not.</summary>
+    public string LocationOf(string key)
+    {
+        return KeyAt(_where, _document, key);
     }
 
     /// <summary>The top-level keys and their values.</summary>
@@ -45,9 +178,16 @@ internal sealed class TomlDocument
         out string error)
     {
         document = null;
-        if (!TryLoad(where, text, out var syntax, out var table, out error))
+        if (!TryLoad(text, out var syntax, out var table, out var message, out var line, out var column))
+        {
+            error = line > 0
+                ? string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {message}")
+                : $"{where}: {message}";
             return false;
-        document = new TomlDocument(syntax, table);
+        }
+
+        document = new TomlDocument(where, syntax, table);
+        error = "";
         return true;
     }
 
@@ -77,7 +217,7 @@ internal sealed class TomlDocument
             var changes = Changes(current, desired);
             var updated = UpdateOwned(owned, key, changes);
             // A null for a part under its own header or in dotted keys is not taken out in place.
-            if (!updated || !TryLoad("", _document.ToString(), out _, out var read, out _)
+            if (!updated || !TryLoad(_document.ToString(), out _, out var read, out _, out _, out _)
                          || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
             {
                 _document = SyntaxParser.Parse(before);

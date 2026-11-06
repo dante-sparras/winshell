@@ -7,22 +7,29 @@ using Tomlyn.Syntax;
 
 namespace Winshell;
 
-/// <summary>
-/// What editing a TOML file's syntax tree takes, whatever the values are. A key is found by its first segment, and
-/// what follows a removed key or table stays in the file.
-/// </summary>
-internal static class TomlSyntax
+// Reading and editing the syntax tree. A key is found by its first segment, and what follows a removed key or table
+// stays in the file. Tomlyn is named only in this type.
+internal sealed partial class TomlDocument
 {
-    /// <summary><c>path[line:column]: message</c>. Tomlyn's <c>Message</c> drops the span; the span's line is 0-based.</summary>
-    public static string Locate(string where, DiagnosticMessage diagnostic)
+    /// <summary>1 MiB. A TOML file stops past this.</summary>
+    private const int MaxTextBytes = 1024 * 1024;
+
+    /// <summary>Null when <paramref name="bytes"/> is within <paramref name="maxBytes"/>.</summary>
+    private static string? FileBytes(long bytes, int maxBytes)
     {
-        var line = diagnostic.Span.Start.Line + 1;
-        var column = diagnostic.Span.Start.Column + 1;
-        return string.Create(CultureInfo.InvariantCulture, $"{where}[{line}:{column}]: {diagnostic.Message}");
+        return bytes > maxBytes
+            ? string.Create(CultureInfo.InvariantCulture, $"file is {bytes} bytes, above the limit of {maxBytes}")
+            : null;
+    }
+
+    /// <summary>Tomlyn's <c>Message</c> drops the span. The span's line and column are 0-based.</summary>
+    private static (string Message, int Line, int Column) Locate(DiagnosticMessage diagnostic)
+    {
+        return (diagnostic.Message, diagnostic.Span.Start.Line + 1, diagnostic.Span.Start.Column + 1);
     }
 
     /// <summary><c>path[line:column]</c> of where <paramref name="document"/> first defines a top-level key, or <c>path</c>.</summary>
-    public static string KeyAt(string where, DocumentSyntax document, string key)
+    private static string KeyAt(string where, DocumentSyntax document, string key)
     {
         var owned = FindOwned(document, key);
         SyntaxNode? first = owned.KeyValues.Count > 0 ? owned.KeyValues[0] : owned.Tables.FirstOrDefault();
@@ -32,18 +39,19 @@ internal static class TomlSyntax
     }
 
     /// <summary>
-    /// Whether <paramref name="text"/> loads. <paramref name="error"/> is <c>path[line:column]: message</c>, or
-    /// <c>path: message</c> for a byte limit or for Tomlyn's depth limit, when it does not. A file past 1 MiB does not
-    /// load. Nesting past 64 levels makes Tomlyn throw, which is reported here and is not applied.
+    /// Whether <paramref name="text"/> loads. On failure <paramref name="line"/> is 1-based, or 0 when the error has
+    /// no position: a file past 1 MiB, or nesting past 64 levels, which makes Tomlyn throw and is not applied.
     /// </summary>
-    public static bool TryLoad(string where, string text, out DocumentSyntax document, out TomlTable table,
-        out string error)
+    private static bool TryLoad(string text, out DocumentSyntax document, out TomlTable table, out string message,
+        out int line, out int column)
     {
         document = new DocumentSyntax();
         table = [];
-        if (DataLimits.FileBytes(Encoding.UTF8.GetByteCount(text), DataLimits.MaxTextBytes) is { } why)
+        line = 0;
+        column = 0;
+        if (FileBytes(Encoding.UTF8.GetByteCount(text), MaxTextBytes) is { } why)
         {
-            error = $"{where}: {why}";
+            message = why;
             return false;
         }
 
@@ -53,32 +61,39 @@ internal static class TomlSyntax
         }
         catch (TomlException e)
         {
-            error = $"{where}: {e.Message}";
+            message = e.Message;
             return false;
         }
 
         if (document.HasErrors)
         {
-            error = document.Diagnostics.Count > 0 ? Locate(where, document.Diagnostics[0]) : $"{where}: invalid TOML";
+            if (document.Diagnostics.Count > 0)
+                (message, line, column) = Locate(document.Diagnostics[0]);
+            else
+                message = "invalid TOML";
             return false;
         }
 
         try
         {
             table = TomlSerializer.Deserialize<TomlTable>(text) ?? [];
-            error = "";
+            message = "";
             return true;
         }
         catch (TomlException e)
         {
-            error = e.Line > 0
-                ? string.Create(CultureInfo.InvariantCulture, $"{where}[{e.Line}:{e.Column}]: {e.Message}")
-                : $"{where}: {e.Message}";
+            message = e.Message;
+            if (e.Line is int at and > 0)
+            {
+                line = at;
+                column = e.Column ?? 0;
+            }
+
             return false;
         }
     }
 
-    public static void RemoveInline(InlineTableSyntax table, InlineTableItemSyntax item)
+    private static void RemoveInline(InlineTableSyntax table, InlineTableItemSyntax item)
     {
         var index = 0;
         while (table.Items.GetChild(index) != item)
@@ -98,7 +113,7 @@ internal static class TomlSyntax
     /// the array as that item did: with or without a comma, then the comment lines and the bracket that followed it. An
     /// array left empty with no comment is <c>[]</c>.
     /// </summary>
-    public static void RemoveLastItem(ArraySyntax array)
+    private static void RemoveLastItem(ArraySyntax array)
     {
         var items = array.Items;
         var last = items.GetChild(items.ChildrenCount - 1)!;
@@ -129,7 +144,7 @@ internal static class TomlSyntax
     /// Adds an item at the end of an array: on a line of its own, indented the same, when the last item starts its own
     /// line, and after it on its line otherwise. What followed the last item follows the new one.
     /// </summary>
-    public static void AppendItem(ArraySyntax array, ValueSyntax value)
+    private static void AppendItem(ArraySyntax array, ValueSyntax value)
     {
         var items = array.Items;
         var item = new ArrayItemSyntax { Value = value };
@@ -203,7 +218,7 @@ internal static class TomlSyntax
         return trivia.FindLastIndex(t => t.Kind == TokenKind.NewLine);
     }
 
-    public static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline,
+    private static void AppendRaw(DocumentSyntax document, string keyText, string tomlValue, string newline,
         IEnumerable<string>? commentLines = null)
     {
         var fresh = ParseAssignment(keyText, tomlValue, newline);
@@ -261,7 +276,7 @@ internal static class TomlSyntax
         fresh.EndOfLineToken.TrailingTrivia = after;
     }
 
-    public static KeyValueSyntax ParseAssignment(string keyText, string tomlValue, string newline)
+    private static KeyValueSyntax ParseAssignment(string keyText, string tomlValue, string newline)
     {
         var parsed = SyntaxParser.Parse(keyText + " = " + tomlValue + newline);
         var fresh = (KeyValueSyntax)parsed.KeyValues.GetChild(0)!;
@@ -271,7 +286,7 @@ internal static class TomlSyntax
 
     // What follows the last key, such as the blank line and comment before a table, follows the key added after it.
     // A comment above the key stays too. Returns what is left to keep when no key is left in the list, or null.
-    public static List<SyntaxTrivia>? Remove(SyntaxList<KeyValueSyntax> list, KeyValueSyntax kv, string newline)
+    private static List<SyntaxTrivia>? Remove(SyntaxList<KeyValueSyntax> list, KeyValueSyntax kv, string newline)
     {
         var above = kv.LeadingTrivia;
         List<SyntaxTrivia> kept =
@@ -304,7 +319,7 @@ internal static class TomlSyntax
     }
 
     /// <summary>Takes out a top-level key. What is left to keep after the last one goes above the first table, or ends the file.</summary>
-    public static void RemoveKey(DocumentSyntax document, KeyValueSyntax kv, string newline)
+    private static void RemoveKey(DocumentSyntax document, KeyValueSyntax kv, string newline)
     {
         if (Remove(document.KeyValues, kv, newline) is not { } kept)
             return;
@@ -323,7 +338,7 @@ internal static class TomlSyntax
     /// Takes out a table. The comment above it stays, and so do the comments after it, which Tomlyn keeps on its last
     /// line: above the next table, or at the end of the file.
     /// </summary>
-    public static void RemoveTable(DocumentSyntax document, TableSyntaxBase table)
+    private static void RemoveTable(DocumentSyntax document, TableSyntaxBase table)
     {
         var index = 0;
         while (document.Tables.GetChild(index) != table)
@@ -379,7 +394,7 @@ internal static class TomlSyntax
                (kinds.Count == 1 || kinds[^2] == TokenKind.NewLine);
     }
 
-    public static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
+    private static void InsertAfter(DocumentSyntax document, TableSyntaxBase after, TableSyntaxBase table)
     {
         var following = new List<TableSyntaxBase>();
         var seen = false;
@@ -395,7 +410,7 @@ internal static class TomlSyntax
             document.Tables.Add(current);
     }
 
-    public static Owned FindOwned(DocumentSyntax document, string name)
+    private static Owned FindOwned(DocumentSyntax document, string name)
     {
         var owned = new Owned();
         foreach (var kv in document.KeyValues)
@@ -407,7 +422,7 @@ internal static class TomlSyntax
         return owned;
     }
 
-    public static KeyValueSyntax? FindItem(SyntaxList<KeyValueSyntax> items, string name)
+    private static KeyValueSyntax? FindItem(SyntaxList<KeyValueSyntax> items, string name)
     {
         foreach (var kv in items)
             if (Names(kv.Key, name))
@@ -415,12 +430,12 @@ internal static class TomlSyntax
         return null;
     }
 
-    public static bool Names(KeySyntax? key, string name)
+    private static bool Names(KeySyntax? key, string name)
     {
         return IsSimple(key) && RootName(key) == name;
     }
 
-    public static bool IsSimple(KeySyntax? key)
+    private static bool IsSimple(KeySyntax? key)
     {
         return key is not null && key.DotKeys.ChildrenCount == 0;
     }
@@ -430,7 +445,7 @@ internal static class TomlSyntax
         return key is null ? null : SegmentText(key.Key);
     }
 
-    public static IEnumerable<string> Segments(KeySyntax key)
+    private static IEnumerable<string> Segments(KeySyntax key)
     {
         if (SegmentText(key.Key) is { } first)
             yield return first;
@@ -449,7 +464,7 @@ internal static class TomlSyntax
         };
     }
 
-    public static string NewlineOf(DocumentSyntax document)
+    private static string NewlineOf(DocumentSyntax document)
     {
         foreach (var kv in document.KeyValues)
             if (Line(kv.EndOfLineToken) is { } line)
@@ -486,17 +501,17 @@ internal static class TomlSyntax
             : null;
     }
 
-    public static SyntaxToken FirstToken(SyntaxNode node)
+    private static SyntaxToken FirstToken(SyntaxNode node)
     {
         return node.Tokens(false).OfType<SyntaxToken>().First();
     }
 
-    public static SyntaxToken LastToken(SyntaxNode node)
+    private static SyntaxToken LastToken(SyntaxNode node)
     {
         return node.Tokens(false).OfType<SyntaxToken>().Last();
     }
 
-    public static SyntaxToken Comma()
+    private static SyntaxToken Comma()
     {
         return Comma([new SyntaxTrivia(TokenKind.Whitespaces, " ")]);
     }
@@ -506,26 +521,26 @@ internal static class TomlSyntax
         return new SyntaxToken(TokenKind.Comma, ",") { TrailingTrivia = trailing };
     }
 
-    public static void SetString(StringValueSyntax node, string text)
+    private static void SetString(StringValueSyntax node, string text)
     {
         node.Value = text;
         node.Token!.TokenKind = TokenKind.String;
         node.Token.Text = Quote(text);
     }
 
-    public static void SetBool(BooleanValueSyntax node, bool value)
+    private static void SetBool(BooleanValueSyntax node, bool value)
     {
         node.Value = value;
         node.Token!.TokenKind = value ? TokenKind.True : TokenKind.False;
         node.Token.Text = value ? "true" : "false";
     }
 
-    public static string Key(string key)
+    private static string Key(string key)
     {
         return key.Length > 0 && key.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-') ? key : Quote(key);
     }
 
-    public static string Quote(string text)
+    private static string Quote(string text)
     {
         var quoted = new StringBuilder("\"");
         foreach (var c in text)
@@ -543,7 +558,7 @@ internal static class TomlSyntax
     }
 
     /// <summary>Everything in a document that defines one key: its assignments, and its tables or array of tables.</summary>
-    internal sealed class Owned
+    private sealed class Owned
     {
         public List<KeyValueSyntax> KeyValues { get; } = [];
 

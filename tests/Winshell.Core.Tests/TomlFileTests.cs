@@ -1,5 +1,4 @@
 using System.Text;
-using Tomlyn.Parsing;
 
 namespace Winshell.Core.Tests;
 
@@ -179,7 +178,7 @@ public sealed class TomlFileTests
         fixture.Loop.Process();
 
         var text = fixture.Text;
-        Assert.False(SyntaxParser.Parse(text).HasErrors);
+        Assert.True(TomlDocument.TryParse("settings.toml", text, out _, out var error), error);
         Assert.Single(text.Split("[[hidden]]").Skip(1));
         Assert.Contains("id = \"Contoso.Chat\" # chat", text, StringComparison.Ordinal);
         Assert.Contains("name = \"Renamed\"", text, StringComparison.Ordinal);
@@ -614,7 +613,7 @@ public sealed class TomlFileTests
         fixture.Loop.Process();
 
         var text = fixture.Text;
-        Assert.False(SyntaxParser.Parse(text).HasErrors);
+        Assert.True(TomlDocument.TryParse("settings.toml", text, out _, out var error), error);
         Assert.Contains("name = \"disk\" # keep", text, StringComparison.Ordinal);
         Assert.DoesNotContain("name = \"default\"", text, StringComparison.Ordinal);
         Assert.Equal("disk", settings.Name);
