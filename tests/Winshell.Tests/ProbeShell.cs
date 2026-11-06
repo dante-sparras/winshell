@@ -164,19 +164,17 @@ internal static class ProbeShell
 
     private static string Project(string shellProject)
     {
+        var props = Path.Combine(Repo.Root, "src", "Winshell.Package", "buildTransitive", "Winshell.props");
         return $"""
                 <Project Sdk="Microsoft.NET.Sdk">
+                  <Import Project="{props}" />
                   <PropertyGroup>
                     <OutputType>WinExe</OutputType>
                     <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
-                    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
                     <Nullable>enable</Nullable>
                     <ImplicitUsings>enable</ImplicitUsings>
                     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
                     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-                    <UseWinUI>true</UseWinUI>
-                    <WindowsPackageType>None</WindowsPackageType>
-                    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
                     <AssemblyName>Probe</AssemblyName>
                     <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
                   </PropertyGroup>
