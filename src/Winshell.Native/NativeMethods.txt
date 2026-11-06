@@ -3,6 +3,7 @@ QueryFullProcessImageNameW
 CloseHandle
 GetSidSubAuthorityCount
 GetSidSubAuthority
+GetCurrentPackageFullName
 
 // Apps
 SHGetKnownFolderPath
@@ -148,14 +149,6 @@ RegNotifyChangeKeyValue
 SelectObject
 SendNotifyMessageW
 WM_COPYDATA
-
-// Updates
-WinVerifyTrust
-WTHelperProvDataFromStateData
-WTHelperGetProvSignerFromChain
-WTHelperGetProvCertFromChain
-WINTRUST_ACTION_GENERIC_VERIFY_V2
-GetCurrentPackageFullName
 
 // Windows
 RegisterShellHookWindow

@@ -7,8 +7,7 @@
 #   pwsh scripts/package.ps1 -Verify          only checks what artifacts/ already has
 #
 # Publishing is a self-contained, trimmed ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed
-# and sign-in does less JIT work. It names -Repository as where the build is released, so it puts an update from that
-# repository's GitHub Releases that is staged already in place.
+# and sign-in does less JIT work.
 # Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
 # and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
 # from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
@@ -146,7 +145,7 @@ if ($Publish) {
         $dir = Assert-Inside (Join-Path $publishRoot $rid) $publishRoot
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         dotnet publish (Join-Path $root 'src/Winshell/Winshell.csproj') --nologo -c Release -r $rid --self-contained `
-            -p:PublishReadyToRun=true "-p:Version=$Version" "-p:WinshellReleaseRepository=$Repository" -o $dir
+            -p:PublishReadyToRun=true "-p:Version=$Version" -o $dir
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish for $rid failed with $LASTEXITCODE" }
         # Debugger helpers and symbols are not part of the install, and neither is what nothing in Winshell loads: WebView2,
         # the other garbage collectors, and HTTP/3. The .mui files are: without them WinUI ends the process, with no crash

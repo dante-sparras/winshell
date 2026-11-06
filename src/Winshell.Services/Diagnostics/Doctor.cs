@@ -4,7 +4,6 @@ using System.Text.RegularExpressions;
 using Winshell.Native;
 using Winshell.Notifications;
 using Winshell.Session;
-using Winshell.Updates;
 
 namespace Winshell.Diagnostics;
 
