@@ -1,6 +1,8 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.System.Diagnostics.ToolHelp;
 
 namespace Winshell.Native;
 
@@ -17,6 +19,33 @@ internal static class ProcessImage
     private const int FirstCapacity = 1024;
 
     internal readonly record struct QueryResult(bool Ok, int Size, int Error);
+
+    /// <summary>
+    /// The <c>winshell.exe</c> or <c>winshellw.exe</c> that started this process, walking from its parent, or null
+    /// when none of those hosts did. A configuration's own program is not that host.
+    /// </summary>
+    internal static string? SupervisingWinshell()
+    {
+        try
+        {
+            var id = (uint)Environment.ProcessId;
+            var seen = new HashSet<uint>();
+            for (var depth = 0; depth < 8 && seen.Add(id); depth++)
+            {
+                if (ParentOf(id) is not uint parent || parent == 0 || parent == id)
+                    return null;
+                if (TryRead(parent) is { } image && IsWinshellHost(image))
+                    return image;
+                id = parent;
+            }
+
+            return null;
+        }
+        catch (Exception e) when (e is Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>The image path, or null when the process cannot be opened or the name cannot be read.</summary>
     internal static string? TryRead(uint processId)
@@ -51,6 +80,35 @@ internal static class ProcessImage
         }
 
         return null;
+    }
+
+    private static bool IsWinshellHost(string path)
+    {
+        var name = Path.GetFileName(path);
+        return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
+               || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The parent process id, or null when the snapshot cannot be read or the process is not in it.</summary>
+    private static uint? ParentOf(uint processId)
+    {
+        var snapshot = PInvoke.CreateToolhelp32Snapshot(CREATE_TOOLHELP_SNAPSHOT_FLAGS.TH32CS_SNAPPROCESS, 0);
+        if (snapshot == new HANDLE(-1))
+            return null;
+        try
+        {
+            var entry = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
+            for (var more = PInvoke.Process32FirstW(snapshot, ref entry);
+                 more;
+                 more = PInvoke.Process32NextW(snapshot, ref entry))
+                if (entry.th32ProcessID == processId)
+                    return entry.th32ParentProcessID;
+            return null;
+        }
+        finally
+        {
+            PInvoke.CloseHandle(snapshot);
+        }
     }
 
     private static unsafe QueryResult Query(nint process, char[] buffer, int capacity)

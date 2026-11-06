@@ -98,10 +98,21 @@ public static class Doctor
             Guard("dpi", "DPI",
                 () => DoctorScreens.Dpi(ThreadDpi.IsPerMonitorV2(), DoctorProbe.CompatibilityLayers(context.ExePath),
                     DoctorProbe.Monitors())),
-            Guard("signIn", "Sign-in", () => Packaging.IsPackaged
-                ? DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State)
-                : DoctorSignIn.SignIn(SignInEntry.RegisteredCommand(), SignInEntry.TurnedOffInWindows(),
-                    context.ExePath, File.Exists, DoctorProbe.ResolveLinks)),
+            Guard("signIn", "Sign-in", () =>
+            {
+                if (Packaging.IsPackaged)
+                    return DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State);
+                // The doctor already knows which configuration it is checking. A sign-in command with no -p and no -c
+                // starts whichever configuration winshell run would, and that is a different verdict.
+                var project = context.ConfigFile is { } file ? Path.GetDirectoryName(file) : null;
+                // The shell's process is the configuration program. The entry starts the winshell.exe that started it.
+                var supervisor = SignInEntry.ProjectFolder(context.ExePath) is null
+                    ? null
+                    : ProcessImage.SupervisingWinshell();
+                return SignInForProcess(context.ExePath, supervisor, SignInEntry.RegisteredCommand(),
+                    SignInEntry.TurnedOffInWindows(), File.Exists, DoctorProbe.ResolveLinks, project,
+                    project is null ? null : SignInEntry.BareFolder(context.ConfigRoot), context.ConfigRoot);
+            }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes",
@@ -204,6 +215,19 @@ public static class Doctor
             Message = check.Message.EndsWith('.') ? $"{check.Message} {problem}" : $"{check.Message}. {problem}",
             Fix = "Correct that file and save. Winshell keeps the last values it could read until the file parses."
         };
+    }
+
+    /// <summary>
+    /// The sign-in check for <paramref name="processPath"/>. A configuration program is compared as the
+    /// <paramref name="supervisor"/> that started it, which is the <c>winshell.exe</c> the entry runs.
+    /// </summary>
+    internal static DoctorCheck SignInForProcess(string processPath, string? supervisor, string? command,
+        bool turnedOff,
+        Func<string, bool> exists, Func<string, string>? resolve = null, string? projectFolder = null,
+        string? bareFolder = null, string? configRoot = null)
+    {
+        return DoctorSignIn.SignIn(command, turnedOff, SignInEntry.InstallExe(processPath, supervisor), exists, resolve,
+            projectFolder, bareFolder, configRoot);
     }
 
     /// <summary>

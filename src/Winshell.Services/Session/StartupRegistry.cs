@@ -31,7 +31,11 @@ internal interface IStartupRegistry
 internal sealed class WindowsStartupRegistry(
     string command,
     string runKey = SignInEntry.RunKey,
-    string approvedKey = SignInEntry.ApprovedKey) : IStartupRegistry
+    string approvedKey = SignInEntry.ApprovedKey,
+    string? bareFolder = null,
+    string? configRoot = null,
+    Func<string?>? bareFolderOf = null,
+    Func<string>? configRootOf = null) : IStartupRegistry
 {
     public string Command => command;
 
@@ -42,7 +46,22 @@ internal sealed class WindowsStartupRegistry(
 
     public bool PointsElsewhere()
     {
-        return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value && !SameSignInCommand(value, command));
+        return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value &&
+                         !SameSignInCommand(value, command, BareFolder(), ConfigRoot()));
+    }
+
+    /// <summary>
+    /// The folder a bare <c>winshell run</c> starts, read when the entry is read. A shell stays open across adding a
+    /// configuration, and that changes which project the installer's command starts.
+    /// </summary>
+    private string? BareFolder()
+    {
+        return bareFolderOf is null ? bareFolder : bareFolderOf();
+    }
+
+    private string? ConfigRoot()
+    {
+        return configRootOf is null ? configRoot : configRootOf();
     }
 
     public bool TurnedOffInWindows()
@@ -76,7 +95,8 @@ internal sealed class WindowsStartupRegistry(
         {
             return action();
         }
-        catch (Exception e) when (e is UnauthorizedAccessException or SecurityException or IOException)
+        catch (Exception e) when (e is UnauthorizedAccessException or SecurityException or IOException
+                                      or ArgumentException or NotSupportedException)
         {
             return false;
         }
@@ -153,10 +173,19 @@ internal sealed class WindowsStartupRegistry(
         return string.IsNullOrEmpty(dir) ? "winshell.exe" : Path.Combine(dir, "winshell.exe");
     }
 
-    /// <summary>Whether two sign-in commands start the same install. The windowed name counts as the console name.</summary>
-    internal static bool SameSignInCommand(string left, string right)
+    /// <summary>
+    /// Whether two sign-in commands start the same install. The windowed name counts as the console name. When
+    /// <paramref name="expected"/> names a configuration, the installer's command (no <c>-p</c> and no <c>-c</c>) matches
+    /// it only when that configuration is <paramref name="bareFolder"/>, and a <c>-c</c> name is a folder of
+    /// <paramref name="configRoot"/>.
+    /// </summary>
+    internal static bool SameSignInCommand(string actual, string expected, string? bareFolder = null,
+        string? configRoot = null)
     {
-        return string.Equals(NormalizeSignInExe(left), NormalizeSignInExe(right), StringComparison.OrdinalIgnoreCase);
+        if (!SignInEntry.Read(expected).NamesConfiguration)
+            return string.Equals(NormalizeSignInExe(actual), NormalizeSignInExe(expected),
+                StringComparison.OrdinalIgnoreCase);
+        return SignInEntry.IsOurs(actual, expected, bareFolder, configRoot);
     }
 
     private static string NormalizeSignInExe(string command)
