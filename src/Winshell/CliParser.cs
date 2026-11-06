@@ -4,203 +4,379 @@ using System.Globalization;
 
 namespace Winshell;
 
+/// <summary>
+/// One table says what every command accepts. <see cref="Parse"/> reads the arguments once, and <see cref="Help"/>
+/// prints the same table.
+/// </summary>
 internal static class CliParser
 {
     internal static CliOptions Parse(string[] args)
     {
-        var command = FirstCommand(args);
-        if (command is not null && !Commands.ContainsKey(command))
-            throw UnknownCommand(command);
-        // Help and the version win over the rest of validation and execution. Arguments after -- or an IPC function are data.
-        if (HelpRequested(args))
-            return new CliOptions { Command = command, ShowHelp = true };
-        if (command is not (null or "help") && VersionRequested(args))
-            return new CliOptions { Command = command, ShowVersion = true };
+        var line = new Line(args);
+        line.Read();
+        // Help and the version win over the rest of validation. An unknown command is already refused.
+        if (line.Help)
+            return new CliOptions { Command = line.Command, ShowHelp = true };
+        if (line.Command is not (null or "help") && line.Version)
+            return new CliOptions { Command = line.Command, ShowVersion = true };
+        return Finish(line);
+    }
 
-        var rest = command is null ? args : WithoutToken(args, command);
-        var options = ParseOptions(rest, command);
-        var positional = options.Positional;
-        switch (command)
+    /// <summary>The help for <paramref name="command"/>, or the summary when that is null or has no help of its own.</summary>
+    internal static string Help(string? command)
+    {
+        var text = command is not null && Commands.TryGetValue(command, out var entry) ? entry.Usage : Summary;
+        return text.Replace("{version}", CliMetadata.Version, StringComparison.Ordinal)
+            .Replace("{config-root}", ConfigPaths.Root(), StringComparison.Ordinal)
+            .Replace("{config-override}", ConfigPaths.OverrideVariable, StringComparison.Ordinal)
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .TrimEnd();
+    }
+
+    private static readonly Option[] Shared =
+    [
+        Option.Flag("--verbose", "-v"),
+        Option.Flag("--help", "-h", "/?"),
+        Option.Flag("--version", "-V")
+    ];
+
+    private static readonly Option Path = Option.Value("--path", "-p");
+
+    private static readonly Option ConfigOption = Option.Value("--config", "-c");
+
+    private static readonly Option[] Instance = [Option.Value("--id", "-i"), Option.Value("--pid"), Path, ConfigOption];
+
+    private const string RunUsage = """
+                                    winshell run [-c <name> | -p <path>] [-d] [-n] [--no-build] [-- <args>...]
+                                      Starts a configuration project's shell, built first when a source is newer than its
+                                      program. With no project, nothing starts.
+                                      -d, --daemonize        run in the background
+                                      -n, --no-duplicate     exit quietly if this config is already running
+                                          --no-build         run the last build, and do not build again
+                                      Words after -- go to the configuration's program.
+                                    """;
+
+    private const string ListUsage = """
+                                     winshell list [-j]
+                                       Lists running instances. -j, --json prints them as JSON.
+                                       Stopped instances are not listed.
+                                     """;
+
+    private const string KillUsage = """
+                                     winshell kill [--force] [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                                       Asks one running instance to exit, then waits until that process has exited.
+                                       --force ends the process when it does not exit.
+                                       With one running instance and no selector, that instance is used.
+                                       With several, this exits and lists them.
+                                     """;
+
+    private const string ReloadUsage = """
+                                       winshell reload [-i <id> | --pid <pid> | -c <name> | -p <path>]
+                                         Builds a configuration project and asks its instance to start again.
+                                         A build that fails leaves the instance running and asks it to show the error.
+                                         With one running instance and no selector, that instance is used.
+                                         With several, this exits and lists them.
+                                       """;
+
+    private const string InspectUsage = """
+                                        winshell inspect [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
+                                          tree                            print each open window's live layout as JSON
+                                          screenshot <file> [window]      save a window as a PNG
+                                          click <name> [window]           activate an element, as Narrator does
+                                          hover <name> [window]           put a control in its pointer look
+                                          A window is the type of its content, or its number in tree. The first is the default.
+                                          A name is an x:Name, or an automation id or name. Nothing goes through Windows' input.
+                                        """;
+
+    private const string DevUsage = """
+                                    winshell dev [-c <name> | -p <path>]
+                                      Runs a configuration project and applies each edit to the running shell, until Ctrl+C.
+                                      A saved C# or XAML file reaches the shell in place, and the other windows are left alone.
+                                      What does not compile shows on screen, and the last version that did keeps running.
+                                      Needs the .NET SDK. See the guide for what an edit can change.
+                                    """;
+
+    private const string LogUsage = """
+                                    winshell log [-i <id> | --pid <pid> | -c <name> | -p <path>] [-t <n>] [-f] [file]
+                                      Prints an instance's log. -t, --tail <n> prints the last n lines.
+                                      -f, --follow keeps printing new lines. winshell log <file> prints that file.
+                                      With one running instance and no selector, that instance is used.
+                                      With several, this exits and lists them.
+                                      With nothing running and no selector, the log of a stopped instance is printed.
+                                    """;
+
+    private const string IpcUsage = """
+                                    winshell ipc [-i <id> | --pid <pid> | -c <name> | -p <path>] <command>
+                                      show [-j]                             list IPC targets. -j prints JSON
+                                      call <target> <function> [args...]    call a function and print the result
+                                      call notice dismiss                   close Winshell's own notice
+                                      prop get <target> <property>          print a property
+                                      wait <target> <signal>                wait for one signal
+                                      listen <target> <signal>              print each signal until Ctrl+C
+                                      Words after the function name are arguments, even when they start with -.
+                                      A -- ends options on every command.
+                                    """;
+
+    private const string DoctorUsage = """
+                                       winshell doctor [-c <name> | -p <path>] [-j] [--no-color]
+                                         Checks this PC's setup for Winshell and changes nothing.
+                                         -c, --config <name>    a named config in {config-root}
+                                         -j, --json             print the checks as JSON
+                                             --no-color         print without color
+                                       """;
+
+    private const string Summary = """
+                                   winshell {version}: a desktop shell for Windows 11
+
+                                   Usage: winshell run [options]              start a shell
+                                          winshell                            print this help
+                                          winshell <command> --help           help for that command, which does not run
+                                          winshell list [-j]                  list running instances
+                                          winshell kill [--force] [instance options]
+                                                                              stop an instance and wait until it exits
+                                          winshell reload [instance options]
+                                                                              reload an instance's configuration
+                                          winshell dev [-c <name> | -p <path>]
+                                                                              run a project and apply each edit to it
+                                          winshell log [-f] [-t N] [file]     print an instance's log
+                                          winshell ipc show [-j]              list IPC targets
+                                          winshell ipc call <target> <function> [args...]
+                                          winshell ipc prop get <target> <property>
+                                          winshell ipc wait <target> <signal>
+                                          winshell ipc listen <target> <signal>
+                                          winshell inspect tree | screenshot <file> | click <name> | hover <name>
+                                                                              look at a running shell, or act on it
+                                          winshell doctor [config options] [-j] [--no-color]
+                                                                              check this PC's setup for Winshell
+                                          winshell help [command]             print this summary, or that command's help
+
+                                   Config selection:
+                                     -p, --path <path>      a project file, or the folder it is in
+                                     -c, --config <name>    a named config in {config-root}
+                                                            ({config-override} overrides that folder)
+                                   Instance selection (kill, reload, log, ipc, inspect):
+                                     -i, --id <id>          an instance id, or the start of one
+                                         --pid <pid>        an instance's process id
+                                   Other:
+                                     -d, --daemonize        run in the background
+                                     -n, --no-duplicate     exit quietly if this config is already running
+                                         --no-build         run the last build, and do not build again
+                                     -v, --verbose          log debug messages
+                                     -j, --json             print list, ipc show or doctor as JSON
+                                         --no-color         print doctor without color
+                                     -h, --help, /?         print help and exit
+                                     -V, --version          print the version
+                                     --                     end options; later words are the program's arguments
+
+                                   Exit codes: 0 done, 1 the command failed, 2 the command line was wrong.
+                                   """;
+
+    /// <summary>Every command, the options and words it takes, and the help it prints. Each also takes <see cref="Shared"/>.</summary>
+    private static readonly Command[] Entries =
+    [
+        Entry("run", RunUsage, WordRule.None,
+        [
+            Path, ConfigOption, Option.Flag("--daemonize", "-d"), Option.Flag("--no-duplicate", "-n"),
+            Option.Flag("--no-build")
+        ]),
+        Entry("list", ListUsage, WordRule.None, [Option.Flag("--json", "-j")]),
+        Entry("kill", KillUsage, WordRule.None, [.. Instance, Option.Flag("--force")]),
+        Entry("reload", ReloadUsage, WordRule.None, Instance),
+        Entry("log", LogUsage, WordRule.One,
+            [.. Instance, Option.Value("--tail", "-t"), Option.Flag("--follow", "-f")]),
+        Entry("ipc", IpcUsage, WordRule.Subcommand, [.. Instance, Option.Flag("--json", "-j")],
+        [
+            new Subcommand("show"),
+            new Subcommand("call", 2, "a target and a function", RawAfter: true),
+            new Subcommand("prop", 3, "\"get\", a target and a property", "get"),
+            new Subcommand("wait", 2, "a target and a signal"),
+            new Subcommand("listen", 2, "a target and a signal")
+        ]),
+        Entry("inspect", InspectUsage, WordRule.Subcommand, Instance,
+        [
+            new Subcommand("tree"),
+            new Subcommand("screenshot", 1, "a file"),
+            new Subcommand("click", 1, "a name"),
+            new Subcommand("hover", 1, "a name")
+        ]),
+        Entry("dev", DevUsage, WordRule.None, [Path, ConfigOption]),
+        Entry("doctor", DoctorUsage, WordRule.None,
+            [Path, ConfigOption, Option.Flag("--json", "-j"), Option.Flag("--no-color")]),
+        Entry("help", Summary, WordRule.Topic, [])
+    ];
+
+    private static readonly FrozenDictionary<string, Command>
+        Commands = Entries.ToFrozenDictionary(entry => entry.Name);
+
+    private static readonly FrozenDictionary<string, Option> ByToken = IndexTokens();
+
+    private static FrozenDictionary<string, Option> IndexTokens()
+    {
+        var map = new Dictionary<string, Option>(StringComparer.Ordinal);
+        foreach (var entry in Entries)
+        foreach (var option in entry.Options)
+            option.Collect(map);
+        return map.ToFrozenDictionary(StringComparer.Ordinal);
+    }
+
+    private static Command Entry(string name, string usage, WordRule words, Option[] options,
+        Subcommand[]? subcommands = null)
+    {
+        return new Command(name, usage, [.. Shared, .. options], subcommands ?? [], words);
+    }
+
+    private static CliOptions Finish(Line line)
+    {
+        var options = Apply(line);
+        var positional = line.Positional;
+        if (line.Command is not { } name)
         {
-            // help takes a command and log takes one file.
-            case "help" or "log" when positional.Length > 1:
-                throw Unexpected(positional[1]);
-            // help <command> is <command> --help.
-            case "help":
-                var topic = positional.FirstOrDefault();
-                if (topic is not null && !Commands.ContainsKey(topic))
-                    throw UnknownCommand(topic);
-                return new CliOptions { Command = topic, ShowHelp = true };
-            case "log":
-                break;
-            // ipc and inspect take a command of their own, then the words that command needs.
-            case "ipc" or "inspect":
-                if (positional.Length == 0)
-                    throw new ArgumentException($"winshell {command} needs a command. Run winshell {command} --help.");
-                if (!Subcommands(command).Contains(positional[0]))
-                    throw new ArgumentException(
-                        $"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
-                if (Lacks(command, positional) is { } needs)
-                    throw new ArgumentException($"winshell {command} {positional[0]} needs {needs}.");
-                break;
-            default:
-                if (positional.Length > 0)
-                    throw Unexpected(positional[0]);
-                break;
+            if (positional.Count > 0)
+                throw Unexpected(positional[0]);
+        }
+        else
+        {
+            var command = Commands[name];
+            switch (command.Words)
+            {
+                case WordRule.None:
+                    if (positional.Count > 0)
+                        throw Unexpected(positional[0]);
+                    break;
+                case WordRule.One:
+                    if (positional.Count > 1)
+                        throw Unexpected(positional[1]);
+                    break;
+                case WordRule.Topic:
+                    if (positional.Count > 1)
+                        throw Unexpected(positional[1]);
+                    var topic = positional.FirstOrDefault();
+                    if (topic is not null && !Commands.ContainsKey(topic))
+                        throw UnknownCommand(topic);
+                    return new CliOptions { Command = topic, ShowHelp = true };
+                case WordRule.Subcommand:
+                    RequireSubcommand(command, positional);
+                    break;
+            }
         }
 
         return options with
         {
-            Command = command,
-            Arguments = [.. args],
-            ShowVersion = VersionRequested(args),
-            ShellStartAllowed = OnlyShellStartOptions(args)
+            Command = line.Command,
+            Arguments = [.. line.Args],
+            ShowVersion = line.Version,
+            ShellStartAllowed = line.ShellStart,
+            Positional = [.. positional],
+            Rest = [.. line.Rest],
+            ChildArguments = BackgroundChild(line, options)
         };
     }
-
-    private static readonly string[] Instance = ["--id", "--pid", "--path", "--config"];
 
     /// <summary>
-    /// The cases <see cref="Cli.RunAsync"/> runs, and the options each takes by its long name. Every command also
-    /// takes <c>-v</c>, <c>-h</c> and <c>-V</c>.
+    /// What a <c>-d</c> child runs. The flag itself is gone. <c>--no-build</c> is added when this process builds,
+    /// so the child does not build again. A value spelled <c>-d</c> stays.
     /// </summary>
-    private static readonly FrozenDictionary<string, string[]> Commands = new Dictionary<string, string[]>
+    private static ImmutableArray<string> BackgroundChild(Line line, CliOptions options)
     {
-        ["run"] = ["--path", "--config", "--daemonize", "--no-duplicate", "--no-build"],
-        ["list"] = ["--json"],
-        ["kill"] = [.. Instance, "--force"],
-        ["reload"] = Instance,
-        ["log"] = [.. Instance, "--tail", "--follow"],
-        ["ipc"] = [.. Instance, "--json"],
-        ["inspect"] = Instance,
-        ["dev"] = ["--path", "--config"],
-        ["doctor"] = ["--path", "--config", "--json", "--no-color"],
-        ["help"] = []
-    }.ToFrozenDictionary();
-
-    private static bool Takes(string command, string option)
-    {
-        return option is "--verbose" or "--help" or "--version" || Commands[command].Contains(option);
+        if (!options.Daemonize)
+            return [];
+        var child = line.Child.ToList();
+        if (line.Command is null)
+            child.Insert(0, "run");
+        if (!options.NoBuild)
+            child.Insert(0, "--no-build");
+        return [.. child];
     }
 
-    /// <summary>The long name of an option winshell has, such as <c>--path</c> for <c>-p</c>; null for any other word.</summary>
-    private static string? LongName(string option)
+    private static CliOptions Apply(Line line)
     {
-        return option switch
+        var options = new CliOptions();
+        ArgumentException? error = null;
+        var command = line.Command is null ? null : Commands[line.Command];
+        foreach (var use in line.Uses)
         {
-            "-p" or "--path" => "--path",
-            "-c" or "--config" => "--config",
-            "-i" or "--id" => "--id",
-            "-d" or "--daemonize" => "--daemonize",
-            "-n" or "--no-duplicate" => "--no-duplicate",
-            "-v" or "--verbose" => "--verbose",
-            "-j" or "--json" => "--json",
-            "-f" or "--follow" => "--follow",
-            "-t" or "--tail" => "--tail",
-            "-V" or "--version" => "--version",
-            "-h" or "--help" => "--help",
-            "--pid" or "--force" or "--no-color" or "--no-build" => option,
-            _ => null
-        };
-    }
-
-    /// <summary>The first words <see cref="Winshell.Commands.IpcCommand"/> and <see cref="Winshell.Commands.InspectCommand"/> take.</summary>
-    private static string[] Subcommands(string command)
-    {
-        return command switch
-        {
-            "ipc" => ["show", "call", "prop", "wait", "listen"],
-            "inspect" => ["tree", "screenshot", "click", "hover"],
-            _ => []
-        };
-    }
-
-    /// <summary>What an ipc or inspect command still needs, such as "a target and a function", or null when it has it.</summary>
-    private static string? Lacks(string command, ImmutableArray<string> words)
-    {
-        return (command, words[0]) switch
-        {
-            ("ipc", "call") when words.Length < 3 => "a target and a function",
-            ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "\"get\", a target and a property",
-            ("ipc", "wait" or "listen") when words.Length < 3 => "a target and a signal",
-            ("inspect", "screenshot") when words.Length < 2 => "a file",
-            ("inspect", "click" or "hover") when words.Length < 2 => "a name",
-            _ => null
-        };
-    }
-
-    private static ArgumentException UnknownCommand(string command)
-    {
-        return new ArgumentException($"Unknown command \"{command}\". Run winshell --help.");
-    }
-
-    private static ArgumentException Unexpected(string argument)
-    {
-        return new ArgumentException($"Unexpected argument \"{argument}\".");
-    }
-
-    /// <summary>The first word that is not an option. Options may come before it, so <c>-c work kill</c> is kill.</summary>
-    internal static string? FirstCommand(string[] args)
-    {
-        for (var i = 0; i < args.Length; i++)
-        {
-            var token = args[i];
-            // Words after -- are arguments, not a command.
-            if (token == "--")
-                return null;
-            if (token is "-h" or "--help" or "/?" or "-V" or "--version")
-                continue;
-            if (token.StartsWith('-'))
+            if (use.IsUnknown)
             {
-                if (TakesValue(token))
-                    i++;
+                error ??= new ArgumentException($"Unknown option \"{use.Token}\".");
                 continue;
             }
 
-            return token;
-        }
-
-        return null;
-    }
-
-    private static string[] WithoutToken(string[] args, string command)
-    {
-        var skipped = false;
-        var rest = new List<string>(args.Length);
-        foreach (var token in args)
-        {
-            if (!skipped && token == command)
+            if (command is not null && !command.Accepts(use.Option.Long))
             {
-                skipped = true;
+                error ??= new ArgumentException($"winshell {command.Name} does not take \"{use.Token}\".");
                 continue;
             }
 
-            rest.Add(token);
+            if (use.Missing)
+            {
+                error ??= new ArgumentException($"{use.Token} needs a value.");
+                continue;
+            }
+
+            try
+            {
+                options = Set(options, use);
+            }
+            catch (ArgumentException e)
+            {
+                error ??= e;
+            }
         }
 
-        return [.. rest];
+        if (error is not null)
+            throw error;
+        return options;
     }
 
-    private static bool TakesValue(string option)
+    private static CliOptions Set(CliOptions options, Use use)
     {
-        return LongName(option) is "--path" or "--config" or "--id" or "--pid" or "--tail";
-    }
-
-    /// <summary>The Start tile and a sign-in entry pass these, and no command word.</summary>
-    private static bool OnlyShellStartOptions(string[] args)
-    {
-        for (var i = 0; i < args.Length; i++)
+        switch (use.Option.Long)
         {
-            var token = args[i];
-            if (token == "--")
-                return true;
-            if (LongName(token) is not { } name || !Takes("run", name))
-                return false;
-            if (TakesValue(token))
-                i++;
+            case "--path":
+                return options with { Path = use.Value };
+            case "--config":
+                return options with { Config = ConfigName(use.Token, use.Value!) };
+            case "--id":
+                return options with { Id = use.Value };
+            case "--pid":
+                return options with { Pid = WholeNumber(use.Token, use.Value!) };
+            case "--tail":
+                return options with { Tail = WholeNumber(use.Token, use.Value!) };
+            case "--daemonize":
+                return options with { Daemonize = true };
+            case "--no-duplicate":
+                return options with { NoDuplicate = true };
+            case "--verbose":
+                return options with { Verbose = true };
+            case "--json":
+                return options with { Json = true };
+            case "--follow":
+                return options with { Follow = true };
+            case "--force":
+                return options with { Force = true };
+            case "--no-color":
+                return options with { NoColor = true };
+            case "--no-build":
+                return options with { NoBuild = true };
+            default:
+                return options;
         }
+    }
 
-        return true;
+    private static void RequireSubcommand(Command command, List<string> positional)
+    {
+        if (positional.Count == 0)
+            throw new ArgumentException(
+                $"winshell {command.Name} needs a command. Run winshell {command.Name} --help.");
+        var name = positional[0];
+        var match = command.Subcommands.FirstOrDefault(sub => sub.Name == name);
+        if (match.Name is null)
+            throw new ArgumentException(
+                $"Unknown {command.Name} command \"{name}\". Run winshell {command.Name} --help.");
+        var words = positional.Count - 1;
+        var wrongWord = match.Word is { } required && (words < 1 || positional[1] != required);
+        if (wrongWord || words < match.Words)
+            throw new ArgumentException($"winshell {command.Name} {name} needs {match.Missing}.");
     }
 
     /// <summary>A config name is one folder in the config folder, so it can't leave it. A path goes in -p.</summary>
@@ -213,163 +389,6 @@ internal static class CliParser
     }
 
     /// <summary>
-    /// Reads options. <paramref name="command"/> is the word <see cref="FirstCommand"/> already took out of
-    /// <paramref name="args"/>. A <c>--</c> ends options. So does the function name of <c>ipc call</c>:
-    /// hotkeys pass <c>-v</c> and <c>-p</c> as arguments, and those must not become winshell options.
-    /// </summary>
-    internal static CliOptions ParseOptions(string[] args, string? command = null)
-    {
-        var options = new CliOptions();
-        var positional = new List<string>();
-        var rest = new List<string>();
-        var raw = false;
-        for (var i = 0; i < args.Length; i++)
-        {
-            if (raw)
-            {
-                positional.Add(args[i]);
-                continue;
-            }
-
-            if (args[i] == "--")
-            {
-                if (command is null or "run")
-                {
-                    rest.AddRange(args.Skip(i));
-                    break;
-                }
-
-                raw = true;
-                continue;
-            }
-
-            string Next()
-            {
-                return i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value.");
-            }
-
-            var name = LongName(args[i]);
-            if (name is not null && command is not null && !Takes(command, name))
-                throw new ArgumentException($"winshell {command} does not take \"{args[i]}\".");
-            switch (name)
-            {
-                case "--path":
-                    options = options with { Path = Next() };
-                    break;
-                case "--config":
-                    options = options with { Config = ConfigName(args[i], Next()) };
-                    break;
-                case "--id":
-                    options = options with { Id = Next() };
-                    break;
-                case "--pid":
-                    options = options with { Pid = WholeNumber(args[i], Next()) };
-                    break;
-                case "--daemonize":
-                    options = options with { Daemonize = true };
-                    break;
-                case "--no-duplicate":
-                    options = options with { NoDuplicate = true };
-                    break;
-                case "--verbose":
-                    options = options with { Verbose = true };
-                    break;
-                case "--json":
-                    options = options with { Json = true };
-                    break;
-                case "--follow":
-                    options = options with { Follow = true };
-                    break;
-                case "--force":
-                    options = options with { Force = true };
-                    break;
-                case "--tail":
-                    options = options with { Tail = WholeNumber(args[i], Next()) };
-                    break;
-                case "--no-color":
-                    options = options with { NoColor = true };
-                    break;
-                case "--no-build":
-                    options = options with { NoBuild = true };
-                    break;
-                case "--version" or "--help":
-                    break;
-                default:
-                    if (args[i].StartsWith('-'))
-                        throw new ArgumentException($"Unknown option \"{args[i]}\".");
-                    positional.Add(args[i]);
-                    if (IpcCallArguments(command, positional))
-                        raw = true;
-                    break;
-            }
-        }
-
-        return options with { Positional = [.. positional], Rest = [.. rest] };
-    }
-
-    /// <summary>
-    /// True when <paramref name="positional"/> already holds the function name. Later words belong to the call.
-    /// The positionals are what follows <paramref name="command"/>.
-    /// </summary>
-    private static bool IpcCallArguments(string? command, List<string> positional)
-    {
-        return command == "ipc" && positional.Count >= 3 && positional[0] == "call";
-    }
-
-    private static readonly string[] HelpFlags = ["-h", "--help", "/?"];
-
-    private static readonly string[] VersionFlags = ["-V", "--version"];
-
-    /// <summary>True when help was asked for as an option, before <c>--</c> and before ipc call arguments.</summary>
-    internal static bool HelpRequested(string[] args)
-    {
-        return OptionBeforeEnd(args, HelpFlags);
-    }
-
-    /// <summary>True when <c>-V</c> or <c>--version</c> is an option. After <c>--</c> it is an argument.</summary>
-    internal static bool VersionRequested(string[] args)
-    {
-        return OptionBeforeEnd(args, VersionFlags);
-    }
-
-    private static bool OptionBeforeEnd(string[] args, string[] names)
-    {
-        var end = OptionRegionLength(args);
-        for (var i = 0; i < end; i++)
-            if (Array.IndexOf(names, args[i]) >= 0)
-                return true;
-        return false;
-    }
-
-    /// <summary>
-    /// How far options extend. <c>--</c> ends them, and so does the first argument of <c>ipc call</c>.
-    /// </summary>
-    private static int OptionRegionLength(string[] args)
-    {
-        string? command = null;
-        var positional = new List<string>();
-        for (var i = 0; i < args.Length; i++)
-        {
-            var token = args[i];
-            if (token == "--" || IpcCallArguments(command, positional))
-                return i;
-            if (token.StartsWith('-'))
-            {
-                if (TakesValue(token))
-                    i++;
-                continue;
-            }
-
-            if (command is null)
-                command = token;
-            else
-                positional.Add(token);
-        }
-
-        return args.Length;
-    }
-
-    /// <summary>
     /// A process id or a tail count. A value that isn't one is an <see cref="ArgumentException"/>,
     /// which <see cref="Cli.RunAsync"/> turns into exit code 2.
     /// </summary>
@@ -379,5 +398,182 @@ internal static class CliParser
         if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) || value < 0)
             throw new ArgumentException($"{option} needs a whole number.");
         return value;
+    }
+
+    private static ArgumentException UnknownCommand(string command)
+    {
+        return new ArgumentException($"Unknown command \"{command}\". Run winshell --help.");
+    }
+
+    private static ArgumentException Unexpected(string argument)
+    {
+        return new ArgumentException($"Unexpected argument \"{argument}\".");
+    }
+
+    /// <summary>How many positional words a command takes after its name.</summary>
+    private enum WordRule
+    {
+        None,
+        One,
+        Topic,
+        Subcommand
+    }
+
+    /// <summary>An option's long name, how many values it takes, and the other spellings it answers to.</summary>
+    private readonly record struct Option(string Long, int Values, params string[] Shorts)
+    {
+        public static Option Flag(string longName, params string[] shorts)
+        {
+            return new Option(longName, 0, shorts);
+        }
+
+        public static Option Value(string longName, params string[] shorts)
+        {
+            return new Option(longName, 1, shorts);
+        }
+
+        public void Collect(Dictionary<string, Option> into)
+        {
+            into.TryAdd(Long, this);
+            foreach (var name in Shorts)
+                into.TryAdd(name, this);
+        }
+    }
+
+    /// <summary>
+    /// A word of <c>ipc</c> or <c>inspect</c>. <see cref="Words"/> is how many words must follow it, and
+    /// <see cref="Word"/> is one that must be first. <see cref="RawAfter"/> means the rest are that command's
+    /// arguments, even when they look like options.
+    /// </summary>
+    private readonly record struct Subcommand(
+        string Name,
+        int Words = 0,
+        string? Missing = null,
+        string? Word = null,
+        bool RawAfter = false);
+
+    private sealed record Command(string Name, string Usage, Option[] Options, Subcommand[] Subcommands, WordRule Words)
+    {
+        public bool Accepts(string longName)
+        {
+            return Options.Any(option => option.Long == longName);
+        }
+    }
+
+    private readonly record struct Use(string Token, Option Option, string? Value, bool Missing, bool IsUnknown)
+    {
+        public static Use Unknown(string token)
+        {
+            return new Use(token, default, null, false, true);
+        }
+    }
+
+    /// <summary>One walk over the arguments. The command is known by the end, including when it comes after its options.</summary>
+    private sealed class Line(string[] args)
+    {
+        public string[] Args { get; } = args;
+
+        public string? Command { get; private set; }
+
+        public bool Help { get; private set; }
+
+        public bool Version { get; private set; }
+
+        public bool ShellStart { get; private set; } = true;
+
+        public List<Use> Uses { get; } = [];
+
+        public List<string> Positional { get; } = [];
+
+        public List<string> Rest { get; } = [];
+
+        /// <summary>Every token except a daemonize flag. A <c>-d</c> that is some other option's value stays.</summary>
+        public List<string> Child { get; } = [];
+
+        private bool _raw;
+
+        public void Read()
+        {
+            for (var i = 0; i < Args.Length; i++)
+            {
+                var token = Args[i];
+                if (_raw)
+                {
+                    Positional.Add(token);
+                    Child.Add(token);
+                    continue;
+                }
+
+                if (token == "--")
+                {
+                    // For run, and when there is no command, the rest belongs to the configuration's program.
+                    if (Command is null or "run")
+                    {
+                        Rest.AddRange(Args.Skip(i));
+                        Child.AddRange(Args.Skip(i));
+                        return;
+                    }
+
+                    _raw = true;
+                    continue;
+                }
+
+                if (ByToken.TryGetValue(token, out var option))
+                {
+                    string? value = null;
+                    var missing = false;
+                    if (option.Values == 1)
+                    {
+                        if (i + 1 >= Args.Length)
+                            missing = true;
+                        else
+                            value = Args[++i];
+                    }
+
+                    Uses.Add(new Use(token, option, value, missing, false));
+                    if (option.Long != "--daemonize")
+                    {
+                        Child.Add(token);
+                        if (value is not null)
+                            Child.Add(value);
+                    }
+
+                    if (option.Long == "--help")
+                        Help = true;
+                    else if (option.Long == "--version")
+                        Version = true;
+                    if (Command is null && !Commands["run"].Accepts(option.Long))
+                        ShellStart = false;
+                    continue;
+                }
+
+                if (token.StartsWith('-'))
+                {
+                    Uses.Add(Use.Unknown(token));
+                    Child.Add(token);
+                    ShellStart = false;
+                    continue;
+                }
+
+                if (Command is null)
+                {
+                    if (!Commands.ContainsKey(token))
+                        throw UnknownCommand(token);
+                    Command = token;
+                    ShellStart = false;
+                    Child.Add(token);
+                    continue;
+                }
+
+                Positional.Add(token);
+                Child.Add(token);
+                if (Command is { } name && Commands[name].Words == WordRule.Subcommand)
+                {
+                    var sub = Commands[name].Subcommands.FirstOrDefault(candidate => candidate.Name == Positional[0]);
+                    if (sub.RawAfter && Positional.Count >= sub.Words + 1)
+                        _raw = true;
+                }
+            }
+        }
     }
 }

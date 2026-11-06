@@ -64,7 +64,7 @@ internal static class Cli
                 case "dev":
                     return await DevCommand.RunAsync(options);
                 default:
-                    // CliParser.Commands lists every case here, and refuses any other.
+                    // The command table lists every case here, and refuses any other.
                     throw new UnreachableException($"No command \"{command}\".");
             }
         }

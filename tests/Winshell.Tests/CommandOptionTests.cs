@@ -1,13 +1,12 @@
-using System.Text.RegularExpressions;
-using Winshell.Commands;
+using System.Globalization;
 
 namespace Winshell.Tests;
 
 /// <summary>
-/// A command takes the options its help names, and refuses the rest, so an option never does nothing. These stay inside
+/// A command takes the options it names, and refuses the rest, so an option never does nothing. These stay inside
 /// <see cref="CliParser"/> so a live instance on this PC is never called.
 /// </summary>
-public partial class CommandOptionTests
+public class CommandOptionTests
 {
     [Theory]
     [InlineData("list --force", "winshell list does not take \"--force\".")]
@@ -28,30 +27,29 @@ public partial class CommandOptionTests
     }
 
     [Theory]
-    [InlineData("run")]
-    [InlineData("list")]
-    [InlineData("kill")]
-    [InlineData("reload")]
-    [InlineData("log")]
-    [InlineData("ipc")]
-    [InlineData("inspect")]
-    [InlineData("dev")]
-    [InlineData("doctor")]
-    public void Every_option_a_command_s_help_names_is_one_it_takes(string command)
+    [InlineData("run -p dir", "path", "dir")]
+    [InlineData("run -c work", "config", "work")]
+    [InlineData("run -d", "daemonize", "")]
+    [InlineData("run -n", "no-duplicate", "")]
+    [InlineData("run --no-build", "no-build", "")]
+    [InlineData("list -j", "json", "")]
+    [InlineData("kill --force", "force", "")]
+    [InlineData("kill -i ab", "id", "ab")]
+    [InlineData("kill --pid 4", "pid", "4")]
+    [InlineData("reload -c work", "config", "work")]
+    [InlineData("log -t 2", "tail", "2")]
+    [InlineData("log -f", "follow", "")]
+    [InlineData("ipc show -j", "json", "")]
+    [InlineData("inspect tree -i ab", "id", "ab")]
+    [InlineData("dev -p dir", "path", "dir")]
+    [InlineData("doctor --no-color", "no-color", "")]
+    [InlineData("doctor -j", "json", "")]
+    public void A_command_reads_the_options_it_accepts(string line, string field, string value)
     {
-        var named = DocumentedOption().Matches(HelpCommand.Text(command))
-            .GroupBy(m => m.Groups["name"].Value, m => m.Groups["value"].Success)
-            .ToList();
+        var parsed = CliParser.Parse(line.Split(' '));
 
-        Assert.NotEmpty(named);
-        foreach (var option in named)
-        {
-            string[] args = option.Any(hasValue => hasValue)
-                ? [command, .. Words(command), option.Key, "1"]
-                : [command, .. Words(command), option.Key];
-            var parsed = CliParser.Parse(args);
-            Assert.Equal(command, parsed.Command);
-        }
+        Assert.Equal(line.Split(' ')[0], parsed.Command);
+        Assert.Equal(value, Field(parsed, field));
     }
 
     [Theory]
@@ -80,7 +78,23 @@ public partial class CommandOptionTests
         };
     }
 
-    /// <summary>An option in help text, such as <c>--force</c> or <c>-c &lt;name&gt;</c>. A <c>--</c> on its own is not one.</summary>
-    [GeneratedRegex(@"(?<![\w<-])(?<name>--?[a-z][a-z-]*)(?<value> <\w+>)?")]
-    private static partial Regex DocumentedOption();
+    private static string Field(CliOptions options, string field)
+    {
+        return field switch
+        {
+            "path" => options.Path ?? "",
+            "config" => options.Config ?? "",
+            "id" => options.Id ?? "",
+            "pid" => options.Pid?.ToString(CultureInfo.InvariantCulture) ?? "",
+            "tail" => options.Tail?.ToString(CultureInfo.InvariantCulture) ?? "",
+            "daemonize" => options.Daemonize ? "" : "no",
+            "no-duplicate" => options.NoDuplicate ? "" : "no",
+            "no-build" => options.NoBuild ? "" : "no",
+            "json" => options.Json ? "" : "no",
+            "force" => options.Force ? "" : "no",
+            "follow" => options.Follow ? "" : "no",
+            "no-color" => options.NoColor ? "" : "no",
+            _ => throw new ArgumentException(field)
+        };
+    }
 }

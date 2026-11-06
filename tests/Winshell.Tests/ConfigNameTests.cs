@@ -12,7 +12,7 @@ public class ConfigNameTests
     [InlineData(@"C:\config")]
     public void A_name_that_is_not_one_folder_is_a_usage_error(string name)
     {
-        var error = Assert.Throws<ArgumentException>(() => CliParser.ParseOptions(["run", "-c", name], "run"));
+        var error = Assert.Throws<ArgumentException>(() => CliParser.Parse(["run", "-c", name]));
 
         Assert.Contains("Use -p for a path", error.Message);
     }
@@ -23,6 +23,6 @@ public class ConfigNameTests
     [InlineData("v1.2")]
     public void A_folder_name_is_kept(string name)
     {
-        Assert.Equal(name, CliParser.ParseOptions(["run", "-c", name], "run").Config);
+        Assert.Equal(name, CliParser.Parse(["run", "-c", name]).Config);
     }
 }
