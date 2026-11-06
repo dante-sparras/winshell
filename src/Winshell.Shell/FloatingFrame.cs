@@ -1,6 +1,5 @@
 using Windows.Foundation;
 using Winshell.Native;
-using Winshell.Windows;
 
 namespace Winshell;
 
@@ -277,7 +276,14 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         var hasPlacement = TopLevelWindows.TryPlacement(Handle, out var placement);
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
-            normal = RestoredScreenRect(placement, shown);
+        {
+            var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
+            var tool = ((long)Win32.GetWindowLongPtr(Handle, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0;
+            normal = WindowOnScreen.Restored(
+                new WindowToMove(shown, placement.Normal, true, minimized, maximized, tool),
+                primary?.Bounds ?? default, primary?.Work ?? default);
+        }
+
         var logical = bounds.Width > 0
             ? DesktopSpace.ToLogical(normal, bounds, scale)
             : new Rect(0, 0, normal.Width, normal.Height);
@@ -294,20 +300,6 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
             minimized,
             placement,
             hasPlacement);
-    }
-
-    /// <summary>
-    /// The restored rectangle in screen pixels. A normal window is already there. A minimized or maximized one
-    /// reports it in workspace coordinates, which start at the primary monitor's work area.
-    /// </summary>
-    private static RECT RestoredScreenRect(WINDOWPLACEMENT placement, RECT shown)
-    {
-        var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
-        var bias = primary is null
-            ? (X: 0, Y: 0)
-            : WindowRules.WorkspaceOffset(primary.Bounds, primary.Work, false);
-        var shifted = WindowRules.Shift(placement.Normal, bias.X, bias.Y);
-        return shifted.Width > 0 && shifted.Height > 0 ? shifted : shown;
     }
 
     private uint BorderlessStyle()

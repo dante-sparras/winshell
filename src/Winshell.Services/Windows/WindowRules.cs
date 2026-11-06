@@ -2,9 +2,6 @@ using Winshell.Native;
 
 namespace Winshell.Windows;
 
-/// <summary>A monitor's work area in physical pixels, and the scale that turns those pixels into logical ones.</summary>
-internal readonly record struct MonitorFrame(int Left, int Top, int Right, int Bottom, double Scale);
-
 /// <summary>Decisions the window list can make without calling Win32, so the rules can be tested on their own.</summary>
 internal static class WindowRules
 {
@@ -34,68 +31,6 @@ internal static class WindowRules
     public static string IconPath(string appUserModelId, string executable)
     {
         return appUserModelId.Contains('!') ? @"shell:AppsFolder\" + appUserModelId : executable;
-    }
-
-    /// <summary>A minimized or maximized window moves by its restored rectangle. A normal window moves by its current one.</summary>
-    public static RECT RectangleToMove(bool minimized, bool maximized, RECT current, RECT restored)
-    {
-        if ((minimized || maximized) && restored.Width > 0 && restored.Height > 0)
-            return restored;
-        return current;
-    }
-
-    /// <summary>
-    /// How far a window's restored rectangle is offset from screen coordinates. Windows reports it in workspace
-    /// coordinates, which start at the primary monitor's work area, unless the window is a tool window.
-    /// </summary>
-    public static (int X, int Y) WorkspaceOffset(RECT primaryMonitor, RECT primaryWork, bool toolWindow)
-    {
-        return toolWindow || primaryWork.Width <= 0 || primaryWork.Height <= 0
-            ? (0, 0)
-            : (primaryWork.Left - primaryMonitor.Left, primaryWork.Top - primaryMonitor.Top);
-    }
-
-    public static RECT Shift(RECT rect, int x, int y)
-    {
-        return new RECT(rect.Left + x, rect.Top + y, rect.Right + x, rect.Bottom + y);
-    }
-
-    /// <summary>
-    /// Where a window goes on another monitor: the same logical offset and size, in the target's physical pixels.
-    /// A window that would hang off the target is slid back, and one that is larger is shrunk to fit. The size is
-    /// rounded on its own, so it does not depend on where the window sits.
-    /// </summary>
-    public static RECT MoveOnto(RECT window, MonitorFrame from, MonitorFrame to)
-    {
-        if (from.Scale <= 0 || to.Scale <= 0 || from.Right <= from.Left || from.Bottom <= from.Top)
-            return window;
-        var width = (window.Right - window.Left) / from.Scale * to.Scale;
-        var height = (window.Bottom - window.Top) / from.Scale * to.Scale;
-        var left = to.Left + (window.Left - from.Left) / from.Scale * to.Scale;
-        var top = to.Top + (window.Top - from.Top) / from.Scale * to.Scale;
-        var targetWidth = to.Right - to.Left;
-        var targetHeight = to.Bottom - to.Top;
-        if (width > targetWidth)
-            width = targetWidth;
-        if (height > targetHeight)
-            height = targetHeight;
-        if (width < 1)
-            width = 1;
-        if (height < 1)
-            height = 1;
-        if (left < to.Left)
-            left = to.Left;
-        if (top < to.Top)
-            top = to.Top;
-        if (left + width > to.Right)
-            left = to.Right - width;
-        if (top + height > to.Bottom)
-            top = to.Bottom - height;
-        var x = (int)Math.Round(left);
-        var y = (int)Math.Round(top);
-        var w = Math.Max(1, (int)Math.Round(width));
-        var h = Math.Max(1, (int)Math.Round(height));
-        return new RECT(x, y, x + w, y + h);
     }
 
     /// <summary>
