@@ -72,7 +72,7 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                 return null;
         }
 
-        // Explorer's notices to a panel's app bar.
-        return placement.AppBar?.OnMessage(msg, wParam, message.LParam);
+        // Explorer's notices to a panel's edge.
+        return placement.Edge?.OnMessage(msg, wParam);
     }
 }

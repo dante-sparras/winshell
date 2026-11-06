@@ -360,7 +360,7 @@ public sealed partial class Shell : IDisposable
     private void ReleaseForCrash()
     {
         _explorerTaskbar?.Restore();
-        AppBar.RemoveAll();
+        PanelEdge.ReleaseAll();
     }
 
     /// <summary>

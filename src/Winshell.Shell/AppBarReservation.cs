@@ -3,7 +3,7 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>
-/// The rectangle a panel's app bar holds, and when to ask Explorer for another. A reservation that moves the work
+/// The rectangle a panel's edge holds, and when <see cref="PanelEdge"/> asks Explorer for another. A reservation that moves the work
 /// area places every panel again, so asking for what is already held would never end. Explorer may grant less than
 /// was asked, as when another app bar takes the space in between. That short answer stands until an
 /// <c>ABN_POSCHANGED</c> arrives. Every notice is a possible outside change: Explorer does not send one per own

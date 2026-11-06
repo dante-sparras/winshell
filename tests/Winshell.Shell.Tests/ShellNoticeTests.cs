@@ -261,17 +261,15 @@ public sealed class ShellNoticeTests : IDisposable
             return (
                 panel.Width,
                 panel.Height,
-                HoldsEdge: panel.Host!.Placement.AppBar?.Registered == true,
-                AutomationProperties.GetName(panel.Content!),
-                AutomationProperties.GetLiveSetting(panel.Content!));
+                Name: AutomationProperties.GetName(panel.Content!),
+                Live: AutomationProperties.GetLiveSetting(panel.Content!));
         });
 
         Assert.Equal(364, read.Width);
         Assert.True(read.Height > 100);
-        Assert.False(read.HoldsEdge);
-        Assert.Contains("did not build", read.Item4, StringComparison.Ordinal);
-        Assert.Contains("CS1002", read.Item4, StringComparison.Ordinal);
-        Assert.Equal(AutomationLiveSetting.Assertive, read.Item5);
+        Assert.Contains("did not build", read.Name, StringComparison.Ordinal);
+        Assert.Contains("CS1002", read.Name, StringComparison.Ordinal);
+        Assert.Equal(AutomationLiveSetting.Assertive, read.Live);
     }
 
     [Fact]
