@@ -159,10 +159,74 @@ public sealed class HotkeyTests : IDisposable
         Assert.True(_backend.HookInstalled);
         Assert.Equal(0, presses);
 
-        _backend.Key((int)'C', false, HotkeyModifiers.None);
+        Assert.True(_backend.Key('C', false));
         _loop.Process();
         Assert.Equal(1, presses);
+        Assert.Equal(0, _backend.Masks);
         Assert.False(_backend.HookInstalled);
+    }
+
+    [Fact]
+    public void A_later_chord_matches_the_modifiers_held_on_either_side()
+    {
+        using var hotkey = Create();
+        var presses = 0;
+        hotkey.Pressed += (_, _) => presses++;
+        hotkey.Sequence = "Ctrl+K, Ctrl+Shift+C";
+        _backend.Press(Key("Ctrl+K"));
+        _backend.Held.UnionWith([0xA3, 0xA0]);
+
+        Assert.True(_backend.Key('C', false));
+        _loop.Process();
+
+        Assert.Equal(1, presses);
+    }
+
+    [Fact]
+    public void A_handled_windows_tap_is_masked_and_its_key_up_passed_on()
+    {
+        using var hotkey = Create();
+        var presses = 0;
+        hotkey.Pressed += (_, _) => presses++;
+        hotkey.Sequence = "Win";
+
+        Assert.False(_backend.Key(0x5B, false));
+        _backend.Held.Add(0x5B);
+        Assert.False(_backend.Key(0x5B, true));
+        _loop.Process();
+
+        Assert.Equal(1, presses);
+        Assert.Equal(1, _backend.Masks);
+    }
+
+    [Fact]
+    public void A_windows_key_used_as_a_modifier_is_not_masked()
+    {
+        using var hotkey = Create();
+        var presses = 0;
+        hotkey.Pressed += (_, _) => presses++;
+        hotkey.Sequence = "Win";
+        _backend.Key(0x5B, false);
+        _backend.Held.Add(0x5B);
+
+        Assert.False(_backend.Key('E', false));
+        Assert.False(_backend.Key(0x5B, true));
+        _loop.Process();
+
+        Assert.Equal(0, presses);
+        Assert.Equal(0, _backend.Masks);
+    }
+
+    [Fact]
+    public void A_lost_hook_is_installed_again_while_a_claim_needs_it()
+    {
+        using var hotkey = Create();
+        hotkey.Sequence = "Win";
+
+        _backend.LoseHook();
+
+        Assert.True(_backend.HookInstalled);
+        Assert.True(hotkey.Active);
     }
 
     [Fact]
@@ -178,7 +242,7 @@ public sealed class HotkeyTests : IDisposable
         _loop.Advance(TimeSpan.FromSeconds(1));
 
         Assert.False(_backend.HookInstalled);
-        _backend.Key((int)'B', false, HotkeyModifiers.None);
+        Assert.False(_backend.Key('B', false));
         _loop.Process();
         Assert.Equal(0, presses);
     }
@@ -291,7 +355,8 @@ public sealed class HotkeyTests : IDisposable
 
     private sealed class FakeBackend : IHotkeyBackend
     {
-        private Func<int, bool, HotkeyModifiers, bool>? _onKey;
+        private Func<int, bool, bool>? _onKey;
+        private Action? _onLost;
 
         public string? Taken { get; set; }
 
@@ -302,6 +367,8 @@ public sealed class HotkeyTests : IDisposable
         public HashSet<int> Held { get; } = [];
 
         public bool HookInstalled { get; private set; }
+
+        public int Masks { get; private set; }
 
         public event Action<OsChord>? ChordPressed;
 
@@ -318,11 +385,12 @@ public sealed class HotkeyTests : IDisposable
             Registered.Remove(chord);
         }
 
-        public bool InstallHook(Func<int, bool, HotkeyModifiers, bool> onKey, Action onLost)
+        public bool InstallHook(Func<int, bool, bool> onKey, Action onLost)
         {
             if (HookFails && !HookInstalled)
                 return false;
             _onKey = onKey;
+            _onLost = onLost;
             HookInstalled = true;
             return true;
         }
@@ -331,13 +399,17 @@ public sealed class HotkeyTests : IDisposable
         {
             HookInstalled = false;
             _onKey = null;
+            _onLost = null;
         }
-
-        public bool IsHookInstalled => HookInstalled;
 
         public bool IsKeyDown(int virtualKey)
         {
             return Held.Contains(virtualKey);
+        }
+
+        public void SendMask()
+        {
+            Masks++;
         }
 
         public void Press(OsChord chord)
@@ -345,10 +417,17 @@ public sealed class HotkeyTests : IDisposable
             ChordPressed?.Invoke(chord);
         }
 
-        public void Key(int virtualKey, bool up, HotkeyModifiers modifiers)
+        // Whether the hook swallowed the key.
+        public bool Key(int virtualKey, bool up)
         {
-            if (HookInstalled)
-                _onKey?.Invoke(virtualKey, up, modifiers);
+            return HookInstalled && _onKey!(virtualKey, up);
+        }
+
+        public void LoseHook()
+        {
+            var onLost = _onLost;
+            RemoveHook();
+            onLost!();
         }
 
         public void Dispose()

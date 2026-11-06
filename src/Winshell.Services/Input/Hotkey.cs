@@ -8,9 +8,6 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
 {
     private const int PollIntervalMs = 16;
     private const int MaxPolls = 3750;
-    private const int VkShift = 0x10;
-    private const int VkControl = 0x11;
-    private const int VkMenu = 0x12;
 
     private readonly IEventLoop _loop;
     private readonly Log _log;
@@ -177,17 +174,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
                 WinKeySide.Right => Down(VirtualKeys.RightWin),
                 _ => Down(VirtualKeys.LeftWin) || Down(VirtualKeys.RightWin)
             };
-        if (!Down(chord.VirtualKey))
-            return false;
-        if ((chord.Modifiers & HotkeyModifiers.Ctrl) != 0 && !Down(VkControl))
-            return false;
-        if ((chord.Modifiers & HotkeyModifiers.Alt) != 0 && !Down(VkMenu))
-            return false;
-        if ((chord.Modifiers & HotkeyModifiers.Shift) != 0 && !Down(VkShift))
-            return false;
-        if ((chord.Modifiers & HotkeyModifiers.Win) != 0 && !Down(VirtualKeys.LeftWin) && !Down(VirtualKeys.RightWin))
-            return false;
-        return true;
+        return Down(chord.VirtualKey) && (VirtualKeys.Held(Down) & chord.Modifiers) == chord.Modifiers;
     }
 
     private bool Down(int virtualKey)

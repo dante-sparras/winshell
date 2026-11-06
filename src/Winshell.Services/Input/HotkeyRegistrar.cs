@@ -15,7 +15,6 @@ internal sealed class HotkeyRegistrar : IDisposable
     private readonly IEventLoop _loop;
     private readonly IHotkeyBackend _backend;
     private readonly HotkeyBook _book = new();
-    private readonly HashSet<OsChord> _registered = [];
     private readonly Dictionary<IHotkeyListener, IDisposable> _timers = [];
     private int _syncPosted;
     private bool _disposed;
@@ -87,20 +86,16 @@ internal sealed class HotkeyRegistrar : IDisposable
 
         lock (_bookLock)
         {
-            if (!first.IsWinOnly)
-                _registered.Add(first.OsKey);
             _book.Add(listener, sequence);
         }
 
-        SyncHook();
-        if (first.IsWinOnly && !_backend.IsHookInstalled)
+        if (!SyncHook() && first.IsWinOnly)
         {
             lock (_bookLock)
             {
                 _book.Remove(listener);
             }
 
-            FlushRegistrations();
             return HotkeyClaim.Invalid(
                 "Windows did not install a keyboard hook, so the Windows key cannot be registered.");
         }
@@ -128,24 +123,11 @@ internal sealed class HotkeyRegistrar : IDisposable
             timers = [.. _timers.Values];
             _timers.Clear();
             _book.Clear();
-            _registered.Clear();
         }
 
         foreach (var timer in timers)
             timer.Dispose();
         _backend.Dispose();
-    }
-
-    /// <summary>
-    /// A handled Windows-key tap is not eaten. The masking key is injected while the Windows key is still down,
-    /// and the real key-up is passed on so the async key state clears.
-    /// </summary>
-    internal static bool Consume(BookResult result, Action? mask = null)
-    {
-        if (!result.MaskWin)
-            return result.Swallow;
-        (mask ?? KeyMask.Tap).Invoke();
-        return false;
     }
 
     private void OnChord(OsChord chord)
@@ -169,27 +151,13 @@ internal sealed class HotkeyRegistrar : IDisposable
     private void ReleaseListener(IHotkeyListener listener)
     {
         CancelTimer(listener);
+        OsChord? unused;
         lock (_bookLock)
         {
-            _book.Remove(listener);
+            unused = _book.Remove(listener);
         }
 
-        FlushRegistrations();
-    }
-
-    private void FlushRegistrations()
-    {
-        List<OsChord> unused = [];
-        lock (_bookLock)
-        {
-            foreach (var chord in _registered)
-                if (!_book.HasOs(chord))
-                    unused.Add(chord);
-            foreach (var chord in unused)
-                _registered.Remove(chord);
-        }
-
-        foreach (var chord in unused)
+        if (unused is { } chord)
             _backend.Unregister(chord);
     }
 
@@ -249,25 +217,22 @@ internal sealed class HotkeyRegistrar : IDisposable
         return (long)_loop.Now.TotalMilliseconds;
     }
 
-    private void SyncHook()
+    // True when the hook is installed.
+    private bool SyncHook()
     {
         if (_disposed)
-            return;
+            return false;
         if (NeedsHook)
-            _backend.InstallHook(OnHook, OnHookLost);
-        else
-            _backend.RemoveHook();
+            return _backend.InstallHook(OnHook, () => SyncHook());
+        _backend.RemoveHook();
+        return false;
     }
 
-    private void OnHookLost()
+    // Runs on the hook thread, which Windows drops when it is slow: no wait, and work for the loop is posted, the
+    // unhook too. The modifiers are read before the lock, to keep it short.
+    private bool OnHook(int virtualKey, bool isUp)
     {
-        _loop.Post(SyncHook);
-    }
-
-    // Runs on the hook thread. Work for the loop is posted, and so is the unhook.
-    // No logging, and no wait: the system drops a hook that is slow.
-    private bool OnHook(int virtualKey, bool isUp, HotkeyModifiers modifiers)
-    {
+        var modifiers = VirtualKeys.Held(_backend.IsKeyDown);
         BookResult result;
         var changed = false;
         lock (_bookLock)
@@ -287,7 +252,12 @@ internal sealed class HotkeyRegistrar : IDisposable
 
         if (changed)
             PostSync();
-        return Consume(result);
+        if (!result.MaskWin)
+            return result.Swallow;
+        // A handled Windows-key tap is masked while the key is still down, and its key-up is passed on so the key
+        // does not stay held.
+        _backend.SendMask();
+        return false;
     }
 
     private void PostSync()

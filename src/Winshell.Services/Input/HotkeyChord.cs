@@ -2,14 +2,15 @@ using System.Globalization;
 
 namespace Winshell.Input;
 
+/// <summary>The modifiers of a chord, with the <c>MOD_</c> values <c>RegisterHotKey</c> takes.</summary>
 [Flags]
 internal enum HotkeyModifiers
 {
     None = 0,
-    Win = 1,
-    Ctrl = 2,
-    Alt = 4,
-    Shift = 8
+    Alt = 0x1,
+    Ctrl = 0x2,
+    Shift = 0x4,
+    Win = 0x8
 }
 
 internal enum WinKeySide
@@ -20,19 +21,37 @@ internal enum WinKeySide
     Right
 }
 
-/// <summary>Virtual keys a hotkey chord can name.</summary>
+/// <summary>The virtual keys of the modifiers.</summary>
 internal static class VirtualKeys
 {
     public const int LeftWin = 0x5B;
     public const int RightWin = 0x5C;
 
-    public static bool IsModifier(int vk)
+    // Each modifier with the keys Windows reports for it: the key for either side, then left and right.
+    private static readonly (HotkeyModifiers Modifier, int[] Keys)[] ModifierKeys =
+    [
+        (HotkeyModifiers.Ctrl, [0x11, 0xA2, 0xA3]),
+        (HotkeyModifiers.Alt, [0x12, 0xA4, 0xA5]),
+        (HotkeyModifiers.Shift, [0x10, 0xA0, 0xA1]),
+        (HotkeyModifiers.Win, [LeftWin, RightWin])
+    ];
+
+    public static bool IsModifier(int virtualKey)
     {
-        return vk switch
-        {
-            0x10 or 0x11 or 0x12 or 0x5B or 0x5C or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5 => true,
-            _ => false
-        };
+        foreach (var (_, keys) in ModifierKeys)
+            if (Array.IndexOf(keys, virtualKey) >= 0)
+                return true;
+        return false;
+    }
+
+    /// <summary>The modifiers with a key down.</summary>
+    public static HotkeyModifiers Held(Predicate<int> isDown)
+    {
+        var held = HotkeyModifiers.None;
+        foreach (var (modifier, keys) in ModifierKeys)
+            if (Array.Exists(keys, isDown))
+                held |= modifier;
+        return held;
     }
 }
 
@@ -59,23 +78,6 @@ internal sealed class HotkeyChord
     public bool IsWinOnly => VirtualKey == 0;
 
     public OsChord OsKey => new(Modifiers, VirtualKey);
-
-    public uint Win32Modifiers
-    {
-        get
-        {
-            uint mods = 0;
-            if ((Modifiers & HotkeyModifiers.Alt) != 0)
-                mods |= 0x0001;
-            if ((Modifiers & HotkeyModifiers.Ctrl) != 0)
-                mods |= 0x0002;
-            if ((Modifiers & HotkeyModifiers.Shift) != 0)
-                mods |= 0x0004;
-            if ((Modifiers & HotkeyModifiers.Win) != 0)
-                mods |= 0x0008;
-            return mods;
-        }
-    }
 
     public static HotkeyChord WindowsKey(WinKeySide side)
     {

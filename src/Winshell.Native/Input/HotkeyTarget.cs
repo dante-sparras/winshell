@@ -19,7 +19,7 @@ internal sealed class HotkeyTarget : IDisposable
         Handle = window.Handle;
     }
 
-    internal nint Handle { get; }
+    private nint Handle { get; }
 
     /// <summary>Makes the window, or returns null when Windows would not.</summary>
     /// <param name="onHotkey">Runs on the window's thread with the id Windows saw pressed.</param>
