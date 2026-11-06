@@ -17,7 +17,10 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     {
     }
 
-    internal KeepAwake(Log log) => _log = log;
+    internal KeepAwake(Log log)
+    {
+        _log = log;
+    }
 
     /// <summary>Whether this keep-awake holds the screen on and the PC awake. False by default.</summary>
     public bool Enabled
@@ -52,5 +55,8 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     }
 
     /// <summary>Turns this keep-awake off, so it no longer holds the PC awake.</summary>
-    public void Dispose() => Enabled = false;
+    public void Dispose()
+    {
+        Enabled = false;
+    }
 }

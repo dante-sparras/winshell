@@ -7,7 +7,8 @@ namespace Winshell.Native;
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IServiceProvider
 {
-    [PreserveSig] int QueryService(in Guid service, in Guid iid, out nint instance);
+    [PreserveSig]
+    int QueryService(in Guid service, in Guid iid, out nint instance);
 }
 
 /// <summary>
@@ -19,17 +20,38 @@ internal interface IServiceProvider
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IVirtualDesktopManagerInternal
 {
-    [PreserveSig] int GetCount(out uint count);
-    [PreserveSig] int MoveViewToDesktop(nint view, nint desktop);
-    [PreserveSig] int CanViewMoveDesktops(nint view, out int canMove);
-    [PreserveSig] int GetCurrentDesktop(out nint desktop);
-    [PreserveSig] int GetDesktops(out nint desktops);
-    [PreserveSig] int GetAdjacentDesktop(nint desktop, int direction, out nint adjacent);
-    [PreserveSig] int SwitchDesktop(nint desktop);
-    [PreserveSig] int SwitchDesktopAndMoveForegroundView(nint desktop);
-    [PreserveSig] int CreateDesktop(out nint desktop);
-    [PreserveSig] int MoveDesktop(nint desktop, int index);
-    [PreserveSig] int RemoveDesktop(nint destroy, nint fallback);
+    [PreserveSig]
+    int GetCount(out uint count);
+
+    [PreserveSig]
+    int MoveViewToDesktop(nint view, nint desktop);
+
+    [PreserveSig]
+    int CanViewMoveDesktops(nint view, out int canMove);
+
+    [PreserveSig]
+    int GetCurrentDesktop(out nint desktop);
+
+    [PreserveSig]
+    int GetDesktops(out nint desktops);
+
+    [PreserveSig]
+    int GetAdjacentDesktop(nint desktop, int direction, out nint adjacent);
+
+    [PreserveSig]
+    int SwitchDesktop(nint desktop);
+
+    [PreserveSig]
+    int SwitchDesktopAndMoveForegroundView(nint desktop);
+
+    [PreserveSig]
+    int CreateDesktop(out nint desktop);
+
+    [PreserveSig]
+    int MoveDesktop(nint desktop, int index);
+
+    [PreserveSig]
+    int RemoveDesktop(nint destroy, nint fallback);
 }
 
 [ComImport]
@@ -37,9 +59,14 @@ internal interface IVirtualDesktopManagerInternal
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IVirtualDesktop
 {
-    [PreserveSig] int IsViewVisible(nint view, out int visible);
-    [PreserveSig] int GetId(out Guid id);
-    [PreserveSig] int GetName(out nint name);
+    [PreserveSig]
+    int IsViewVisible(nint view, out int visible);
+
+    [PreserveSig]
+    int GetId(out Guid id);
+
+    [PreserveSig]
+    int GetName(out nint name);
 }
 
 [ComImport]
@@ -47,8 +74,11 @@ internal interface IVirtualDesktop
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IObjectArray
 {
-    [PreserveSig] int GetCount(out uint count);
-    [PreserveSig] int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object item);
+    [PreserveSig]
+    int GetCount(out uint count);
+
+    [PreserveSig]
+    int GetAt(uint index, in Guid iid, [MarshalAs(UnmanagedType.IUnknown)] out object item);
 }
 
 [ComImport]
@@ -56,7 +86,12 @@ internal interface IObjectArray
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IVirtualDesktopManager
 {
-    [PreserveSig] int IsWindowOnCurrentVirtualDesktop(nint hwnd, out int onCurrent);
-    [PreserveSig] int GetWindowDesktopId(nint hwnd, out Guid desktopId);
-    [PreserveSig] int MoveWindowToDesktop(nint hwnd, in Guid desktopId);
+    [PreserveSig]
+    int IsWindowOnCurrentVirtualDesktop(nint hwnd, out int onCurrent);
+
+    [PreserveSig]
+    int GetWindowDesktopId(nint hwnd, out Guid desktopId);
+
+    [PreserveSig]
+    int MoveWindowToDesktop(nint hwnd, in Guid desktopId);
 }

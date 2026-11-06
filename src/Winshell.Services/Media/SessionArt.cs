@@ -30,6 +30,7 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             Set("", request);
             return;
         }
+
         _ = Read();
 
         async Task Read()
@@ -53,15 +54,18 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
         }
 
         // A failed read is not "this track has no art". Clearing the url here blanks art that already arrived.
-        void Skip(string reason) => loop.Post(() =>
+        void Skip(string reason)
         {
-            if (request == _request)
-                _applied = request;
-            if (_missLogged)
-                return;
-            _missLogged = true;
-            missed(reason);
-        });
+            loop.Post(() =>
+            {
+                if (request == _request)
+                    _applied = request;
+                if (_missLogged)
+                    return;
+                _missLogged = true;
+                missed(reason);
+            });
+        }
     }
 
     public void Release()
@@ -77,6 +81,7 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             ArtCache.ReleaseLater(url);
             return;
         }
+
         _applied = request;
         if (url.Length > 0)
             _missLogged = false;
@@ -85,6 +90,7 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             ArtCache.ReleaseLater(url);
             return;
         }
+
         ArtCache.ReleaseLater(Url);
         Url = url;
         changed();

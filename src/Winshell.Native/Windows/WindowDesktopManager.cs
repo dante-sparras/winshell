@@ -13,7 +13,10 @@ internal sealed class WindowDesktopManager
 
     private readonly IVirtualDesktopManager _manager;
 
-    private WindowDesktopManager(IVirtualDesktopManager manager) => _manager = manager;
+    private WindowDesktopManager(IVirtualDesktopManager manager)
+    {
+        _manager = manager;
+    }
 
     /// <summary>The manager, or null. <paramref name="hr"/> is negative when Windows could not create it.</summary>
     internal static WindowDesktopManager? Create(out int hr)
@@ -37,8 +40,14 @@ internal sealed class WindowDesktopManager
     }
 
     /// <summary>The HRESULT of asking which desktop the window is on.</summary>
-    internal int DesktopOf(nint hwnd, out Guid desktop) => _manager.GetWindowDesktopId(hwnd, out desktop);
+    internal int DesktopOf(nint hwnd, out Guid desktop)
+    {
+        return _manager.GetWindowDesktopId(hwnd, out desktop);
+    }
 
     /// <summary>The HRESULT of moving the window to that desktop.</summary>
-    internal int Move(nint hwnd, Guid desktop) => _manager.MoveWindowToDesktop(hwnd, in desktop);
+    internal int Move(nint hwnd, Guid desktop)
+    {
+        return _manager.MoveWindowToDesktop(hwnd, in desktop);
+    }
 }

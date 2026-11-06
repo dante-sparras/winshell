@@ -14,7 +14,8 @@ public sealed class PowerModeBackendTests
         Assert.Equal(PowerModeBackend.BestEfficiency, PowerModeBackend.ToGuid(PowerModeLevel.BestEfficiency));
         Assert.Equal(Guid.Empty, PowerModeBackend.ToGuid(PowerModeLevel.Balanced));
         Assert.Equal(PowerModeBackend.BestPerformance, PowerModeBackend.ToGuid(PowerModeLevel.BestPerformance));
-        Assert.NotEqual(PowerModeBackend.DeprecatedPerformance, PowerModeBackend.ToGuid(PowerModeLevel.BestPerformance));
+        Assert.NotEqual(PowerModeBackend.DeprecatedPerformance,
+            PowerModeBackend.ToGuid(PowerModeLevel.BestPerformance));
 
         Assert.Equal(0, (int)PowerModeLevel.BestEfficiency);
         Assert.Equal(1, (int)PowerModeLevel.Balanced);

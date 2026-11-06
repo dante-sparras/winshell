@@ -76,7 +76,8 @@ internal sealed unsafe class NativeWindow
     {
         if (Registered.TryAdd(className, 0))
             Register(className);
-        var hwnd = Win32.CreateWindowExW(exStyle, className, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null), 0);
+        var hwnd = Win32.CreateWindowExW(exStyle, className, "", style, 0, 0, 1, 1, 0, 0, Win32.GetModuleHandleW(null),
+            0);
         if (hwnd == 0)
             throw new InvalidOperationException($"CreateWindowEx failed: {Marshal.GetLastPInvokeError()}");
         var window = new NativeWindow(hwnd, handler);
@@ -118,7 +119,7 @@ internal sealed unsafe class NativeWindow
                 hIcon = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXICON), Win32.GetSystemMetrics(Win32.SM_CYICON)),
                 hIconSm = AppIcon(Win32.GetSystemMetrics(Win32.SM_CXSMICON), Win32.GetSystemMetrics(Win32.SM_CYSMICON)),
                 hCursor = Win32.LoadCursorW(0, Win32.IDC_ARROW),
-                lpszClassName = name,
+                lpszClassName = name
             };
             Win32.RegisterClassExW(wc);
         }
@@ -128,20 +129,23 @@ internal sealed unsafe class NativeWindow
     /// The logo embedded in the program. The C# compiler stores <c>ApplicationIcon</c> as icon group 32512, so the
     /// icon shows on a window of this class that has a caption.
     /// </summary>
-    private static nint AppIcon(int width, int height) =>
-        Win32.LoadImageW(Win32.GetModuleHandleW(null), Win32.IDI_APPLICATION, Win32.IMAGE_ICON, width, height, 0);
+    private static nint AppIcon(int width, int height)
+    {
+        return Win32.LoadImageW(Win32.GetModuleHandleW(null), Win32.IDI_APPLICATION, Win32.IMAGE_ICON, width, height,
+            0);
+    }
 
     [UnmanagedCallersOnly]
     private static nint WndProc(nint hwnd, uint msg, nint wParam, nint lParam)
     {
         if (Live.TryGetValue(hwnd, out var window))
-        {
             try
             {
                 if (window._handler(new WindowMessage(msg, wParam, lParam)) is { } result)
                     return result;
             }
-#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
+#pragma warning disable CA1031
+            // Windows called in; nothing above this frame can catch it.
             catch (Exception)
 #pragma warning restore CA1031
             {
@@ -152,7 +156,7 @@ internal sealed unsafe class NativeWindow
                 if (msg == PInvoke.WM_NCDESTROY)
                     window.Forget(hwnd);
             }
-        }
+
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 }

@@ -13,7 +13,7 @@ public sealed class AppShell : ShellConfiguration
             Height = 48,
             ReservedSize = 48,
             Content = new PanelView(),
-            Visible = true,
+            Visible = true
         };
     }
 }

@@ -23,7 +23,8 @@ internal readonly unsafe ref struct CopyData
     internal nuint Kind => _data->dwData;
 
     /// <summary>The bytes the sender passed, which Windows copied into this process for the message.</summary>
-    internal ReadOnlySpan<byte> Payload => _data->lpData == null ? default : new(_data->lpData, (int)_data->cbData);
+    internal ReadOnlySpan<byte> Payload =>
+        _data->lpData == null ? default : new ReadOnlySpan<byte>(_data->lpData, (int)_data->cbData);
 
     /// <summary>
     /// Sends the message on to <paramref name="window"/> as it arrived, and returns that window's answer; 0 when it
@@ -31,7 +32,8 @@ internal readonly unsafe ref struct CopyData
     /// </summary>
     internal nint Forward(nint window, uint timeoutMilliseconds)
     {
-        Win32.SendMessageTimeoutW(window, PInvoke.WM_COPYDATA, _sender, (nint)_data, Win32.SMTO_ABORTIFHUNG, timeoutMilliseconds, out var result);
+        Win32.SendMessageTimeoutW(window, PInvoke.WM_COPYDATA, _sender, (nint)_data, Win32.SMTO_ABORTIFHUNG,
+            timeoutMilliseconds, out var result);
         return result;
     }
 }
@@ -70,7 +72,6 @@ internal sealed unsafe class TrayWindow : IDisposable
     internal static TrayWindow? Create(string className, CopyDataHandler copyData, Func<uint, nint, nint, bool> message)
     {
         if (Registered.TryAdd(className, 0))
-        {
             fixed (char* name = className)
             {
                 var wc = new WNDCLASSEXW
@@ -78,13 +79,14 @@ internal sealed unsafe class TrayWindow : IDisposable
                     cbSize = (uint)sizeof(WNDCLASSEXW),
                     lpfnWndProc = &WndProc,
                     hInstance = Win32.GetModuleHandleW(null),
-                    lpszClassName = name,
+                    lpszClassName = name
                 };
                 Win32.RegisterClassExW(wc);
             }
-        }
+
         var hwnd = Win32.CreateWindowExW(
-            Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED | Win32.WS_EX_TRANSPARENT,
+            Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED |
+            Win32.WS_EX_TRANSPARENT,
             className, "", Win32.WS_POPUP, 0, 0, 0, 0, 0, 0, Win32.GetModuleHandleW(null), 0);
         if (hwnd == 0)
             return null;
@@ -95,8 +97,10 @@ internal sealed unsafe class TrayWindow : IDisposable
     }
 
     /// <summary>Lets <paramref name="message"/> through from a process at any integrity level.</summary>
-    internal void AllowFromAnyLevel(uint message) =>
+    internal void AllowFromAnyLevel(uint message)
+    {
         PInvoke.ChangeWindowMessageFilterEx((HWND)Handle, message, WINDOW_MESSAGE_FILTER_ACTION.MSGFLT_ALLOW, null);
+    }
 
     public void Dispose()
     {
@@ -125,6 +129,7 @@ internal sealed unsafe class TrayWindow : IDisposable
         {
             return 0;
         }
+
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 }

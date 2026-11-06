@@ -1,5 +1,4 @@
 using Windows.Graphics.Imaging;
-using Windows.Storage.Streams;
 
 namespace Winshell.Services.Tests;
 
@@ -11,7 +10,8 @@ public sealed class PixelImageTests
         var decoder = await BitmapDecoder.CreateAsync(BitmapDecoder.PngDecoderId, stream);
         Assert.Equal(2u, decoder.PixelWidth);
         Assert.Equal(1u, decoder.PixelHeight);
-        var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, new BitmapTransform(),
+        var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight,
+            new BitmapTransform(),
             ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
         return pixels.DetachPixelData();
     }
@@ -29,7 +29,7 @@ public sealed class PixelImageTests
     [Fact]
     public async Task A_premultiplied_picture_is_saved_with_straight_alpha()
     {
-        var png = new PixelImage(2, 1, [64, 32, 16, 128, 0, 0, 0, 0], premultiplied: true).EncodePng();
+        var png = new PixelImage(2, 1, [64, 32, 16, 128, 0, 0, 0, 0], true).EncodePng();
 
         Assert.Equal(new byte[] { 128, 64, 32, 128, 0, 0, 0, 0 }, await DecodeAsync(png));
     }
@@ -52,10 +52,14 @@ public sealed class PixelImageTests
     [InlineData(0, 1, 0)]
     [InlineData(1, 0, 0)]
     [InlineData(-1, -1, 4)]
-    public void A_picture_has_a_size(int width, int height, int bytes) =>
+    public void A_picture_has_a_size(int width, int height, int bytes)
+    {
         Assert.Throws<ArgumentOutOfRangeException>(() => new PixelImage(width, height, new byte[bytes]));
+    }
 
     [Fact]
-    public void The_pixels_must_fill_the_picture() =>
+    public void The_pixels_must_fill_the_picture()
+    {
         Assert.Throws<ArgumentException>(() => new PixelImage(2, 2, new byte[15]));
+    }
 }

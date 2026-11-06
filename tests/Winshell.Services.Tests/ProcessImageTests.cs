@@ -31,13 +31,15 @@ public class ProcessImageTests
     [Fact]
     public void A_required_size_past_the_win32_limit_returns_nothing()
     {
-        Assert.Null(ProcessImage.Read((_, _) => new ProcessImage.QueryResult(false, ProcessImage.MaxCharacters + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
+        Assert.Null(ProcessImage.Read((_, _) =>
+            new ProcessImage.QueryResult(false, ProcessImage.MaxCharacters + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
     }
 
     [Fact]
     public void A_second_short_buffer_returns_nothing()
     {
-        Assert.Null(ProcessImage.Read((_, capacity) => new ProcessImage.QueryResult(false, capacity + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
+        Assert.Null(ProcessImage.Read((_, capacity) =>
+            new ProcessImage.QueryResult(false, capacity + 1, Win32.ERROR_INSUFFICIENT_BUFFER)));
     }
 
     [Fact]

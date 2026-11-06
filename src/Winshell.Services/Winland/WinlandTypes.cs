@@ -11,7 +11,10 @@ namespace Winshell.Winland;
 public sealed record WinlandEvent(string Name, string Data)
 {
     /// <summary>Splits <see cref="Data"/> at commas into that many strings. The last keeps any further commas, and missing ones are empty.</summary>
-    public IReadOnlyList<string> Parse(int argumentCount) => WinlandProtocol.ParseArgs(Data, argumentCount);
+    public IReadOnlyList<string> Parse(int argumentCount)
+    {
+        return WinlandProtocol.ParseArgs(Data, argumentCount);
+    }
 }
 
 /// <summary>A Monitor as Winland reports it.</summary>
@@ -94,7 +97,10 @@ public sealed class WinlandMonitor : ObservableObject
         Set(ref _activeWorkspace, workspace, nameof(ActiveWorkspace));
     }
 
-    internal void SetFocused(bool focused) => Set(ref _focused, focused, nameof(Focused));
+    internal void SetFocused(bool focused)
+    {
+        Set(ref _focused, focused, nameof(Focused));
+    }
 }
 
 /// <summary>A Workspace. Winland numbers Workspaces per Monitor, so two can both be 3; <see cref="Monitor"/> tells them apart.</summary>
@@ -108,7 +114,10 @@ public sealed class WinlandWorkspace : ObservableObject
     private bool _active, _focused, _urgent, _hasFullscreen;
     private JsonElement? _lastIpcObject;
 
-    internal WinlandWorkspace(WinlandService ipc) => _ipc = ipc;
+    internal WinlandWorkspace(WinlandService ipc)
+    {
+        _ipc = ipc;
+    }
 
     /// <summary>The Workspace number. A named Workspace gets a negative id, and <c>special:special</c> gets -99.</summary>
     public int Id => _id;
@@ -149,7 +158,8 @@ public sealed class WinlandWorkspace : ObservableObject
     public void Activate()
     {
         if (!IsSpecial && _monitor is { Id: >= 0 } monitor && monitor != _ipc.FocusedMonitor)
-            _ipc.Send($"[[BATCH]]dispatch focusmonitor {monitor.Id.ToString(CultureInfo.InvariantCulture)};dispatch workspace {_name}");
+            _ipc.Send(
+                $"[[BATCH]]dispatch focusmonitor {monitor.Id.ToString(CultureInfo.InvariantCulture)};dispatch workspace {_name}");
         else
             _ipc.Dispatch("workspace " + _name);
     }
@@ -161,11 +171,20 @@ public sealed class WinlandWorkspace : ObservableObject
         Set(ref _address, name, nameof(Address));
     }
 
-    internal void SetId(int id) => Set(ref _id, id, nameof(Id));
+    internal void SetId(int id)
+    {
+        Set(ref _id, id, nameof(Id));
+    }
 
-    internal void SetMonitor(WinlandMonitor? monitor) => Set(ref _monitor, monitor, nameof(Monitor));
+    internal void SetMonitor(WinlandMonitor? monitor)
+    {
+        Set(ref _monitor, monitor, nameof(Monitor));
+    }
 
-    internal void SetHasFullscreen(bool value) => Set(ref _hasFullscreen, value, nameof(HasFullscreen));
+    internal void SetHasFullscreen(bool value)
+    {
+        Set(ref _hasFullscreen, value, nameof(HasFullscreen));
+    }
 
     internal void SetLastIpcObject(JsonElement value)
     {
@@ -179,7 +198,10 @@ public sealed class WinlandWorkspace : ObservableObject
         Set(ref _focused, focused, nameof(Focused));
     }
 
-    internal void SetUrgent(bool urgent) => Set(ref _urgent, urgent, nameof(Urgent));
+    internal void SetUrgent(bool urgent)
+    {
+        Set(ref _urgent, urgent, nameof(Urgent));
+    }
 
     internal void InsertWindow(WinlandWindow window)
     {
@@ -187,7 +209,10 @@ public sealed class WinlandWorkspace : ObservableObject
             Windows.Add(window);
     }
 
-    internal void RemoveWindow(WinlandWindow window) => Windows.Remove(window);
+    internal void RemoveWindow(WinlandWindow window)
+    {
+        Windows.Remove(window);
+    }
 }
 
 /// <summary>A window as Winland reports it. Its address is the window handle.</summary>
@@ -202,7 +227,10 @@ public sealed class WinlandWindow : ObservableObject
     private AppWindow? _seen;
     private JsonElement? _lastIpcObject;
 
-    internal WinlandWindow(WinlandService service) => _service = service;
+    internal WinlandWindow(WinlandService service)
+    {
+        _service = service;
+    }
 
     /// <summary>The window handle in hexadecimal, without <c>0x</c>.</summary>
     public string Address => _address == 0 ? "" : _address.ToString("x", CultureInfo.InvariantCulture);
@@ -252,11 +280,20 @@ public sealed class WinlandWindow : ObservableObject
         Changed(nameof(Window));
     }
 
-    internal void SetTitle(string title) => Set(ref _title, title, nameof(Title));
+    internal void SetTitle(string title)
+    {
+        Set(ref _title, title, nameof(Title));
+    }
 
-    internal void SetWorkspace(WinlandWorkspace? workspace) => Set(ref _workspace, workspace, nameof(Workspace));
+    internal void SetWorkspace(WinlandWorkspace? workspace)
+    {
+        Set(ref _workspace, workspace, nameof(Workspace));
+    }
 
-    internal void SetUrgent(bool urgent) => Set(ref _urgent, urgent, nameof(Urgent));
+    internal void SetUrgent(bool urgent)
+    {
+        Set(ref _urgent, urgent, nameof(Urgent));
+    }
 
     internal void SetLastIpcObject(JsonElement value)
     {

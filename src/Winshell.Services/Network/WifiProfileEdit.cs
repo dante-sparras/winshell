@@ -17,8 +17,10 @@ internal sealed class WlanProfileApi : IWlanProfileApi
 {
     public static readonly WlanProfileApi Instance = new();
 
-    public uint Get(Guid adapter, string profileName, out string? xml, out uint flags) =>
-        Wlan.GetProfile(adapter, profileName, out xml, out flags);
+    public uint Get(Guid adapter, string profileName, out string? xml, out uint flags)
+    {
+        return Wlan.GetProfile(adapter, profileName, out xml, out flags);
+    }
 
     /// <summary>Refuses a document past <see cref="WifiProfileXml.MaxCharacters"/> with ERROR_INVALID_PARAMETER.</summary>
     public uint Set(Guid adapter, string xml, uint flags, out uint reason)
@@ -29,11 +31,15 @@ internal sealed class WlanProfileApi : IWlanProfileApi
         return 87;
     }
 
-    public uint Connect(Guid adapter, string profileName, bool hidden) =>
-        Wlan.ConnectProfile(adapter, profileName, hidden);
+    public uint Connect(Guid adapter, string profileName, bool hidden)
+    {
+        return Wlan.ConnectProfile(adapter, profileName, hidden);
+    }
 
-    public uint Delete(Guid adapter, string profileName) =>
-        Wlan.DeleteProfile(adapter, profileName);
+    public uint Delete(Guid adapter, string profileName)
+    {
+        return Wlan.DeleteProfile(adapter, profileName);
+    }
 }
 
 /// <summary>A profile write. <see cref="Wrote"/> is false when nothing was sent to Windows.</summary>
@@ -60,9 +66,13 @@ internal static class WifiProfileEdit
         return changed ? Write(api, adapter, updated, flags) : new ProfileChange(null, false);
     }
 
-    public static string WindowsMessage(uint code) => new Win32Exception((int)code).Message;
+    public static string WindowsMessage(uint code)
+    {
+        return new Win32Exception((int)code).Message;
+    }
 
-    private static bool TryRead(IWlanProfileApi api, Guid adapter, string profileName, out string xml, out uint flags, out string? error)
+    private static bool TryRead(IWlanProfileApi api, Guid adapter, string profileName, out string xml, out uint flags,
+        out string? error)
     {
         xml = "";
         var read = api.Get(adapter, profileName, out var text, out flags);
@@ -71,6 +81,7 @@ internal static class WifiProfileEdit
             error = read == 0 ? WifiProfileXml.Unreadable : WindowsMessage(read);
             return false;
         }
+
         xml = text;
         error = null;
         return true;
@@ -86,7 +97,10 @@ internal static class WifiProfileEdit
 /// <summary>Turns profile XML into the fields a configuration sees. The XML itself is not kept.</summary>
 internal static class WifiProfiles
 {
-    public static string Id(Guid adapter, string profileName) => adapter + ":" + profileName;
+    public static string Id(Guid adapter, string profileName)
+    {
+        return adapter + ":" + profileName;
+    }
 
     public static WifiProfileInfo Describe(Guid adapter, string profileName, string? xml, uint readError)
     {
@@ -94,19 +108,25 @@ internal static class WifiProfiles
         if (readError != 0 || string.IsNullOrEmpty(xml))
         {
             var message = readError == 0 ? WifiProfileXml.Unreadable : WifiProfileEdit.WindowsMessage(readError);
-            return new WifiProfileInfo(id, profileName, "", false, WifiSecurityType.Unknown, false, false, false, message);
+            return new WifiProfileInfo(id, profileName, "", false, WifiSecurityType.Unknown, false, false, false,
+                message);
         }
+
         if (!WifiProfileXml.TryParse(xml, out var fields, out var error))
-            return new WifiProfileInfo(id, profileName, "", false, WifiSecurityType.Unknown, false, false, false, error);
+            return new WifiProfileInfo(id, profileName, "", false, WifiSecurityType.Unknown, false, false, false,
+                error);
         return new WifiProfileInfo(
-            id, profileName, fields.Ssid, fields.AutoConnect, fields.Security, fields.HasPassword, true, fields.Hidden, "");
+            id, profileName, fields.Ssid, fields.AutoConnect, fields.Security, fields.HasPassword, true, fields.Hidden,
+            "");
     }
 
     /// <summary>A readable profile matches its SSID. One that could not be read matches its profile name.</summary>
-    public static bool Matches(WifiProfileInfo profile, string networkName) =>
-        profile.Loaded
+    public static bool Matches(WifiProfileInfo profile, string networkName)
+    {
+        return profile.Loaded
             ? string.Equals(profile.Ssid, networkName, StringComparison.Ordinal)
             : string.Equals(profile.Name, networkName, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>Runs profile XML writes one at a time, off the thread that asked.</summary>

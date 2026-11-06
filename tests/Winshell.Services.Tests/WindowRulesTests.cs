@@ -11,7 +11,9 @@ public sealed class WindowRulesTests
     [Fact]
     public void App_identity_prefers_the_window_id_and_otherwise_uses_the_program_name()
     {
-        Assert.Equal("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", WindowRules.AppId("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", @"C:\Windows\System32\ApplicationFrameHost.exe"));
+        Assert.Equal("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+            WindowRules.AppId("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+                @"C:\Windows\System32\ApplicationFrameHost.exe"));
         Assert.Equal("chrome", WindowRules.AppId("", @"C:\Program Files\Google\Chrome\Application\chrome.exe"));
         Assert.Equal("Chrome", WindowRules.AppId("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe"));
         Assert.Equal("", WindowRules.AppId("", ""));
@@ -20,8 +22,11 @@ public sealed class WindowRulesTests
     [Fact]
     public void A_packaged_app_icon_comes_from_Start_and_every_other_icon_from_the_program()
     {
-        Assert.Equal(@"shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", WindowRules.IconPath("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", @"C:\Windows\System32\ApplicationFrameHost.exe"));
-        Assert.Equal(@"C:\Program Files\Google\Chrome\Application\chrome.exe", WindowRules.IconPath("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe"));
+        Assert.Equal(@"shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+            WindowRules.IconPath("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App",
+                @"C:\Windows\System32\ApplicationFrameHost.exe"));
+        Assert.Equal(@"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            WindowRules.IconPath("Chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe"));
         Assert.Equal(@"C:\Program Files\App\app.exe", WindowRules.IconPath("", @"C:\Program Files\App\app.exe"));
     }
 
@@ -42,12 +47,19 @@ public sealed class WindowRulesTests
     }
 
     [Fact]
-    public void A_window_larger_than_the_target_shrinks_to_fit() =>
-        Assert.Equal(new RECT(0, 0, 800, 600), WindowRules.MoveOnto(new RECT(0, 0, 3000, 2000), new MonitorFrame(0, 0, 4000, 3000, 1), new MonitorFrame(0, 0, 800, 600, 1)));
+    public void A_window_larger_than_the_target_shrinks_to_fit()
+    {
+        Assert.Equal(new RECT(0, 0, 800, 600),
+            WindowRules.MoveOnto(new RECT(0, 0, 3000, 2000), new MonitorFrame(0, 0, 4000, 3000, 1),
+                new MonitorFrame(0, 0, 800, 600, 1)));
+    }
 
     [Fact]
-    public void A_window_above_the_work_area_starts_at_the_target_corner() =>
-        Assert.Equal(new RECT(1920, 0, 2120, 100), WindowRules.MoveOnto(new RECT(-50, -20, 150, 80), Primary, new MonitorFrame(1920, 0, 3840, 1080, 1)));
+    public void A_window_above_the_work_area_starts_at_the_target_corner()
+    {
+        Assert.Equal(new RECT(1920, 0, 2120, 100),
+            WindowRules.MoveOnto(new RECT(-50, -20, 150, 80), Primary, new MonitorFrame(1920, 0, 3840, 1080, 1)));
+    }
 
     [Fact]
     public void A_bad_monitor_frame_leaves_the_window_where_it_is()
@@ -64,7 +76,8 @@ public sealed class WindowRulesTests
         Assert.Equal((0, 48), WindowRules.WorkspaceOffset(monitor, work, false));
         Assert.Equal((0, 0), WindowRules.WorkspaceOffset(monitor, work, true));
         Assert.Equal((0, 0), WindowRules.WorkspaceOffset(monitor, default, false));
-        Assert.Equal((64, 40), WindowRules.WorkspaceOffset(new RECT(-3, 0, 1917, 1080), new RECT(61, 40, 1917, 1080), false));
+        Assert.Equal((64, 40),
+            WindowRules.WorkspaceOffset(new RECT(-3, 0, 1917, 1080), new RECT(61, 40, 1917, 1080), false));
     }
 
     [Fact]
@@ -101,10 +114,14 @@ public sealed class WindowRulesTests
         Assert.False(WindowRules.MarksWindow(Win32.EVENT_SYSTEM_FOREGROUND, 0, 0, 0, false, false));
         Assert.True(WindowRules.MarksForeground(Win32.EVENT_SYSTEM_FOREGROUND));
         Assert.False(WindowRules.MarksWindow(Win32.EVENT_OBJECT_LOCATIONCHANGE, 1, Win32.OBJID_WINDOW, 1, true, true));
-        Assert.False(WindowRules.MarksWindow(Win32.EVENT_OBJECT_LOCATIONCHANGE, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF, true, false));
-        Assert.True(WindowRules.MarksWindow(Win32.EVENT_OBJECT_LOCATIONCHANGE, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF, false, true));
-        Assert.False(WindowRules.MarksWindow(Win32.EVENT_OBJECT_DESTROY, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF, false, false));
-        Assert.True(WindowRules.MarksWindow(Win32.EVENT_OBJECT_DESTROY, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF, true, false));
+        Assert.False(WindowRules.MarksWindow(Win32.EVENT_OBJECT_LOCATIONCHANGE, 1, Win32.OBJID_WINDOW,
+            Win32.CHILDID_SELF, true, false));
+        Assert.True(WindowRules.MarksWindow(Win32.EVENT_OBJECT_LOCATIONCHANGE, 1, Win32.OBJID_WINDOW,
+            Win32.CHILDID_SELF, false, true));
+        Assert.False(WindowRules.MarksWindow(Win32.EVENT_OBJECT_DESTROY, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF,
+            false, false));
+        Assert.True(WindowRules.MarksWindow(Win32.EVENT_OBJECT_DESTROY, 1, Win32.OBJID_WINDOW, Win32.CHILDID_SELF, true,
+            false));
         Assert.True(WindowRules.MarksForeground(Win32.EVENT_SYSTEM_MINIMIZESTART));
         Assert.True(WindowRules.MarksForeground(Win32.EVENT_OBJECT_HIDE));
         Assert.False(WindowRules.MarksForeground(Win32.EVENT_OBJECT_NAMECHANGE));
@@ -145,16 +162,19 @@ public sealed class WindowRulesTests
     public void A_preview_leaves_out_the_invisible_resize_borders()
     {
         // A 1280x720 frame with 7-pixel borders on the left, right and bottom, as Windows 11 draws a normal window.
-        Assert.Equal(new RECT(7, 0, 1287, 720), WindowRules.PreviewSource(new RECT(93, 100, 1387, 827), new RECT(100, 100, 1380, 820)));
+        Assert.Equal(new RECT(7, 0, 1287, 720),
+            WindowRules.PreviewSource(new RECT(93, 100, 1387, 827), new RECT(100, 100, 1380, 820)));
         // A maximized window hangs over the monitor by its borders; the frame is the monitor.
-        Assert.Equal(new RECT(8, 8, 1928, 1048), WindowRules.PreviewSource(new RECT(-8, -8, 1928, 1048), new RECT(0, 0, 1920, 1040)));
+        Assert.Equal(new RECT(8, 8, 1928, 1048),
+            WindowRules.PreviewSource(new RECT(-8, -8, 1928, 1048), new RECT(0, 0, 1920, 1040)));
     }
 
     [Fact]
     public void Without_a_frame_inside_the_window_the_preview_is_the_whole_window()
     {
         Assert.Equal(new RECT(0, 0, 400, 300), WindowRules.PreviewSource(new RECT(10, 10, 410, 310), default));
-        Assert.Equal(new RECT(0, 0, 400, 300), WindowRules.PreviewSource(new RECT(10, 10, 410, 310), new RECT(500, 500, 600, 600)));
+        Assert.Equal(new RECT(0, 0, 400, 300),
+            WindowRules.PreviewSource(new RECT(10, 10, 410, 310), new RECT(500, 500, 600, 600)));
         Assert.Equal(new RECT(0, 0, 0, 0), WindowRules.PreviewSource(default, new RECT(0, 0, 10, 10)));
     }
 
@@ -166,8 +186,10 @@ public sealed class WindowRulesTests
     }
 
     [Fact]
-    public void A_small_window_is_previewed_at_its_own_size_not_enlarged() =>
+    public void A_small_window_is_previewed_at_its_own_size_not_enlarged()
+    {
         Assert.Equal(new RECT(60, 59, 160, 129), WindowRules.FitPreview(new RECT(10, 20, 210, 168), 100, 70));
+    }
 
     [Fact]
     public void A_preview_with_no_box_or_no_source_is_empty()

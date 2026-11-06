@@ -1,20 +1,30 @@
-
 namespace Winshell.Core.Tests;
 
 /// <summary>A crash report that cannot be written, and a handler that throws, are logged instead of dropped.</summary>
 public sealed class CrashWriteLogTests : IDisposable
 {
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-crash-write-log", Guid.NewGuid().ToString("N"));
+    private readonly string _dir =
+        Path.Combine(Path.GetTempPath(), "winshell-crash-write-log", Guid.NewGuid().ToString("N"));
+
     private readonly List<string> _lines = [];
 
-    public CrashWriteLogTests() => Directory.CreateDirectory(_dir);
-
-    public void Dispose() => Directory.Delete(_dir, true);
-
-    private CrashReports Reports(string folder) => new(folder)
+    public CrashWriteLogTests()
     {
-        Log = new Log { Sink = (level, category, message) => _lines.Add($"{level} {category}: {message}") },
-    };
+        Directory.CreateDirectory(_dir);
+    }
+
+    public void Dispose()
+    {
+        Directory.Delete(_dir, true);
+    }
+
+    private CrashReports Reports(string folder)
+    {
+        return new CrashReports(folder)
+        {
+            Log = new Log { Sink = (level, category, message) => _lines.Add($"{level} {category}: {message}") }
+        };
+    }
 
     [Fact]
     public void A_report_that_cannot_be_written_is_logged_and_still_returns_null()

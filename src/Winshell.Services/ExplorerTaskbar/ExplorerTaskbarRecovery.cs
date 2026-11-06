@@ -9,8 +9,11 @@ namespace Winshell.ExplorerTaskbar;
 internal static class ExplorerTaskbarRecovery
 {
     /// <summary>Whether a taskbar window of Explorer's is hidden. With no taskbar window at all, none is.</summary>
-    public static bool AnyHidden() =>
-        Win32ExplorerTaskbar.Windows("Shell_TrayWnd").Concat(Win32ExplorerTaskbar.Windows("Shell_SecondaryTrayWnd")).Any(hwnd => !Win32.IsWindowVisible(hwnd));
+    public static bool AnyHidden()
+    {
+        return Win32ExplorerTaskbar.Windows("Shell_TrayWnd")
+            .Concat(Win32ExplorerTaskbar.Windows("Shell_SecondaryTrayWnd")).Any(hwnd => !Win32.IsWindowVisible(hwnd));
+    }
 
     /// <summary>
     /// Shows every hidden taskbar window and reserves its edge again, read from where the window is now. A window that
@@ -33,6 +36,7 @@ internal static class ExplorerTaskbarRecovery
                 saved.Rect = rect;
                 saved.Removed = true;
             }
+
             Win32ExplorerTaskbar.PutBack(saved);
         }
     }

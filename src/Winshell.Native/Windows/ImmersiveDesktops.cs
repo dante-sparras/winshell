@@ -43,6 +43,7 @@ internal static class ImmersiveDesktops
                 error = $"failed: GetCount {Hex(hr)}";
                 return false;
             }
+
             if (count is 0 or > MaxDesktops)
             {
                 error = $"failed: GetCount returned {count}";
@@ -55,6 +56,7 @@ internal static class ImmersiveDesktops
                 error = $"failed: GetDesktops {Hex(hr)}";
                 return false;
             }
+
             arrayObject = Marshal.GetObjectForIUnknown(arrayPointer);
             var array = (IObjectArray)arrayObject;
             hr = array.GetCount(out var listed);
@@ -74,6 +76,7 @@ internal static class ImmersiveDesktops
                     error = $"failed: GetAt {i} {Hex(hr)}";
                     return false;
                 }
+
                 held.Add(item);
                 var desktop = (IVirtualDesktop)item;
                 hr = desktop.GetId(out var id);
@@ -82,6 +85,7 @@ internal static class ImmersiveDesktops
                     error = $"failed: desktop {i} has no id ({Hex(hr)})";
                     return false;
                 }
+
                 entries[i] = new VirtualDesktopEntry(id, ReadName(desktop));
             }
 
@@ -91,6 +95,7 @@ internal static class ImmersiveDesktops
                 error = $"failed: GetCurrentDesktop {Hex(hr)}";
                 return false;
             }
+
             try
             {
                 var currentObject = Marshal.GetObjectForIUnknown(currentPointer);
@@ -101,6 +106,7 @@ internal static class ImmersiveDesktops
             {
                 Marshal.Release(currentPointer);
             }
+
             if (hr < 0 || current == Guid.Empty)
             {
                 error = $"failed: the current desktop has no id ({Hex(hr)})";
@@ -138,6 +144,7 @@ internal static class ImmersiveDesktops
             problem = $"did not run ({error})";
             return false;
         }
+
         nint pointer = 0;
         try
         {
@@ -146,6 +153,7 @@ internal static class ImmersiveDesktops
                 problem = "could not find that desktop";
                 return false;
             }
+
             var hr = manager.SwitchDesktop(pointer);
             problem = hr < 0 ? $"failed ({Hex(hr)})" : "";
             return hr >= 0;
@@ -171,6 +179,7 @@ internal static class ImmersiveDesktops
             problem = $"did not run ({error})";
             return null;
         }
+
         nint pointer = 0;
         object? created = null;
         try
@@ -181,6 +190,7 @@ internal static class ImmersiveDesktops
                 problem = $"failed ({Hex(hr)})";
                 return null;
             }
+
             created = Marshal.GetObjectForIUnknown(pointer);
             hr = ((IVirtualDesktop)created).GetId(out var id);
             if (hr < 0 || id == Guid.Empty)
@@ -188,6 +198,7 @@ internal static class ImmersiveDesktops
                 problem = $"returned a desktop with no id ({Hex(hr)})";
                 return null;
             }
+
             problem = "";
             return id;
         }
@@ -216,6 +227,7 @@ internal static class ImmersiveDesktops
             problem = $"did not run ({error})";
             return false;
         }
+
         nint destroy = 0, onto = 0;
         try
         {
@@ -224,6 +236,7 @@ internal static class ImmersiveDesktops
                 problem = "could not find the desktop or its fallback";
                 return false;
             }
+
             var hr = manager.RemoveDesktop(destroy, onto);
             problem = hr < 0 ? $"failed ({Hex(hr)})" : "";
             return hr >= 0;
@@ -248,7 +261,8 @@ internal static class ImmersiveDesktops
         manager = null;
         error = "";
         var providerId = typeof(IServiceProvider).GUID;
-        var hr = Win32.CoCreateInstance(in ImmersiveShellClass, 0, (uint)CLSCTX.CLSCTX_LOCAL_SERVER, in providerId, out var shellPointer);
+        var hr = Win32.CoCreateInstance(in ImmersiveShellClass, 0, (uint)CLSCTX.CLSCTX_LOCAL_SERVER, in providerId,
+            out var shellPointer);
         if (hr < 0 || shellPointer == 0)
         {
             error = $"unavailable: immersive shell {Hex(hr)}";
@@ -269,6 +283,7 @@ internal static class ImmersiveDesktops
                 error = $"unavailable: virtual desktop service {Hex(hr)}";
                 return false;
             }
+
             manager = (IVirtualDesktopManagerInternal)Marshal.GetObjectForIUnknown(managerPointer);
             return true;
         }
@@ -314,6 +329,7 @@ internal static class ImmersiveDesktops
                 pointer = Marshal.GetComInterfaceForObject(desktop, typeof(IVirtualDesktop));
                 return true;
             }
+
             return false;
         }
         finally
@@ -346,5 +362,8 @@ internal static class ImmersiveDesktops
             Marshal.ReleaseComObject(com);
     }
 
-    private static string Hex(int hr) => $"0x{hr:X8}";
+    private static string Hex(int hr)
+    {
+        return $"0x{hr:X8}";
+    }
 }

@@ -37,17 +37,20 @@ public class TrayProtocolTests
     [InlineData(TrayClick.Middle, 4u, new uint[] { 0x0207, 0x0208 })]
     [InlineData(TrayClick.Menu, 0u, new uint[] { 0x0204, 0x0205 })]
     [InlineData(TrayClick.Menu, 3u, new uint[] { 0x0204, 0x0205, 0x007B })]
-    internal void Clicks_send_what_explorer_sends(TrayClick click, uint version, uint[] messages) =>
+    internal void Clicks_send_what_explorer_sends(TrayClick click, uint version, uint[] messages)
+    {
         Assert.Equal(messages, TrayProtocol.ClickMessages(click, version));
+    }
 
     [Fact]
     public void A_full_structure_reads_every_field()
     {
         var guid = Guid.NewGuid();
         var call = TrayProtocol.Read(TrayCall.Build(TrayProtocol.Modify, unchecked((int)0x80001234), 9,
-            TrayProtocol.NIF_MESSAGE | TrayProtocol.NIF_TIP | TrayProtocol.NIF_STATE | TrayProtocol.NIF_INFO | TrayProtocol.NIF_GUID,
-            callback: 0x8001, icon: 0x0042, tip: "Sync\nUp to date", state: 1, stateMask: 1, info: "Done", timeoutOrVersion: 10000,
-            infoTitle: "Backup", infoFlags: 2, guid: guid));
+            TrayProtocol.NIF_MESSAGE | TrayProtocol.NIF_TIP | TrayProtocol.NIF_STATE | TrayProtocol.NIF_INFO |
+            TrayProtocol.NIF_GUID,
+            0x8001, 0x0042, "Sync\nUp to date", 1, 1, "Done", 10000,
+            "Backup", 2, guid));
         Assert.NotNull(call);
         Assert.Equal(TrayProtocol.Modify, call.Message);
         // Handles sign-extend, as Windows does for 32-bit handle values.
@@ -69,7 +72,8 @@ public class TrayProtocolTests
     public void A_structure_from_an_older_app_reads_what_it_sent()
     {
         // NOTIFYICONDATAW_V1 ends after a 64-character tip; the GUID flag cannot point past it.
-        var call = TrayProtocol.Read(TrayCall.Build(TrayProtocol.Add, 0x100, 1, TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID,
+        var call = TrayProtocol.Read(TrayCall.Build(TrayProtocol.Add, 0x100, 1,
+            TrayProtocol.NIF_TIP | TrayProtocol.NIF_GUID,
             tip: "Old app", guid: Guid.NewGuid(), size: 24 + 64 * 2));
         Assert.NotNull(call);
         Assert.Equal("Old app", call.Tip);
@@ -80,7 +84,8 @@ public class TrayProtocolTests
     [Fact]
     public void A_longer_structure_from_a_newer_windows_still_reads()
     {
-        var payload = TrayCall.Build(TrayProtocol.Add, 0x100, 1, TrayProtocol.NIF_TIP, tip: "Future", size: TrayProtocol.FullSize + 64);
+        var payload = TrayCall.Build(TrayProtocol.Add, 0x100, 1, TrayProtocol.NIF_TIP, tip: "Future",
+            size: TrayProtocol.FullSize + 64);
         Assert.Equal("Future", TrayProtocol.Read(payload)?.Tip);
     }
 

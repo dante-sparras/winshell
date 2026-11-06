@@ -24,6 +24,7 @@ internal sealed partial class DevOutput(string projectFolder)
             _errors.Add(error);
             return string.Join('\n', _errors);
         }
+
         if (text.StartsWith("Unable to apply changes", StringComparison.Ordinal))
             _errors.Clear();
         if (!Applied().IsMatch(text))

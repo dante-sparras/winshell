@@ -14,6 +14,7 @@ internal static class Repo
                 return dir.FullName;
             dir = dir.Parent;
         }
+
         throw new InvalidOperationException("The tests run outside the repository.");
     }
 }

@@ -23,8 +23,15 @@ internal static class ClipboardImage
             var pointer = Win32.GlobalLock(memory);
             if (pointer == 0)
                 throw new Win32Exception();
-            try { Marshal.Copy(dib, 0, pointer, dib.Length); }
-            finally { Win32.GlobalUnlock(memory); }
+            try
+            {
+                Marshal.Copy(dib, 0, pointer, dib.Length);
+            }
+            finally
+            {
+                Win32.GlobalUnlock(memory);
+            }
+
             if (!Win32.OpenClipboard(owner))
                 throw new Win32Exception();
             try
@@ -33,7 +40,10 @@ internal static class ClipboardImage
                     throw new Win32Exception();
                 memory = 0; // The clipboard owns the allocation now.
             }
-            finally { Win32.CloseClipboard(); }
+            finally
+            {
+                Win32.CloseClipboard();
+            }
         }
         finally
         {

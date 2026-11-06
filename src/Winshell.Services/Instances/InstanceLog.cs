@@ -28,7 +28,8 @@ internal sealed class InstanceLog : IDisposable
         _cap = cap;
         _writer = Open();
         _delay = flushAfter ?? TimeSpan.FromMilliseconds(500);
-        _timer = (time ?? TimeProvider.System).CreateTimer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _timer = (time ?? TimeProvider.System).CreateTimer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan,
+            Timeout.InfiniteTimeSpan);
     }
 
     /// <summary>Queues one already-stamped line. Warn and above are on disk before this returns.</summary>
@@ -57,7 +58,9 @@ internal sealed class InstanceLog : IDisposable
     public void Flush()
     {
         lock (_gate)
+        {
             FlushLocked();
+        }
     }
 
     // Nobody awaits the timer, so a failure here would end the process. The lines that could not land are dropped,
@@ -94,6 +97,7 @@ internal sealed class InstanceLog : IDisposable
                 _writer = null;
             }
         }
+
         _timer.Dispose();
     }
 
@@ -117,17 +121,22 @@ internal sealed class InstanceLog : IDisposable
         var rolled = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_path))!, "log.1.txt");
         try
         {
-            File.Move(_path, rolled, overwrite: true);
+            File.Move(_path, rolled, true);
         }
         catch (IOException)
         {
             // A reader still has the previous roll. Keep appending; the next flush tries again.
         }
+
         _writer = Open();
     }
 
-    private StreamWriter Open() => new(new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete))
+    private StreamWriter Open()
     {
-        AutoFlush = false,
-    };
+        return new StreamWriter(new FileStream(_path, FileMode.Append, FileAccess.Write,
+            FileShare.ReadWrite | FileShare.Delete))
+        {
+            AutoFlush = false
+        };
+    }
 }

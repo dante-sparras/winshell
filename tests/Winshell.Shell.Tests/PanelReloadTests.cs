@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Winshell.ShellTests;
@@ -10,7 +11,10 @@ public sealed class PanelReloadTests
     {
         public static int Built { get; private set; }
 
-        public Edited() => Built++;
+        public Edited()
+        {
+            Built++;
+        }
 
         public Func<int> Counter()
         {
@@ -39,17 +43,23 @@ public sealed class PanelReloadTests
     {
         public bool Disposed { get; private set; }
 
-        public void Dispose() => Disposed = true;
+        public void Dispose()
+        {
+            Disposed = true;
+        }
     }
 
-    private static PanelWindow Panel(Microsoft.UI.Xaml.UIElement content) => new()
+    private static PanelWindow Panel(UIElement content)
     {
-        Anchors = Edges.Top | Edges.Left,
-        Width = 200,
-        Height = 40,
-        Content = content,
-        Visible = true,
-    };
+        return new PanelWindow
+        {
+            Anchors = Edges.Top | Edges.Left,
+            Width = 200,
+            Height = 40,
+            Content = content,
+            Visible = true
+        };
+    }
 
     [Fact]
     public async Task An_edited_panel_gets_new_content_and_the_others_keep_theirs()
@@ -64,7 +74,8 @@ public sealed class PanelReloadTests
 
             PanelReload.Apply(shell, [typeof(Edited)]);
 
-            return (editedPanel.Content is Edited fresh && !ReferenceEquals(fresh, edited), editedPanel.Host!.Handle == handle, ReferenceEquals(otherPanel.Content, other));
+            return (editedPanel.Content is Edited fresh && !ReferenceEquals(fresh, edited),
+                editedPanel.Host!.Handle == handle, ReferenceEquals(otherPanel.Content, other));
         });
 
         Assert.True(replaced);
@@ -80,7 +91,8 @@ public sealed class PanelReloadTests
             var edited = new Edited();
             using var panel = Panel(edited);
 
-            var closure = typeof(Edited).GetNestedTypes(BindingFlags.NonPublic).Single(type => type.Name.StartsWith('<'));
+            var closure = typeof(Edited).GetNestedTypes(BindingFlags.NonPublic)
+                .Single(type => type.Name.StartsWith('<'));
             PanelReload.Apply(shell, [closure]);
 
             return !ReferenceEquals(panel.Content, edited);
@@ -113,7 +125,10 @@ public sealed class PanelReloadTests
         {
         }
 
-        public NestedRoot(Edited child) => Children.Add(child);
+        public NestedRoot(Edited child)
+        {
+            Children.Add(child);
+        }
     }
 
     [Fact]
@@ -132,6 +147,7 @@ public sealed class PanelReloadTests
             {
                 Throws.Fail = false;
             }
+
             return ReferenceEquals(panel.Content, content);
         });
 

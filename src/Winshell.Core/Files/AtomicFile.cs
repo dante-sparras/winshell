@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -16,9 +17,11 @@ internal static class AtomicFile
     /// text about to be put down. <paramref name="diskAtStart"/> null means the file was missing.
     /// </summary>
     public static bool HandSaveWins(string? onDisk, string? diskAtStart, string incoming)
-        => onDisk is not null
-            && !string.Equals(onDisk, diskAtStart, StringComparison.Ordinal)
-            && !string.Equals(onDisk, incoming, StringComparison.Ordinal);
+    {
+        return onDisk is not null
+               && !string.Equals(onDisk, diskAtStart, StringComparison.Ordinal)
+               && !string.Equals(onDisk, incoming, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Puts <paramref name="text"/> at <paramref name="destination"/>, through a temporary file unless
@@ -34,6 +37,7 @@ internal static class AtomicFile
             WriteText(destination, text, bom);
             return true;
         }
+
         var temp = destination + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
         WriteText(temp, text, bom);
         try
@@ -61,14 +65,15 @@ internal static class AtomicFile
     private static void WriteText(string path, string text, bool bom)
     {
         // Flush to disk before a later rename. A power loss after WriteAllText can leave an empty file.
-        var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: bom);
+        var encoding = new UTF8Encoding(bom);
         using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
         using (var writer = new StreamWriter(stream, encoding, leaveOpen: true))
         {
             writer.Write(text);
             writer.Flush();
         }
-        stream.Flush(flushToDisk: true);
+
+        stream.Flush(true);
     }
 
     /// <summary>
@@ -78,18 +83,16 @@ internal static class AtomicFile
     private static void MoveReplacing(string temp, string path)
     {
         int[] delays = [25, 50, 100, 200];
-        for (var attempt = 0; ; attempt++)
-        {
+        for (var attempt = 0;; attempt++)
             try
             {
-                File.Move(temp, path, overwrite: true);
+                File.Move(temp, path, true);
                 return;
             }
             catch (Exception e) when (IsTransientLock(e) && attempt < delays.Length)
             {
                 Thread.Sleep(delays[attempt]);
             }
-        }
     }
 
     private static bool IsTransientLock(Exception exception)
@@ -144,7 +147,7 @@ internal static class AtomicFile
             using var process = Process.GetProcessById(pid);
             return !process.HasExited;
         }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
         {
             // ArgumentException is "no process with that id". Anything else means the id could not be checked.
             return e is not ArgumentException;
@@ -164,13 +167,14 @@ internal static class AtomicFile
             return full;
         try
         {
-            var target = new FileInfo(full).ResolveLinkTarget(returnFinalTarget: true);
+            var target = new FileInfo(full).ResolveLinkTarget(true);
             if (target is not null)
                 return target.FullName;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
+
         return full;
     }
 
@@ -192,7 +196,8 @@ internal static class AtomicFile
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             return FileLinks.Count(stream.SafeFileHandle) ?? 1;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

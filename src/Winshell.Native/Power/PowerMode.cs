@@ -55,7 +55,8 @@ internal static unsafe class PowerMode
         _effectiveChanged = changed;
         try
         {
-            _ = PInvoke.PowerRegisterForEffectivePowerModeNotifications(PInvoke.EFFECTIVE_POWER_MODE_V2, &OnEffectiveChanged, null, out _);
+            _ = PInvoke.PowerRegisterForEffectivePowerModeNotifications(PInvoke.EFFECTIVE_POWER_MODE_V2,
+                &OnEffectiveChanged, null, out _);
         }
         catch (EntryPointNotFoundException)
         {

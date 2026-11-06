@@ -1,6 +1,6 @@
+using Windows.Foundation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Windows.Foundation;
 
 namespace Winshell.ShellTests;
 
@@ -14,11 +14,15 @@ public sealed class WindowThumbnailTests
         var found = await ShellFixture.On(async shell =>
         {
             var screen = shell.Screens[0].Geometry;
-            var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+            var thumbnail = new WindowThumbnail
+            {
+                Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
+            };
             using var popup = new PopupWindow
             {
                 Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
-                Content = new Grid { Children = { thumbnail } },
+                Content = new Grid { Children = { thumbnail } }
             };
             popup.Visible = true;
             await ShellFixture.LaidOut(thumbnail);
@@ -37,11 +41,15 @@ public sealed class WindowThumbnailTests
         var same = await ShellFixture.On(async shell =>
         {
             var screen = shell.Screens[0].Geometry;
-            var thumbnail = new WindowThumbnail { Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+            var thumbnail = new WindowThumbnail
+            {
+                Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
+            };
             using var popup = new PopupWindow
             {
                 Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
-                Content = new Grid { Children = { thumbnail } },
+                Content = new Grid { Children = { thumbnail } }
             };
             popup.Visible = true;
             await ShellFixture.LaidOut(thumbnail);

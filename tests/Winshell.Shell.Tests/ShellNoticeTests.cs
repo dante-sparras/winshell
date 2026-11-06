@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Winshell.ShellTests;
@@ -23,14 +24,16 @@ public sealed class ShellNoticeTests : IDisposable
     public ShellNoticeTests()
     {
         _crashes = new CrashReports(_dir);
-        _notices = new ShellNotices(_loop, new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") }, _crashes, Show, _opened.Add, () => _quiet);
+        _notices = new ShellNotices(_loop,
+            new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") }, _crashes, Show,
+            _opened.Add, () => _quiet);
     }
 
     public void Dispose()
     {
         _notices.Dispose();
         if (Directory.Exists(_dir))
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
     }
 
     private Closes Show(Notice notice, Action act, Action dismiss)
@@ -81,19 +84,26 @@ public sealed class ShellNoticeTests : IDisposable
 
     private sealed class Closes(ShellNoticeTests test) : IDisposable
     {
-        public void Dispose() => test._closed++;
+        public void Dispose()
+        {
+            test._closed++;
+        }
     }
 
     private void Fail(bool fatal = false, string recovery = "Winshell opened it again.")
     {
         if (fatal)
-            _crashes.Write("taskbar", new InvalidOperationException("no"), fatal: true);
+            _crashes.Write("taskbar", new InvalidOperationException("no"), true);
         else
-            _crashes.WriteOnce("taskbar", new InvalidOperationException(Guid.NewGuid().ToString()), subject: "the taskbar", recovery: recovery);
+            _crashes.WriteOnce("taskbar", new InvalidOperationException(Guid.NewGuid().ToString()), "the taskbar",
+                recovery);
         _loop.Process();
     }
 
-    private static Notice Build() => ShellNotices.ForBuildError("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj");
+    private static Notice Build()
+    {
+        return ShellNotices.ForBuildError("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj");
+    }
 
     [Fact]
     public void A_failure_says_what_stopped_and_what_Winshell_did()
@@ -111,7 +121,7 @@ public sealed class ShellNoticeTests : IDisposable
     [Fact]
     public void A_failure_that_ends_the_process_or_has_no_recovery_shows_nothing()
     {
-        Fail(fatal: true);
+        Fail(true);
         Fail(recovery: "");
 
         Assert.Empty(_shown);
@@ -123,8 +133,10 @@ public sealed class ShellNoticeTests : IDisposable
     [InlineData(4, true)]
     [InlineData(6, true)]
     [InlineData(5, false)]
-    public void Windows_holding_notifications_back_is_read_as_a_toast_reads_it(int state, bool quiet) =>
+    public void Windows_holding_notifications_back_is_read_as_a_toast_reads_it(int state, bool quiet)
+    {
         Assert.Equal(quiet, ShellNotices.QuietState(state));
+    }
 
     [Fact]
     public void A_quiet_Windows_holds_a_failure_back_and_the_log_says_where_it_went()
@@ -210,8 +222,11 @@ public sealed class ShellNoticeTests : IDisposable
     [Theory]
     [InlineData(5u, 25)]
     [InlineData(60u, 60)]
-    public void A_setting_for_longer_notifications_lengthens_a_crash_notice_and_a_shorter_one_does_not(uint seconds, int expected) =>
+    public void A_setting_for_longer_notifications_lengthens_a_crash_notice_and_a_shorter_one_does_not(uint seconds,
+        int expected)
+    {
         Assert.Equal(TimeSpan.FromSeconds(expected), ShellNotices.CrashTimeoutFor(seconds));
+    }
 
     [Fact]
     public async Task The_window_sits_above_the_taskbar_at_the_right_of_the_screen_and_says_the_whole_notice()
@@ -235,7 +250,7 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.False(read.HoldsEdge);
         Assert.Contains("did not build", read.Item4, StringComparison.Ordinal);
         Assert.Contains("CS1002", read.Item4, StringComparison.Ordinal);
-        Assert.Equal(Microsoft.UI.Xaml.Automation.Peers.AutomationLiveSetting.Assertive, read.Item5);
+        Assert.Equal(AutomationLiveSetting.Assertive, read.Item5);
     }
 
     [Fact]
@@ -248,7 +263,8 @@ public sealed class ShellNoticeTests : IDisposable
             var action = ((StackPanel)root.Children[0]).Children.OfType<Button>().Last();
             await ShellFixture.LaidOut(action);
             await Wait.UntilAsync(
-                () => action.TransformToVisual(root).TransformPoint(default).Y + action.ActualHeight + root.Padding.Bottom <= root.ActualHeight + 0.5,
+                () => action.TransformToVisual(root).TransformPoint(default).Y + action.ActualHeight +
+                    root.Padding.Bottom <= root.ActualHeight + 0.5,
                 "the button to fit in the window");
             return true;
         });
@@ -264,7 +280,9 @@ public sealed class ShellNoticeTests : IDisposable
             var loop = new ManualEventLoop();
             var timed = 0;
             var untimed = 0;
-            var crash = ShellNotices.ForCrash(new CrashReport("r.txt", "x", new InvalidOperationException("no"), false) { Recovery = "Fine." }, TimeSpan.FromSeconds(25));
+            var crash = ShellNotices.ForCrash(
+                new CrashReport("r.txt", "x", new InvalidOperationException("no"), false) { Recovery = "Fine." },
+                TimeSpan.FromSeconds(25));
             using var first = new NoticeWindow(crash, () => { }, () => timed++, loop);
             using var second = new NoticeWindow(Build(), () => { }, () => untimed++, loop);
             loop.Advance(TimeSpan.FromSeconds(26));

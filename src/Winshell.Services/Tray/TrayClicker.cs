@@ -10,7 +10,10 @@ internal sealed class TrayClicker(IEventLoop loop, ITrayBackend backend) : IDisp
     private readonly uint? _shellIntegrity = backend.IntegrityOf((uint)Environment.ProcessId);
     private readonly TrayCursor _cursor = new(loop, () => backend.Cursor, backend.MoveCursor);
 
-    public void Dispose() => _cursor.Dispose();
+    public void Dispose()
+    {
+        _cursor.Dispose();
+    }
 
     public void Click(TrayIcon icon, TrayClick click, (int X, int Y)? at)
     {
@@ -37,5 +40,8 @@ internal sealed class TrayClicker(IEventLoop loop, ITrayBackend backend) : IDisp
     /// Windows keeps its clicks from an elevated app unless that app lets them in. An elevated shell would not be
     /// kept out, so it clicks no app above medium integrity, nor one whose level it cannot read.
     /// </summary>
-    internal static bool MayClick(uint? shell, uint? app) => shell <= ProcessIntegrity.Medium || app <= ProcessIntegrity.Medium;
+    internal static bool MayClick(uint? shell, uint? app)
+    {
+        return shell <= ProcessIntegrity.Medium || app <= ProcessIntegrity.Medium;
+    }
 }

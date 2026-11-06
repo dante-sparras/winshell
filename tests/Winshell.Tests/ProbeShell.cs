@@ -43,14 +43,15 @@ internal static class ProbeShell
     }
 
     /// <summary>Starts the program and returns at once. What it prints goes to <paramref name="printed"/>.</summary>
-    internal static Process Launch(string config, string local, string[] args, string? shellId = null, StringBuilder? printed = null, string? program = null)
+    internal static Process Launch(string config, string local, string[] args, string? shellId = null,
+        StringBuilder? printed = null, string? program = null)
     {
         var info = new ProcessStartInfo(program ?? Program)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardError = true
         };
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
@@ -59,15 +60,17 @@ internal static class ProbeShell
         if (shellId is not null)
             info.Environment[ShellIdVariable] = shellId;
         var process = Process.Start(info)!;
+
         // Read the output so the program never blocks on a full pipe.
         void Print(object sender, DataReceivedEventArgs e)
         {
             if (printed is not null && e.Data is not null)
-            {
                 lock (printed)
+                {
                     printed.AppendLine(e.Data);
-            }
+                }
         }
+
         process.ErrorDataReceived += Print;
         process.OutputDataReceived += Print;
         process.BeginErrorReadLine();
@@ -91,7 +94,8 @@ internal static class ProbeShell
 
     private static HashSet<int> Listed(string config, string local)
     {
-        var result = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+        var result = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config),
+            ("WINSHELL_LOCAL_DIR", local));
         result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).ToHashSet();
@@ -122,7 +126,9 @@ internal static class ProbeShell
     internal static string Build(string folder)
     {
         lock (Gate)
+        {
             return BuildLocked(folder);
+        }
     }
 
     private static string BuildLocked(string folder)
@@ -156,28 +162,30 @@ internal static class ProbeShell
     }
 
 
-    private static string Project(string shellProject) =>
-        $"""
-        <Project Sdk="Microsoft.NET.Sdk">
-          <PropertyGroup>
-            <OutputType>WinExe</OutputType>
-            <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
-            <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
-            <Nullable>enable</Nullable>
-            <ImplicitUsings>enable</ImplicitUsings>
-            <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
-            <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
-            <UseWinUI>true</UseWinUI>
-            <WindowsPackageType>None</WindowsPackageType>
-            <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-            <AssemblyName>Probe</AssemblyName>
-            <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
-          </PropertyGroup>
-          <ItemGroup>
-            <ProjectReference Include="{shellProject}" />
-          </ItemGroup>
-        </Project>
-        """;
+    private static string Project(string shellProject)
+    {
+        return $"""
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <OutputType>WinExe</OutputType>
+                    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+                    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
+                    <Nullable>enable</Nullable>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
+                    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+                    <UseWinUI>true</UseWinUI>
+                    <WindowsPackageType>None</WindowsPackageType>
+                    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+                    <AssemblyName>Probe</AssemblyName>
+                    <DisableWinExeOutputInference>true</DisableWinExeOutputInference>
+                  </PropertyGroup>
+                  <ItemGroup>
+                    <ProjectReference Include="{shellProject}" />
+                  </ItemGroup>
+                </Project>
+                """;
+    }
 
     /// <summary>A file whose presence in the config folder makes the probe start a program and never exit.</summary>
     internal const string HangMarker = "probe-hang";
@@ -199,67 +207,67 @@ internal static class ProbeShell
 
     private const string Source =
         $$"""
-        using Winshell;
+          using Winshell;
 
-        using System.Diagnostics;
-        using Microsoft.UI.Xaml.Controls;
-        using Windows.Foundation;
+          using System.Diagnostics;
+          using Microsoft.UI.Xaml.Controls;
+          using Windows.Foundation;
 
-        public sealed class ProbePage : StackPanel;
+          public sealed class ProbePage : StackPanel;
 
-        public sealed class ProbePopup : StackPanel;
+          public sealed class ProbePopup : StackPanel;
 
-        internal sealed class Bare : ShellConfiguration
-        {
-            public override void Start(Shell shell)
-            {
-                shell.Ipc.Handle("probe", "note", (string text) => { });
-                var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
-                // A test that puts {{CrashMarker}} there gets a shell that crashes as it starts, once.
-                if (config is not null && File.Exists(Path.Combine(config, "{{CrashMarker}}")))
-                {
-                    File.Delete(Path.Combine(config, "{{CrashMarker}}"));
-                    throw new InvalidOperationException("The probe was asked to crash as it started.");
-                }
-                // A test that puts {{WindowMarker}} there gets a panel whose button opens a popup.
-                if (config is not null && File.Exists(Path.Combine(config, "{{WindowMarker}}")))
-                {
-                    var popup = new PopupWindow { Content = new ProbePopup { Children = { new TextBlock { Text = "Opened" } } } };
-                    var open = new Button { Name = "Open", Content = "Open" };
-                    var panel = new PanelWindow
-                    {
-                        Anchors = Edges.Top | Edges.Left,
-                        Width = 160,
-                        Height = 60,
-                        Content = new ProbePage { Children = { open } },
-                        Visible = true,
-                    };
-                    open.Click += (_, _) =>
-                    {
-                        popup.Rect = new Rect(panel.Origin.X, panel.Origin.Y + panel.ActualHeight, 160, 60);
-                        popup.Visible = true;
-                    };
-                }
-                // A test that puts {{HideTaskbarMarker}} there gets a shell that hides Explorer's taskbar once.
-                if (config is not null && File.Exists(Path.Combine(config, "{{HideTaskbarMarker}}")))
-                {
-                    shell.ExplorerTaskbar.Hidden = true;
-                    File.Delete(Path.Combine(config, "{{HideTaskbarMarker}}"));
-                }
-                // A test that puts {{HangMarker}} there gets a shell that starts a program and then never exits.
-                if (config is null || !File.Exists(Path.Combine(config, "{{HangMarker}}")))
-                    return;
-                var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
-                File.WriteAllText(Path.Combine(config, "child.pid"), child.Id.ToString());
-                AppDomain.CurrentDomain.ProcessExit += (_, _) => Thread.Sleep(Timeout.Infinite);
-            }
-        }
+          internal sealed class Bare : ShellConfiguration
+          {
+              public override void Start(Shell shell)
+              {
+                  shell.Ipc.Handle("probe", "note", (string text) => { });
+                  var config = Environment.GetEnvironmentVariable("WINSHELL_CONFIG_DIR");
+                  // A test that puts {{CrashMarker}} there gets a shell that crashes as it starts, once.
+                  if (config is not null && File.Exists(Path.Combine(config, "{{CrashMarker}}")))
+                  {
+                      File.Delete(Path.Combine(config, "{{CrashMarker}}"));
+                      throw new InvalidOperationException("The probe was asked to crash as it started.");
+                  }
+                  // A test that puts {{WindowMarker}} there gets a panel whose button opens a popup.
+                  if (config is not null && File.Exists(Path.Combine(config, "{{WindowMarker}}")))
+                  {
+                      var popup = new PopupWindow { Content = new ProbePopup { Children = { new TextBlock { Text = "Opened" } } } };
+                      var open = new Button { Name = "Open", Content = "Open" };
+                      var panel = new PanelWindow
+                      {
+                          Anchors = Edges.Top | Edges.Left,
+                          Width = 160,
+                          Height = 60,
+                          Content = new ProbePage { Children = { open } },
+                          Visible = true,
+                      };
+                      open.Click += (_, _) =>
+                      {
+                          popup.Rect = new Rect(panel.Origin.X, panel.Origin.Y + panel.ActualHeight, 160, 60);
+                          popup.Visible = true;
+                      };
+                  }
+                  // A test that puts {{HideTaskbarMarker}} there gets a shell that hides Explorer's taskbar once.
+                  if (config is not null && File.Exists(Path.Combine(config, "{{HideTaskbarMarker}}")))
+                  {
+                      shell.ExplorerTaskbar.Hidden = true;
+                      File.Delete(Path.Combine(config, "{{HideTaskbarMarker}}"));
+                  }
+                  // A test that puts {{HangMarker}} there gets a shell that starts a program and then never exits.
+                  if (config is null || !File.Exists(Path.Combine(config, "{{HangMarker}}")))
+                      return;
+                  var child = Process.Start(new ProcessStartInfo("ping", "-n 120 127.0.0.1") { UseShellExecute = false, CreateNoWindow = true })!;
+                  File.WriteAllText(Path.Combine(config, "child.pid"), child.Id.ToString());
+                  AppDomain.CurrentDomain.ProcessExit += (_, _) => Thread.Sleep(Timeout.Infinite);
+              }
+          }
 
-        internal static class Program
-        {
-            [STAThread]
-            private static void Main() =>
-                Shell.Run<Bare>(new ShellOptions { ShellId = Environment.GetEnvironmentVariable("{{ShellIdVariable}}") ?? "probe" });
-        }
-        """;
+          internal static class Program
+          {
+              [STAThread]
+              private static void Main() =>
+                  Shell.Run<Bare>(new ShellOptions { ShellId = Environment.GetEnvironmentVariable("{{ShellIdVariable}}") ?? "probe" });
+          }
+          """;
 }

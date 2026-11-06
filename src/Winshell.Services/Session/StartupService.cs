@@ -27,14 +27,18 @@ public sealed class StartupService : ObservableObject
     /// The service the running shell uses: the package's startup task when packaged, else the <c>Run</c> value for this
     /// process's command. Tests construct the service with a fake instead.
     /// </summary>
-    internal static StartupService ForThisProcess(Log log) => new(log, RegistryForThisProcess());
+    internal static StartupService ForThisProcess(Log log)
+    {
+        return new StartupService(log, RegistryForThisProcess());
+    }
 
     private static IStartupRegistry? RegistryForThisProcess()
     {
         if (Packaging.IsPackaged)
             return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
         return Environment.ProcessPath is { } exe
-            ? new WindowsStartupRegistry(WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)))
+            ? new WindowsStartupRegistry(
+                WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)))
             : null;
     }
 
@@ -55,10 +59,14 @@ public sealed class StartupService : ObservableObject
                 _log.Warn("startup", "RunAtSignIn needs a shell started by winshell.exe.");
                 return;
             }
+
             if (value == _runs)
                 return;
             if (!(value ? _registry.Register() : _registry.Unregister()))
-                _log.Warn("startup", value ? "Windows did not let Winshell register to run at sign-in." : "Windows did not let Winshell stop running at sign-in.");
+                _log.Warn("startup",
+                    value
+                        ? "Windows did not let Winshell register to run at sign-in."
+                        : "Windows did not let Winshell stop running at sign-in.");
             Refresh();
         }
     }

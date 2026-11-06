@@ -29,7 +29,8 @@ public class ProductVersionTests
     public void The_assembly_version_is_the_release_please_manifest()
     {
         var manifest = ManifestVersion();
-        var informational = typeof(ProductVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;
+        var informational = typeof(ProductVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
+            .InformationalVersion;
         Assert.Matches($"^{Regex.Escape(manifest)}(\\+\\S+)?$", informational);
         Assert.Equal(informational, ProductVersion.Current.Text);
         var parsed = ProductVersion.Parse(manifest);
@@ -47,10 +48,13 @@ public class ProductVersionTests
             if (File.Exists(path))
             {
                 using var json = JsonDocument.Parse(File.ReadAllText(path));
-                return json.RootElement.GetProperty(".").GetString() ?? throw new InvalidOperationException("The release-please manifest has no version.");
+                return json.RootElement.GetProperty(".").GetString() ??
+                       throw new InvalidOperationException("The release-please manifest has no version.");
             }
+
             dir = dir.Parent;
         }
+
         throw new InvalidOperationException("The release-please manifest is not above the test output.");
     }
 }

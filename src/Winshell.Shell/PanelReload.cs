@@ -27,10 +27,8 @@ internal static class PanelReload
     {
         var edited = updated.Select(Written).ToHashSet();
         foreach (var window in shell.Platform.Windows.Select(host => host.Client).OfType<ShellWindow>().ToList())
-        {
             if (window.Content is { } content && Shows(content, edited))
                 Rebuild(shell, window, content);
-        }
     }
 
     /// <summary>An edit reports the closures and state machines the compiler made, which are nested in the type it changed.</summary>
@@ -46,10 +44,8 @@ internal static class PanelReload
         if (edited.Contains(element.GetType()))
             return true;
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
-        {
             if (Shows(VisualTreeHelper.GetChild(element, i), edited))
                 return true;
-        }
         return false;
     }
 
@@ -61,6 +57,7 @@ internal static class PanelReload
             shell.Log.Info("dev", $"{type.Name} needs arguments, so its window keeps it. Edited methods still run.");
             return;
         }
+
         try
         {
             var fresh = (UIElement)constructor.Invoke(null);
@@ -73,6 +70,7 @@ internal static class PanelReload
             shell.Log.Warn("dev", $"Could not rebuild {type.Name}: {e.InnerException?.Message}");
             return;
         }
+
         (content as IDisposable)?.Dispose();
         shell.Log.Info("dev", $"Rebuilt {type.Name}.");
     }

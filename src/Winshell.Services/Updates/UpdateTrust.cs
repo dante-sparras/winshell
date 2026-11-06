@@ -14,12 +14,21 @@ internal static class UpdateTrust
         return Path.Combine(string.IsNullOrEmpty(parent) ? updatesDir : parent, "update-trust");
     }
 
-    internal static string ZipPath(string updatesDir, string version) => Path.Combine(Root(updatesDir), version + ".zip");
+    internal static string ZipPath(string updatesDir, string version)
+    {
+        return Path.Combine(Root(updatesDir), version + ".zip");
+    }
 
-    internal static string DigestPath(string updatesDir, string version) => Path.Combine(Root(updatesDir), version + ".sha256");
+    internal static string DigestPath(string updatesDir, string version)
+    {
+        return Path.Combine(Root(updatesDir), version + ".sha256");
+    }
 
     /// <summary>A scratch folder for one apply to extract into. <see cref="Clean"/> deletes any a crash left.</summary>
-    internal static string ExtractPath(string updatesDir) => Path.Combine(Root(updatesDir), "extract-" + Guid.NewGuid().ToString("N"));
+    internal static string ExtractPath(string updatesDir)
+    {
+        return Path.Combine(Root(updatesDir), "extract-" + Guid.NewGuid().ToString("N"));
+    }
 
     /// <summary>Moves a hash-checked download out of the updates folder and records the digest that matched.</summary>
     internal static void Keep(string updatesDir, string version, string partialZip, string sha256)
@@ -49,16 +58,17 @@ internal static class UpdateTrust
         if (!Directory.Exists(root))
             return;
         foreach (var file in Directory.EnumerateFiles(root))
-        {
             if (file.EndsWith(".partial", StringComparison.OrdinalIgnoreCase)
                 || (Updater.ParseVersion(Path.GetFileNameWithoutExtension(file)) is { } version && version <= current))
                 TryDelete(file);
-        }
         foreach (var dir in Directory.EnumerateDirectories(root, "extract-*"))
             TryDeleteDirectory(dir);
     }
 
-    internal static string Hash(Stream stream) => Convert.ToHexStringLower(SHA256.HashData(stream));
+    internal static string Hash(Stream stream)
+    {
+        return Convert.ToHexStringLower(SHA256.HashData(stream));
+    }
 
     private static void MoveOver(string source, string destination)
     {
@@ -69,13 +79,23 @@ internal static class UpdateTrust
 
     private static void TryDelete(string path)
     {
-        try { File.Delete(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private static void TryDeleteDirectory(string path)
     {
-        try { Directory.Delete(path, recursive: true); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        try
+        {
+            Directory.Delete(path, true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 }

@@ -49,12 +49,16 @@ public sealed class PixelImage
         using var output = new InMemoryRandomAccessStream();
 #pragma warning disable VSTHRD002 // WIC's encoder is async only. The encode needs no thread of the caller's, so this ends on a UI thread too.
         var encoder = BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output).AsTask().GetAwaiter().GetResult();
-        encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, (uint)Width, (uint)Height, 96, 96, StraightBgra());
+        encoder.SetPixelData(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight, (uint)Width, (uint)Height, 96, 96,
+            StraightBgra());
         encoder.FlushAsync().AsTask().GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
         using var encoded = new MemoryStream();
         using (var input = output.GetInputStreamAt(0).AsStreamForRead())
+        {
             input.CopyTo(encoded);
+        }
+
         return encoded.ToArray();
     }
 
@@ -72,6 +76,7 @@ public sealed class PixelImage
             for (var channel = i; channel < i + 3; channel++)
                 straight[channel] = (byte)Math.Min(255, (straight[channel] * 255 + alpha / 2) / alpha);
         }
+
         return straight;
     }
 }

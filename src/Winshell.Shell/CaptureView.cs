@@ -1,10 +1,10 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Foundation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Foundation;
 using Winshell.Capture;
 
 namespace Winshell;
@@ -22,7 +22,10 @@ public sealed class CaptureView : Panel
         nameof(Session),
         typeof(CaptureSession),
         typeof(CaptureView),
-        new PropertyMetadata(null, (sender, args) => ((CaptureView)sender).OnSessionChanged((CaptureSession?)args.OldValue, (CaptureSession?)args.NewValue)));
+        new PropertyMetadata(null,
+            (sender, args) =>
+                ((CaptureView)sender).OnSessionChanged((CaptureSession?)args.OldValue,
+                    (CaptureSession?)args.NewValue)));
 
     private readonly Image _image = new() { Stretch = Stretch.Uniform };
     private CaptureSession? _subscribed;
@@ -98,6 +101,7 @@ public sealed class CaptureView : Panel
             Show(session?.Frame);
             return;
         }
+
         if (_subscribed is not null)
             _subscribed.PropertyChanged -= OnFrameChanged;
         _subscribed = session;
@@ -123,15 +127,19 @@ public sealed class CaptureView : Panel
             InvalidateMeasure();
             return;
         }
+
         WriteableBitmap bitmap;
         var resized = false;
         if (_bitmap is { } current && current.PixelWidth == frame.Width && current.PixelHeight == frame.Height)
+        {
             bitmap = current;
+        }
         else
         {
             bitmap = new WriteableBitmap(frame.Width, frame.Height);
             resized = true;
         }
+
         Copy(bitmap, frame);
         bitmap.Invalidate();
         _bitmap = bitmap;
@@ -151,6 +159,7 @@ public sealed class CaptureView : Panel
             destination.Write(pixels);
             return;
         }
+
         // Premultiplied a piece at a time, so a frame needs no second array.
         Span<byte> piece = stackalloc byte[4096];
         for (var start = 0; start < pixels.Length; start += piece.Length)
@@ -173,6 +182,7 @@ public sealed class CaptureView : Panel
                     piece[i + 2] = (byte)((source[i + 2] * alpha + 127) / 255);
                 }
             }
+
             destination.Write(piece[..source.Length]);
         }
     }

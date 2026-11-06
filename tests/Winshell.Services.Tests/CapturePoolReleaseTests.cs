@@ -33,11 +33,17 @@ public class CapturePoolReleaseTests
 
     private sealed class RecordingDisposable(string name, List<string> order) : IDisposable
     {
-        public void Dispose() => order.Add(name);
+        public void Dispose()
+        {
+            order.Add(name);
+        }
     }
 
     private sealed class ThrowingDisposable : IDisposable
     {
-        public void Dispose() => throw new COMException("session already closed");
+        public void Dispose()
+        {
+            throw new COMException("session already closed");
+        }
     }
 }

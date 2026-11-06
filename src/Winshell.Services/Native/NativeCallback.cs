@@ -1,4 +1,3 @@
-
 namespace Winshell.Native;
 
 /// <summary>

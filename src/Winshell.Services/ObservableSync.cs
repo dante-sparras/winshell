@@ -9,7 +9,8 @@ internal static class ObservableSync
     /// Makes <paramref name="items"/> match <paramref name="next"/> in order. An object whose key is still there is
     /// kept and updated, because a UI holds on to it. <paramref name="removed"/> hears about each object that goes.
     /// </summary>
-    public static void Sync<T, TInfo, TKey>(this ObservableCollection<T> items, IEnumerable<TInfo> next, Func<T, TKey> key, Func<TInfo, TKey> infoKey,
+    public static void Sync<T, TInfo, TKey>(this ObservableCollection<T> items, IEnumerable<TInfo> next,
+        Func<T, TKey> key, Func<TInfo, TKey> infoKey,
         Func<TInfo, T> create, Action<T, TInfo> update, Action<T>? removed = null)
         where TKey : notnull
     {
@@ -20,6 +21,7 @@ internal static class ObservableSync
                 known[key(item)] = same = new Queue<T>();
             same.Enqueue(item);
         }
+
         var index = 0;
         foreach (var info in next)
         {
@@ -36,8 +38,10 @@ internal static class ObservableSync
                 update(item, info);
                 items.Insert(index, item);
             }
+
             index++;
         }
+
         for (var i = items.Count - 1; i >= index; i--)
         {
             var gone = items[i];

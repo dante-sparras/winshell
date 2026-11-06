@@ -15,7 +15,10 @@ public sealed class WifiNetwork : Network
     public WifiSecurityType Security => Info.Security;
 
     /// <summary>Connects with a password, for a secured network that isn't saved. The password is not kept.</summary>
-    public void ConnectWithPassword(string password) => _ = ConnectAsync(password);
+    public void ConnectWithPassword(string password)
+    {
+        _ = ConnectAsync(password);
+    }
 
     internal override void Update(NetworkInfo info)
     {

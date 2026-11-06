@@ -14,18 +14,24 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     private readonly IEventLoop _loop;
     private readonly TimeProvider _time;
+
     private readonly MonitorWarning _warning;
+
     // Guards the timer and the read flags. Nothing awaits inside it.
     private readonly object _gate = new();
+
     // Ends with the service, so a read that Windows does not cancel ends at its next check.
     private readonly CancellationTokenSource _ended = new();
+
     // One radio change and one visibility change run at a time. Boxed, so ChangeAdapterAsync can hold either flag.
     private readonly StrongBox<int> _radioSet = new();
     private readonly StrongBox<int> _visibilitySet = new();
     private ITimer? _poll;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
+
     private string _error = "";
+
     // Someone asked for a read while one ran. What they want to see may be newer than that read.
     private bool _reading, _readAgain;
     private long _revision;
@@ -86,8 +92,12 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             // Without events the timer still reads, only later.
             _warning.Failed(e);
         }
+
         lock (_gate)
+        {
             _poll ??= _time.CreateTimer(_ => Refresh(), null, PollInterval, PollInterval);
+        }
+
         Refresh();
     }
 
@@ -100,20 +110,30 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             poll = _poll;
             _poll = null;
         }
+
         poll?.Dispose();
         Backend.StopWatching();
     }
 
-    internal void Post(Action action) => _loop.Post(() =>
+    internal void Post(Action action)
     {
-        if (!_disposed)
-            action();
-    });
+        _loop.Post(() =>
+        {
+            if (!_disposed)
+                action();
+        });
+    }
 
-    internal void Invalidate() => Interlocked.Increment(ref _revision);
+    internal void Invalidate()
+    {
+        Interlocked.Increment(ref _revision);
+    }
 
     /// <summary>Reads the state now, rather than at the next change Windows reports.</summary>
-    public void Refresh() => _ = RefreshAsync();
+    public void Refresh()
+    {
+        _ = RefreshAsync();
+    }
 
     // One read runs at a time. A request during it reads again when it ends, so the result is never older than the request.
     internal async Task RefreshAsync()
@@ -127,13 +147,18 @@ public sealed class BluetoothService : ObservableObject, IDisposable
                 _readAgain = true;
                 return;
             }
+
             _reading = true;
         }
+
         bool again;
         do
         {
             lock (_gate)
+            {
                 _readAgain = false;
+            }
+
             try
             {
                 await ReadAsync().ConfigureAwait(false);
@@ -147,11 +172,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
                     _reading = again;
                     close = _disposed && !again;
                 }
+
                 if (close)
                     CloseBackend();
             }
-        }
-        while (again);
+        } while (again);
     }
 
     private async Task ReadAsync()
@@ -182,6 +207,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             _warning.Failed(e);
             return;
         }
+
         Post(() =>
         {
             if (revision == Interlocked.Read(ref _revision))
@@ -190,10 +216,16 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     }
 
     /// <summary>Starts looking for nearby devices. Needs an adapter that is on.</summary>
-    public void StartDiscovery() => SetDiscovery(true);
+    public void StartDiscovery()
+    {
+        SetDiscovery(true);
+    }
 
     /// <summary>Stops looking, and clears the unpaired devices it found.</summary>
-    public void StopDiscovery() => SetDiscovery(false);
+    public void StopDiscovery()
+    {
+        SetDiscovery(false);
+    }
 
     private void SetDiscovery(bool enabled)
     {
@@ -212,6 +244,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             {
                 Backend.StopDiscovery();
             }
+
             Set(ref _error, "", nameof(Error));
         }
         catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
@@ -220,6 +253,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             OperationFailed?.Invoke(e.Message);
             return;
         }
+
         Refresh();
     }
 
@@ -252,6 +286,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
                     return (incoming, false);
                 changed = true;
             }
+
             var error = await Backend.SetDiscoverableAsync(discoverable).ConfigureAwait(false);
             return (error, changed || error is null);
         }).ConfigureAwait(false);
@@ -272,12 +307,14 @@ public sealed class BluetoothService : ObservableObject, IDisposable
                     return (discovery, false);
                 changed = true;
             }
+
             var error = await Backend.SetPairableAsync(pairable).ConfigureAwait(false);
             return (error, changed || error is null);
         }).ConfigureAwait(false);
     }
 
-    private async Task ChangeAdapterAsync(BluetoothAdapter adapter, StrongBox<int> busy, Func<Task<(string? Error, bool Changed)>> attempt)
+    private async Task ChangeAdapterAsync(BluetoothAdapter adapter, StrongBox<int> busy,
+        Func<Task<(string? Error, bool Changed)>> attempt)
     {
         if (Interlocked.CompareExchange(ref busy.Value, 1, 0) != 0)
             return;
@@ -322,17 +359,20 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         if (_adapter?.Id != snapshot.Adapter?.Id)
         {
             RemoveDevices();
-            Set(ref _adapter, snapshot.Adapter is { } info ? new BluetoothAdapter(this, info) : null, nameof(DefaultAdapter));
+            Set(ref _adapter, snapshot.Adapter is { } info ? new BluetoothAdapter(this, info) : null,
+                nameof(DefaultAdapter));
             Adapters.Clear();
             if (_adapter is not null)
                 Adapters.Add(_adapter);
         }
+
         if (snapshot.Adapter is { } adapterInfo)
             _adapter?.Update(adapterInfo);
         // Not null when a device is built: without an adapter, incoming is empty.
         var adapter = _adapter;
         var incoming = adapter is null ? [] : snapshot.Devices;
-        Devices.Sync(incoming, d => d.Key, i => i.Key, i => new BluetoothDevice(this, i, adapter!), (d, i) => d.Update(i), d => d.Remove());
+        Devices.Sync(incoming, d => d.Key, i => i.Key, i => new BluetoothDevice(this, i, adapter!),
+            (d, i) => d.Update(i), d => d.Remove());
         Mirror(PairedDevices, Devices.Where(d => d.Paired));
         Mirror(NearbyDevices, Devices.Where(d => !d.Paired && d.Present));
     }
@@ -346,19 +386,20 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         NearbyDevices.Clear();
     }
 
-    private static void Mirror(ObservableCollection<BluetoothDevice> list, IEnumerable<BluetoothDevice> next) =>
+    private static void Mirror(ObservableCollection<BluetoothDevice> list, IEnumerable<BluetoothDevice> next)
+    {
         list.Sync(next, d => d, d => d, d => d, (_, _) => { });
+    }
 
     private static bool SameSnapshot(BluetoothSnapshot left, BluetoothSnapshot right)
     {
         if (left.Ready != right.Ready || left.Discovering != right.Discovering || left.Adapter != right.Adapter
-            || !string.Equals(left.Error, right.Error, StringComparison.Ordinal) || left.Devices.Count != right.Devices.Count)
+            || !string.Equals(left.Error, right.Error, StringComparison.Ordinal) ||
+            left.Devices.Count != right.Devices.Count)
             return false;
         for (var i = 0; i < left.Devices.Count; i++)
-        {
             if (left.Devices[i] != right.Devices[i])
                 return false;
-        }
         return true;
     }
 
@@ -371,6 +412,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
                 return;
             _disposed = true;
         }
+
         Backend.Changed -= Refresh;
         StopMonitoring();
         foreach (var device in Devices)
@@ -378,7 +420,10 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         _ended.Cancel();
         bool idle;
         lock (_gate)
+        {
             idle = !_reading;
+        }
+
         // A read in flight closes the backend when it ends.
         if (idle)
             CloseBackend();

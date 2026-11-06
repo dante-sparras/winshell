@@ -29,14 +29,14 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
     [Fact]
     public void A_second_start_exits_and_another_shell_stays()
     {
-        var first = Start(duplicate: true);
+        var first = Start(true);
         AssertHeld("probe");
 
-        var same = Launch(duplicate: true);
+        var same = Launch(true);
         AssertExitedQuietly(same);
         Assert.False(first.HasExited);
 
-        var second = Start(duplicate: true, "other");
+        var second = Start(true, "other");
         Assert.False(first.HasExited);
         Assert.False(second.HasExited);
         AssertHeld("other");
@@ -45,18 +45,18 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
     [Fact]
     public void A_shell_started_without_the_flag_still_blocks_a_duplicate()
     {
-        var first = Start(duplicate: false);
+        var first = Start(false);
         Assert.Throws<WaitHandleCannotBeOpenedException>(() => Mutex.OpenExisting(MutexName("probe")));
 
-        AssertExitedQuietly(Launch(duplicate: true));
+        AssertExitedQuietly(Launch(true));
         Assert.False(first.HasExited);
     }
 
     [Fact]
     public void Two_overlapping_starts_leave_one_shell()
     {
-        var first = Launch(duplicate: true);
-        var second = Launch(duplicate: true);
+        var first = Launch(true);
+        var second = Launch(true);
 
         Wait.Until(() => first.HasExited || second.HasExited, "one of the two starts to exit");
         var loser = first.HasExited ? first : second;
@@ -79,14 +79,15 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
         _started.Add(child);
         AssertHeld("probe");
 
-        AssertExitedQuietly(Launch(duplicate: true));
+        AssertExitedQuietly(Launch(true));
         Assert.False(child.HasExited);
     }
 
     private Process Start(bool duplicate, string? shellId = null)
     {
         var process = Launch(duplicate, shellId);
-        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id), $"instance {process.Id} in winshell list");
+        Wait.Until(() => Listed().Any(i => i.GetProperty("pid").GetInt32() == process.Id),
+            $"instance {process.Id} in winshell list");
         return process;
     }
 
@@ -125,10 +126,14 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
             if (taken)
                 mutex.ReleaseMutex();
         }
+
         Assert.False(taken);
     }
 
-    private string MutexName(string shellId) => DuplicateHold.ShellMutexName(shellId, _local);
+    private string MutexName(string shellId)
+    {
+        return DuplicateHold.ShellMutexName(shellId, _local);
+    }
 
     private List<JsonElement> Listed()
     {
@@ -138,8 +143,10 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
         return json.RootElement.EnumerateArray().Select(e => e.Clone()).ToList();
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_CONFIG_DIR", _config), ("WINSHELL_LOCAL_DIR", _local));
+    }
 
     public void Dispose()
     {
@@ -151,7 +158,7 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
                 {
                     Run("kill", "--pid", process.Id.ToString(CultureInfo.InvariantCulture));
                     if (!process.WaitForExit(8_000))
-                        process.Kill(entireProcessTree: true);
+                        process.Kill(true);
                 }
             }
             catch (Exception)
@@ -159,14 +166,16 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
                 try
                 {
                     if (!process.HasExited)
-                        process.Kill(entireProcessTree: true);
+                        process.Kill(true);
                 }
                 catch (Exception)
                 {
                 }
             }
+
             process.Dispose();
         }
+
         try
         {
             Directory.Delete(_dir, true);

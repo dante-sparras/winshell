@@ -18,8 +18,8 @@ internal readonly record struct DesktopContract(bool Supported, string Reason)
     public static DesktopContract ForBuild(uint build)
     {
         if (build is >= OldestBuild and <= NewestBuild)
-            return new(true, "");
-        return new(false,
+            return new DesktopContract(true, "");
+        return new DesktopContract(false,
             $"Windows build {build} is outside the virtual desktop method table Winshell knows ({OldestBuild} through {NewestBuild}).");
     }
 }
@@ -27,7 +27,10 @@ internal readonly record struct DesktopContract(bool Supported, string Reason)
 /// <summary>Decisions about virtual desktops that do not call Windows, so tests can lock them.</summary>
 internal static class VirtualDesktopRules
 {
-    public static string FormatId(Guid id) => id == Guid.Empty ? "" : id.ToString("D");
+    public static string FormatId(Guid id)
+    {
+        return id == Guid.Empty ? "" : id.ToString("D");
+    }
 
     /// <summary>The name Windows stored, or <c>Desktop N</c> when it stored none. <paramref name="index"/> is zero-based.</summary>
     public static string DisplayName(string? name, int index)

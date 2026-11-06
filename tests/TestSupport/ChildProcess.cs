@@ -30,12 +30,13 @@ internal sealed record ChildProcess(int Code, string Output, string Error)
         readError.Start();
         if (!process.WaitForExit(patience))
         {
-            process.Kill(entireProcessTree: true);
+            process.Kill(true);
             process.WaitForExit();
             readOutput.Join(patience);
             readError.Join(patience);
             Assert.Fail($"{what} did not exit.\nOutput:\n{output}\nError:\n{error}");
         }
+
         Assert.True(readOutput.Join(patience) && readError.Join(patience), $"{what} left its output open");
         return new ChildProcess(process.ExitCode, output, error) { Command = what };
     }
@@ -56,7 +57,9 @@ internal sealed record ChildProcess(int Code, string Output, string Error)
     internal static ChildProcess Exited(string command, Process process, StringBuilder printed)
     {
         lock (printed)
+        {
             return new ChildProcess(process.ExitCode, printed.ToString(), "") { Command = command };
+        }
     }
 
     /// <summary>Fails the test, showing what the process printed, unless it exited with <paramref name="expected"/>.</summary>

@@ -10,18 +10,42 @@ public sealed class TomlFileTests
         : TomlFile(path, loop, log, check)
     {
         [TomlComment("Who this is.")]
-        public string Name { get; set => Set(ref field, value); } = "default";
+        public string Name
+        {
+            get;
+            set => Set(ref field, value);
+        } = "default";
 
-        public bool On { get; set => Set(ref field, value); } = true;
+        public bool On
+        {
+            get;
+            set => Set(ref field, value);
+        } = true;
 
-        public int Size { get; set => Set(ref field, value); } = 3;
+        public int Size
+        {
+            get;
+            set => Set(ref field, value);
+        } = 3;
 
-        public double Scale { get; set => Set(ref field, value); } = 1.5;
+        public double Scale
+        {
+            get;
+            set => Set(ref field, value);
+        } = 1.5;
 
         [TomlComment("The tiles, in order.\nOne per key.")]
-        public IReadOnlyList<string> Tiles { get; set => Set(ref field, value); } = ["wifi"];
+        public IReadOnlyList<string> Tiles
+        {
+            get;
+            set => Set(ref field, value);
+        } = ["wifi"];
 
-        public IReadOnlyList<IReadOnlyDictionary<string, object?>> Hidden { get; set => Set(ref field, value); } = [];
+        public IReadOnlyList<IReadOnlyDictionary<string, object?>> Hidden
+        {
+            get;
+            set => Set(ref field, value);
+        } = [];
 
         // Not a key: it has no public setter.
         public string Shown => Name.ToUpperInvariant();
@@ -31,33 +55,63 @@ public sealed class TomlFileTests
     private sealed class Pins(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
         [TomlComment("The apps pinned to Start, in order.")]
-        public IReadOnlyList<string>? Apps { get; set => Set(ref field, value); }
+        public IReadOnlyList<string>? Apps
+        {
+            get;
+            set => Set(ref field, value);
+        }
     }
 
     private sealed class Big(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
-        public long Number { get; set => Set(ref field, value); }
+        public long Number
+        {
+            get;
+            set => Set(ref field, value);
+        }
 
-        public string Name { get; set => Set(ref field, value); } = "default";
+        public string Name
+        {
+            get;
+            set => Set(ref field, value);
+        } = "default";
     }
 
     private sealed class Loose(string path, IEventLoop loop, Log log) : TomlFile(path, loop, log)
     {
-        public object? Gone { get; set => Set(ref field, value); }
+        public object? Gone
+        {
+            get;
+            set => Set(ref field, value);
+        }
 
-        public int? Maybe { get; set => Set(ref field, value); }
+        public int? Maybe
+        {
+            get;
+            set => Set(ref field, value);
+        }
 
-        public IReadOnlyDictionary<string, object?>? Taskbar { get; set => Set(ref field, value); }
+        public IReadOnlyDictionary<string, object?>? Taskbar
+        {
+            get;
+            set => Set(ref field, value);
+        }
     }
 
-    private static Settings Open(TomlFixture fixture, Func<string, object, string>? check = null) =>
-        new(fixture.FilePath, fixture.Loop, fixture.Log, check);
+    private static Settings Open(TomlFixture fixture, Func<string, object, string>? check = null)
+    {
+        return new Settings(fixture.FilePath, fixture.Loop, fixture.Log, check);
+    }
 
-    private static string BackdropCheck(string key, object value) =>
-        key == "name" && value is not ("acrylic" or "mica") ? "is not \"acrylic\" or \"mica\"" : "";
+    private static string BackdropCheck(string key, object value)
+    {
+        return key == "name" && value is not ("acrylic" or "mica") ? "is not \"acrylic\" or \"mica\"" : "";
+    }
 
-    private static Dictionary<string, object?> Row(params (string Key, object? Value)[] items) =>
-        items.ToDictionary(item => item.Key, item => item.Value);
+    private static Dictionary<string, object?> Row(params (string Key, object? Value)[] items)
+    {
+        return items.ToDictionary(item => item.Key, item => item.Value);
+    }
 
     private static void HardLink(string link, string real)
     {
@@ -68,12 +122,12 @@ public sealed class TomlFileTests
     public void Values_are_read_from_the_file_and_a_key_it_does_not_have_keeps_its_default()
     {
         using var fixture = new TomlFixture("""
-            name = 'from "file"'
-            size = 7
-            scale = 2
-            hidden = [{ id = "Contoso.Chat", name = "Chat" }, { id = "Contoso.Mail" }]
-            unknown = 1
-            """);
+                                            name = 'from "file"'
+                                            size = 7
+                                            scale = 2
+                                            hidden = [{ id = "Contoso.Chat", name = "Chat" }, { id = "Contoso.Mail" }]
+                                            unknown = 1
+                                            """);
         using var settings = Open(fixture);
 
         Assert.True(settings.Loaded);
@@ -91,13 +145,13 @@ public sealed class TomlFileTests
     public void An_array_of_tables_reads_as_rows()
     {
         using var fixture = new TomlFixture("""
-            [[hidden]]
-            id = "Contoso.Chat"
-            name = "Chat"
+                                            [[hidden]]
+                                            id = "Contoso.Chat"
+                                            name = "Chat"
 
-            [[hidden]]
-            id = "Contoso.Mail"
-            """);
+                                            [[hidden]]
+                                            id = "Contoso.Mail"
+                                            """);
         using var settings = Open(fixture);
 
         Assert.Equal(["Contoso.Chat", "Contoso.Mail"], settings.Hidden.Select(row => row["id"]));
@@ -107,18 +161,18 @@ public sealed class TomlFileTests
     public void A_changed_array_of_tables_keeps_its_comment_and_unknown_key()
     {
         using var fixture = new TomlFixture("""
-            [[hidden]]
-            id = "Contoso.Chat" # chat
-            name = "Chat"
-            extra = 1
+                                            [[hidden]]
+                                            id = "Contoso.Chat" # chat
+                                            name = "Chat"
+                                            extra = 1
 
-            [[hidden]]
-            id = "Contoso.Mail"
+                                            [[hidden]]
+                                            id = "Contoso.Mail"
 
-            [other]
-            kept = true
+                                            [other]
+                                            kept = true
 
-            """);
+                                            """);
         using var settings = Open(fixture);
 
         settings.Hidden = [Row(("id", "Contoso.Chat"), ("name", "Renamed"))];
@@ -165,22 +219,22 @@ public sealed class TomlFileTests
         settings.Save();
 
         Assert.Equal("""
-            # Who this is.
-            name = "default"
+                     # Who this is.
+                     name = "default"
 
-            on = true
+                     on = true
 
-            size = 3
+                     size = 3
 
-            scale = 1.5
+                     scale = 1.5
 
-            # The tiles, in order.
-            # One per key.
-            tiles = ["wifi"]
+                     # The tiles, in order.
+                     # One per key.
+                     tiles = ["wifi"]
 
-            hidden = []
+                     hidden = []
 
-            """, fixture.Text);
+                     """, fixture.Text);
         Assert.Empty(fixture.Messages);
     }
 
@@ -201,17 +255,17 @@ public sealed class TomlFileTests
     public void Writing_changes_only_the_values_and_keeps_what_the_user_wrote()
     {
         using var fixture = new TomlFixture("""
-            # My settings.
-            name = "mine" # set by hand
+                                            # My settings.
+                                            name = "mine" # set by hand
 
-            # Not Winshell's.
-            unknown = 1
-            size = 3
+                                            # Not Winshell's.
+                                            unknown = 1
+                                            size = 3
 
-            [other]
-            kept = true
+                                            [other]
+                                            kept = true
 
-            """);
+                                            """);
         using var settings = Open(fixture);
 
         settings.Name = "changed \\ \"quoted\"";
@@ -219,27 +273,27 @@ public sealed class TomlFileTests
         fixture.Loop.Process();
 
         Assert.Equal("""
-            # My settings.
-            name = "changed \\ \"quoted\"" # set by hand
+                     # My settings.
+                     name = "changed \\ \"quoted\"" # set by hand
 
-            # Not Winshell's.
-            unknown = 1
-            size = 3
+                     # Not Winshell's.
+                     unknown = 1
+                     size = 3
 
-            on = true
+                     on = true
 
-            scale = 1.5
+                     scale = 1.5
 
-            # The tiles, in order.
-            # One per key.
-            tiles = ["wifi"]
+                     # The tiles, in order.
+                     # One per key.
+                     tiles = ["wifi"]
 
-            hidden = [{ id = "Contoso.Chat", name = "Chat" }]
+                     hidden = [{ id = "Contoso.Chat", name = "Chat" }]
 
-            [other]
-            kept = true
+                     [other]
+                     kept = true
 
-            """, fixture.Text);
+                     """, fixture.Text);
         Assert.Empty(fixture.Messages);
     }
 
@@ -279,12 +333,12 @@ public sealed class TomlFileTests
     public void A_null_value_takes_its_key_out_and_the_comments_around_it_stay()
     {
         using var fixture = new TomlFixture("""
-            # Above gone.
-            gone = 1
-            # Above maybe.
-            maybe = 2
+                                            # Above gone.
+                                            gone = 1
+                                            # Above maybe.
+                                            maybe = 2
 
-            """);
+                                            """);
         using var loose = new Loose(fixture.FilePath, fixture.Loop, fixture.Log);
         Assert.Equal(1L, loose.Gone);
         Assert.Equal(2, loose.Maybe);
@@ -333,7 +387,10 @@ public sealed class TomlFileTests
         using var settings = Open(fixture);
         Assert.Equal("kept", settings.Name);
         Assert.Equal(3, settings.Size);
-        Assert.Contains(fixture.Messages, m => m.Contains("size should be a whole number from -2147483648 to 2147483647, not \"x\", so it was left unchanged", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages,
+            m => m.Contains(
+                "size should be a whole number from -2147483648 to 2147483647, not \"x\", so it was left unchanged",
+                StringComparison.Ordinal));
 
         settings.Name = "next";
         fixture.Loop.Process();
@@ -361,7 +418,8 @@ public sealed class TomlFileTests
     [Fact]
     public void A_key_that_looks_like_one_the_file_reads_is_reported_once_with_its_line()
     {
-        using var fixture = new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\nin = 1\n\n[colors]\nmode = \"dark\"\n");
+        using var fixture =
+            new TomlFixture("name = \"kept\"\nSize = 4\n  tilez = [\"wifi\"]\nin = 1\n\n[colors]\nmode = \"dark\"\n");
         using var settings = Open(fixture);
         settings.Name = "next";
         fixture.Loop.Process();
@@ -369,7 +427,7 @@ public sealed class TomlFileTests
         Assert.Equal(
             [
                 $"TomlFile: {fixture.FilePath}[2:1]: Size was ignored; did you mean size?",
-                $"TomlFile: {fixture.FilePath}[3:3]: tilez was ignored; did you mean tiles?",
+                $"TomlFile: {fixture.FilePath}[3:3]: tilez was ignored; did you mean tiles?"
             ],
             fixture.Messages);
     }
@@ -383,7 +441,9 @@ public sealed class TomlFileTests
         using var fixture = new TomlFixture($"on = {value}\nname = \"mine\"\n");
         using var settings = Open(fixture);
         Assert.True(settings.On);
-        Assert.Contains(fixture.Messages, m => m.Contains($"on should be true or false, not {value}, so it was left unchanged", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages,
+            m => m.Contains($"on should be true or false, not {value}, so it was left unchanged",
+                StringComparison.Ordinal));
 
         settings.Name = "next";
         fixture.Loop.Process();
@@ -439,7 +499,9 @@ public sealed class TomlFileTests
         using var settings = Open(fixture);
 
         Assert.Equal(["wifi"], settings.Tiles);
-        Assert.Contains(fixture.Messages, m => m.Contains("tiles should be a list of strings, not [\"wifi\", 2], so it was left unchanged", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages,
+            m => m.Contains("tiles should be a list of strings, not [\"wifi\", 2], so it was left unchanged",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -447,8 +509,13 @@ public sealed class TomlFileTests
     {
         using var fixture = new TomlFixture("size = 3000000000\n");
         using (var settings = Open(fixture))
+        {
             Assert.Equal(3, settings.Size);
-        Assert.Contains(fixture.Messages, m => m.Contains("size should be a whole number from -2147483648 to 2147483647, not 3000000000,", StringComparison.Ordinal));
+        }
+
+        Assert.Contains(fixture.Messages,
+            m => m.Contains("size should be a whole number from -2147483648 to 2147483647, not 3000000000,",
+                StringComparison.Ordinal));
 
         File.WriteAllText(fixture.FilePath, "number = 9223372036854775807\nname = \"mine\"\n");
         using var big = new Big(fixture.FilePath, fixture.Loop, fixture.Log);
@@ -471,7 +538,8 @@ public sealed class TomlFileTests
 
         Assert.Equal("default", settings.Name);
         Assert.Equal(4, settings.Size);
-        Assert.Contains(fixture.Messages, m => m.Contains("name is not \"acrylic\" or \"mica\", so it was left unchanged", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages,
+            m => m.Contains("name is not \"acrylic\" or \"mica\", so it was left unchanged", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -485,7 +553,7 @@ public sealed class TomlFileTests
                 $"TomlFile: {fixture.FilePath}[1:1]: name is not \"acrylic\" or \"mica\", so it was left unchanged",
                 $"TomlFile: {fixture.FilePath}[3:3]: on should be true or false, not [false], so it was left unchanged",
                 $"TomlFile: {fixture.FilePath}[2:1]: size should be a whole number from -2147483648 to 2147483647, not \"x\", so it was left unchanged",
-                $"TomlFile: {fixture.FilePath}[4:1]: tiles should be a list of strings, not [1, \"wifi\"], so it was left unchanged",
+                $"TomlFile: {fixture.FilePath}[4:1]: tiles should be a list of strings, not [1, \"wifi\"], so it was left unchanged"
             ],
             fixture.Messages);
     }
@@ -522,7 +590,9 @@ public sealed class TomlFileTests
         Assert.False(settings.Loaded);
         Assert.Contains("settings.toml[1:", settings.Error, StringComparison.Ordinal);
         Assert.Contains("]:", settings.Error, StringComparison.Ordinal);
-        Assert.Contains(fixture.Messages, m => m.Contains("TomlFile", StringComparison.Ordinal) && m.Contains("settings.toml[1:", StringComparison.Ordinal));
+        Assert.Contains(fixture.Messages,
+            m => m.Contains("TomlFile", StringComparison.Ordinal) &&
+                 m.Contains("settings.toml[1:", StringComparison.Ordinal));
 
         var before = File.ReadAllBytes(fixture.FilePath);
         settings.On = false;
@@ -585,6 +655,7 @@ public sealed class TomlFileTests
             Assert.DoesNotContain(fixture.Messages, m => m.Contains("failed to write", StringComparison.Ordinal));
             Assert.NotEqual("", settings.Error);
         }
+
         Assert.Equal(Disk, fixture.Text);
         Assert.Equal("default", settings.Name);
     }
@@ -667,6 +738,7 @@ public sealed class TomlFileTests
             // ERROR_PRIVILEGE_NOT_HELD. This process cannot create a symbolic link. The hard-link test covers the in-place path.
             return;
         }
+
         using var settings = Open(fixture);
 
         settings.Name = "next";

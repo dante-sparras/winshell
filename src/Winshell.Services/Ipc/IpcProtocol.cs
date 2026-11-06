@@ -14,12 +14,16 @@ internal static class IpcProtocol
     public const int Oldest = 0;
 
     /// <summary>Why a shell speaking <paramref name="current"/> refuses a client speaking <paramref name="client"/>, or null.</summary>
-    public static string? ClientRefusal(int client, int current = Current, int oldest = Oldest) =>
-        client >= oldest && client <= current ? null : Mismatch(current, client);
+    public static string? ClientRefusal(int client, int current = Current, int oldest = Oldest)
+    {
+        return client >= oldest && client <= current ? null : Mismatch(current, client);
+    }
 
     /// <summary>Why a client speaking <paramref name="current"/> refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
-    public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest) =>
-        shell >= oldest ? null : Mismatch(shell, current);
+    public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest)
+    {
+        return shell >= oldest ? null : Mismatch(shell, current);
+    }
 
     /// <summary>
     /// Why a shell of release <paramref name="shell"/> refuses a winshell of release <paramref name="client"/>, or null.
@@ -34,9 +38,13 @@ internal static class IpcProtocol
         var right = ProductVersion.Parse(client);
         if (left.Major == right.Major && left.Minor == right.Minor && left.Patch == right.Patch)
             return null;
-        return $"This shell is Winshell {shell} and this winshell is {client}. Use the winshell that matches, or build the shell with this one.";
+        return
+            $"This shell is Winshell {shell} and this winshell is {client}. Use the winshell that matches, or build the shell with this one.";
     }
 
-    private static string Mismatch(int shell, int client) =>
-        $"This shell speaks control protocol {shell} and this winshell speaks {client}. Use the winshell that matches, or build the shell with this one.";
+    private static string Mismatch(int shell, int client)
+    {
+        return
+            $"This shell speaks control protocol {shell} and this winshell speaks {client}. Use the winshell that matches, or build the shell with this one.";
+    }
 }

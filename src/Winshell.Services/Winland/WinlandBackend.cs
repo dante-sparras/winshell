@@ -16,7 +16,10 @@ internal sealed class WinlandBackend : IWinlandBackend
     private static readonly TimeSpan FirstPoll = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan LastPoll = TimeSpan.FromSeconds(30);
     private static readonly int SessionId = Process.GetCurrentProcess().SessionId;
-    private static readonly IReadOnlyList<string> Candidates = WinlandProtocol.PipeNames(Environment.GetEnvironmentVariable("WINLAND_PIPE"), SessionId);
+
+    private static readonly IReadOnlyList<string> Candidates =
+        WinlandProtocol.PipeNames(Environment.GetEnvironmentVariable("WINLAND_PIPE"), SessionId);
+
     public static readonly WinlandBackend Instance = new();
 
     private readonly List<Log> _logs = [];
@@ -45,7 +48,9 @@ internal sealed class WinlandBackend : IWinlandBackend
     public void Stop(Log log)
     {
         lock (_logs)
+        {
             _logs.Remove(log);
+        }
     }
 
     /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
@@ -79,12 +84,11 @@ internal sealed class WinlandBackend : IWinlandBackend
                     Raise(ConnectionChanged, true);
                     var reader = new WinlandReader(pipe);
                     while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
-                    {
                         if (line.Length > 0)
                             Raise(EventReceived, line);
-                    }
                 }
-                catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidDataException or InvalidOperationException)
+                catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidDataException
+                                              or InvalidOperationException)
                 {
                 }
                 finally
@@ -97,9 +101,11 @@ internal sealed class WinlandBackend : IWinlandBackend
                         Raise(ConnectionChanged, false);
                     }
                 }
+
                 lost = true;
                 break;
             }
+
             // Winland drops a subscriber that falls behind, so a lost stream is tried again at once, then from 3 s.
             var wait = lost ? TimeSpan.FromMilliseconds(250) : poll;
             poll = lost ? FirstPoll : NextPoll(poll);
@@ -108,7 +114,10 @@ internal sealed class WinlandBackend : IWinlandBackend
     }
 
     /// <summary>The wait after <paramref name="poll"/> finds no Winland: twice as long, at most 30 s.</summary>
-    internal static TimeSpan NextPoll(TimeSpan poll) => poll * 2 < LastPoll ? poll * 2 : LastPoll;
+    internal static TimeSpan NextPoll(TimeSpan poll)
+    {
+        return poll * 2 < LastPoll ? poll * 2 : LastPoll;
+    }
 
     public async Task<string?> RequestAsync(string command)
     {
@@ -121,15 +130,18 @@ internal sealed class WinlandBackend : IWinlandBackend
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             try
             {
-                await pipe.WriteAsync(Encoding.UTF8.GetBytes(command.ReplaceLineEndings(" ") + "\n"), timeout.Token).ConfigureAwait(false);
+                await pipe.WriteAsync(Encoding.UTF8.GetBytes(command.ReplaceLineEndings(" ") + "\n"), timeout.Token)
+                    .ConfigureAwait(false);
                 await pipe.FlushAsync(timeout.Token).ConfigureAwait(false);
                 return await new WinlandReader(pipe).ReadReplyAsync(timeout.Token).ConfigureAwait(false);
             }
-            catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException or InvalidDataException)
+            catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException
+                                          or InvalidDataException)
             {
                 return null;
             }
         }
+
         return null;
     }
 
@@ -145,17 +157,21 @@ internal sealed class WinlandBackend : IWinlandBackend
                 await pipe.DisposeAsync().ConfigureAwait(false);
                 return null;
             }
+
             return pipe;
         }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException or OperationCanceledException)
+        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException
+                                      or OperationCanceledException)
         {
             await pipe.DisposeAsync().ConfigureAwait(false);
             return null;
         }
     }
 
-    private static uint? ServerProcess(NamedPipeClientStream pipe) =>
-        Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
+    private static uint? ServerProcess(NamedPipeClientStream pipe)
+    {
+        return Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
+    }
 
     /// <summary>Calls each handler in turn. One that throws is logged, and the others still run.</summary>
     internal void Raise<T>(Action<T>? handlers, T value)
@@ -163,7 +179,6 @@ internal sealed class WinlandBackend : IWinlandBackend
         if (handlers is null)
             return;
         foreach (var handler in handlers.GetInvocationList().Cast<Action<T>>())
-        {
             try
             {
                 handler(value);
@@ -173,13 +188,15 @@ internal sealed class WinlandBackend : IWinlandBackend
                 var message = e.ToString();
                 Log[] logs;
                 lock (_logs)
+                {
                     logs = _logs.ToArray();
+                }
+
                 if (logs.Length == 0)
                     Log.Default.Warn("winland", message);
                 else
                     foreach (var log in logs)
                         log.Warn("winland", message);
             }
-        }
     }
 }

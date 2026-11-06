@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Foundation;
 using Windows.Media.Control;
 using Winshell.Media;
 
@@ -6,10 +7,17 @@ namespace Winshell.Services.Tests;
 
 public sealed class MediaServiceTests
 {
-    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Playing = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
-    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Paused = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
-    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Stopped = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Stopped;
-    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Changing = GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing;
+    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Playing =
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+
+    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Paused =
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus.Paused;
+
+    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Stopped =
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus.Stopped;
+
+    private const GlobalSystemMediaTransportControlsSessionPlaybackStatus Changing =
+        GlobalSystemMediaTransportControlsSessionPlaybackStatus.Changing;
 
     private readonly List<string> _warnings = [];
     private readonly Log _log;
@@ -23,7 +31,10 @@ public sealed class MediaServiceTests
     }
 
     /// <summary>A session with no Windows behind it. Its commands land on the link.</summary>
-    private SmtcSession Native(RecordingLink link, string appId = "test") => new(new ManualEventLoop(), _log, 0, appId, appId, _ => link);
+    private SmtcSession Native(RecordingLink link, string appId = "test")
+    {
+        return new SmtcSession(new ManualEventLoop(), _log, 0, appId, appId, _ => link);
+    }
 
     private sealed class RecordingLink : ISmtcLink
     {
@@ -41,11 +52,15 @@ public sealed class MediaServiceTests
         {
         }
 
-        public void Send(string what, Func<GlobalSystemMediaTransportControlsSession, global::Windows.Foundation.IAsyncOperation<bool>> command) => Sent.Add(what);
+        public void Send(string what, Func<GlobalSystemMediaTransportControlsSession, IAsyncOperation<bool>> command)
+        {
+            Sent.Add(what);
+        }
     }
 
     private static void Controls(SmtcSession native, bool canPlay = false, bool canPause = false, bool canStop = false,
-        bool canGoNext = false, bool canGoPrevious = false, bool canSeek = false) =>
+        bool canGoNext = false, bool canGoPrevious = false, bool canSeek = false)
+    {
         native.ApplyPlayback(new SmtcPlayback(Stopped)
         {
             CanPlay = canPlay,
@@ -53,8 +68,9 @@ public sealed class MediaServiceTests
             CanStop = canStop,
             CanGoNext = canGoNext,
             CanGoPrevious = canGoPrevious,
-            CanSeek = canSeek,
+            CanSeek = canSeek
         });
+    }
 
     private sealed class FakeSessions(Func<string, SmtcSession> create) : IMediaSessions
     {
@@ -81,13 +97,22 @@ public sealed class MediaServiceTests
         }
     }
 
-    private MediaSession Session() => new(_native, _log);
+    private MediaSession Session()
+    {
+        return new MediaSession(_native, _log);
+    }
 
-    private void Track(string title, string artist = "", string album = "", string albumArtist = "", int number = 0, string[]? genres = null) =>
+    private void Track(string title, string artist = "", string album = "", string albumArtist = "", int number = 0,
+        string[]? genres = null)
+    {
         _native.ApplyTrack(title, artist, album, albumArtist, number, genres, null);
+    }
 
-    private void Timeline(double position, double end) =>
-        _native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(end), TimeSpan.FromSeconds(position), default, TimeProvider.System.GetUtcNow());
+    private void Timeline(double position, double end)
+    {
+        _native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(end), TimeSpan.FromSeconds(position), default,
+            TimeProvider.System.GetUtcNow());
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -121,7 +146,7 @@ public sealed class MediaServiceTests
         var changes = Watch(media.Sessions[0]);
 
         sessions.Remove(native);
-        Controls(native, canPlay: true);
+        Controls(native, true);
 
         Assert.Empty(changes);
     }
@@ -136,7 +161,7 @@ public sealed class MediaServiceTests
 
         media.Dispose();
         sessions.Add("b.exe");
-        Controls(native, canPlay: true);
+        Controls(native, true);
 
         Assert.Single(media.Sessions);
         Assert.Empty(changes);
@@ -147,7 +172,11 @@ public sealed class MediaServiceTests
     {
         var session = Session();
         var changes = Watch(session);
-        int Count() => changes.Count(c => c == nameof(MediaSession.CanControl));
+
+        int Count()
+        {
+            return changes.Count(c => c == nameof(MediaSession.CanControl));
+        }
 
         Assert.False(session.CanControl);
 
@@ -172,7 +201,7 @@ public sealed class MediaServiceTests
     [Fact]
     public void Can_control_reports_the_loss_of_a_command_the_session_started_with()
     {
-        Controls(_native, canPlay: true);
+        Controls(_native, true);
         var session = Session();
         var changes = Watch(session);
         Assert.True(session.CanControl);
@@ -203,7 +232,7 @@ public sealed class MediaServiceTests
             LoopSupported = true,
             RateSupported = true,
             Shuffle = true,
-            LoopState = 1,
+            LoopState = 1
         });
         Timeline(5, 125);
 
@@ -261,7 +290,8 @@ public sealed class MediaServiceTests
     public void The_playback_commands_reach_the_app_when_it_accepts_them()
     {
         var session = Session();
-        _native.ApplyPlayback(new SmtcPlayback(Paused) { CanPlay = true, CanPause = true, CanStop = true, CanGoNext = true, CanGoPrevious = true });
+        _native.ApplyPlayback(new SmtcPlayback(Paused)
+            { CanPlay = true, CanPause = true, CanStop = true, CanGoNext = true, CanGoPrevious = true });
         Assert.True(session.CanTogglePlaying);
 
         session.Play();
@@ -306,7 +336,7 @@ public sealed class MediaServiceTests
             () => session.Shuffle = true,
             () => session.LoopState = MediaLoopState.List,
             () => session.Rate = 2,
-            session.SwitchTo,
+            session.SwitchTo
         };
 
         for (var i = 0; i < refused.Length; i++)
@@ -314,6 +344,7 @@ public sealed class MediaServiceTests
             refused[i]();
             Assert.Equal(i + 1, _warnings.Count);
         }
+
         Assert.Empty(_link.Sent);
     }
 
@@ -350,7 +381,8 @@ public sealed class MediaServiceTests
         Assert.False(session.Shuffle);
         Assert.Equal(MediaLoopState.None, session.LoopState);
 
-        _native.ApplyPlayback(new SmtcPlayback(Playing) { Shuffle = true, LoopState = 2, ShuffleSupported = true, LoopSupported = true });
+        _native.ApplyPlayback(new SmtcPlayback(Playing)
+            { Shuffle = true, LoopState = 2, ShuffleSupported = true, LoopSupported = true });
         Assert.True(session.Shuffle);
         Assert.Equal(MediaLoopState.List, session.LoopState);
 

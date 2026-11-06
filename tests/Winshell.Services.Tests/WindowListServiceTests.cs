@@ -11,7 +11,10 @@ public sealed class WindowListServiceTests
     private readonly ManualEventLoop _loop = new();
     private readonly FakeWindowBackend _windows = new();
 
-    private WindowListService Start(VirtualDesktopsService? desktops = null) => new(_loop, Log.Default, desktops, _windows);
+    private WindowListService Start(VirtualDesktopsService? desktops = null)
+    {
+        return new WindowListService(_loop, Log.Default, desktops, _windows);
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -47,9 +50,11 @@ public sealed class WindowListServiceTests
     [InlineData(true, true, false, false, false, false, false, false, false, false)]
     [InlineData(true, true, false, false, false, false, false, false, true, true)]
     public void Windows_the_taskbar_skips_stay_out_of_the_list(
-        bool exists, bool visible, bool shell, bool child, bool appWindow, bool owned, bool tool, bool noActivate, bool title, bool cloaked)
+        bool exists, bool visible, bool shell, bool child, bool appWindow, bool owned, bool tool, bool noActivate,
+        bool title, bool cloaked)
     {
-        _windows.Show(1, FakeWindowBackend.Window(), new TaskbarWindowFacts(exists, visible, shell, child, appWindow, owned, tool, noActivate, title, cloaked));
+        _windows.Show(1, FakeWindowBackend.Window(),
+            new TaskbarWindowFacts(exists, visible, shell, child, appWindow, owned, tool, noActivate, title, cloaked));
         _windows.Show(2);
 
         using var list = Start();
@@ -60,7 +65,8 @@ public sealed class WindowListServiceTests
     [Fact]
     public void An_owned_window_that_asks_for_a_taskbar_button_is_listed()
     {
-        _windows.Show(1, FakeWindowBackend.Window(), FakeWindowBackend.Normal with { AppWindow = true, Owned = true, ToolWindow = true, NoActivate = true });
+        _windows.Show(1, FakeWindowBackend.Window(),
+            FakeWindowBackend.Normal with { AppWindow = true, Owned = true, ToolWindow = true, NoActivate = true });
 
         using var list = Start();
 

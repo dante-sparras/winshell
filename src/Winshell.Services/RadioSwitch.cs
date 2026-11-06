@@ -27,7 +27,9 @@ internal sealed class WindowsRadioSource : IRadioSource
 {
     public static readonly WindowsRadioSource Instance = new();
 
-    private WindowsRadioSource() { }
+    private WindowsRadioSource()
+    {
+    }
 
     public async Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync()
     {
@@ -35,13 +37,20 @@ internal sealed class WindowsRadioSource : IRadioSource
         return radios.Select(static radio => (IDeviceRadio)new WindowsRadio(radio)).ToList();
     }
 
-    public async Task<RadioAccessStatus> RequestAccessAsync() => await Radio.RequestAccessAsync();
+    public async Task<RadioAccessStatus> RequestAccessAsync()
+    {
+        return await Radio.RequestAccessAsync();
+    }
 
     private sealed class WindowsRadio(Radio radio) : IDeviceRadio
     {
         public RadioKind Kind => radio.Kind;
         public RadioState State => radio.State;
-        public Task<RadioAccessStatus> SetStateAsync(RadioState state) => radio.SetStateAsync(state).AsTask();
+
+        public Task<RadioAccessStatus> SetStateAsync(RadioState state)
+        {
+            return radio.SetStateAsync(state).AsTask();
+        }
     }
 }
 
@@ -83,23 +92,32 @@ internal static class RadioSwitch
             if (radio.State != desired)
                 return Unchanged;
         }
+
         return null;
     }
 
-    internal static string Missing(RadioKind kind) => kind switch
+    internal static string Missing(RadioKind kind)
     {
-        RadioKind.WiFi => "Windows reports no Wi-Fi radio.",
-        RadioKind.Bluetooth => "Windows reports no Bluetooth radio.",
-        _ => "Windows reports no radio.",
-    };
+        return kind switch
+        {
+            RadioKind.WiFi => "Windows reports no Wi-Fi radio.",
+            RadioKind.Bluetooth => "Windows reports no Bluetooth radio.",
+            _ => "Windows reports no radio."
+        };
+    }
 
-    internal static string AccessError(RadioAccessStatus status) => status switch
+    internal static string AccessError(RadioAccessStatus status)
     {
-        RadioAccessStatus.DeniedByUser => "The user denied radio control.",
-        RadioAccessStatus.DeniedBySystem => "Windows or its policy denied radio control.",
-        _ => "Windows did not allow radio control.",
-    };
+        return status switch
+        {
+            RadioAccessStatus.DeniedByUser => "The user denied radio control.",
+            RadioAccessStatus.DeniedBySystem => "Windows or its policy denied radio control.",
+            _ => "Windows did not allow radio control."
+        };
+    }
 
-    private static bool NeedsChange(IDeviceRadio radio, bool turnOn) =>
-        turnOn ? radio.State != RadioState.On : radio.State == RadioState.On;
+    private static bool NeedsChange(IDeviceRadio radio, bool turnOn)
+    {
+        return turnOn ? radio.State != RadioState.On : radio.State == RadioState.On;
+    }
 }

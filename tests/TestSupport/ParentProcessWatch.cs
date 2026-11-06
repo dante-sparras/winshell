@@ -22,11 +22,11 @@ internal static class ParentProcessWatch
         if (parent is null)
             return;
         new Thread(() =>
-        {
-            parent.WaitForExit();
-            Process.GetCurrentProcess().Kill();
-        })
-        { IsBackground = true, Name = "Parent process watch" }.Start();
+            {
+                parent.WaitForExit();
+                Process.GetCurrentProcess().Kill();
+            })
+            { IsBackground = true, Name = "Parent process watch" }.Start();
     }
 
     private static Process? Parent()
@@ -50,11 +50,11 @@ internal static class ParentProcessWatch
         {
             var self = (uint)Environment.ProcessId;
             var entry = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
-            for (var more = PInvoke.Process32FirstW(snapshot, ref entry); more; more = PInvoke.Process32NextW(snapshot, ref entry))
-            {
+            for (var more = PInvoke.Process32FirstW(snapshot, ref entry);
+                 more;
+                 more = PInvoke.Process32NextW(snapshot, ref entry))
                 if (entry.th32ProcessID == self)
                     return entry.th32ParentProcessID;
-            }
             throw new InvalidOperationException("This process is not in the process snapshot.");
         }
         finally

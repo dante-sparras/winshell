@@ -63,7 +63,8 @@ internal sealed class HostPlacement
         if (_host.Released || Panel is not { } p || AppBar is not { } appBar)
             return;
         // A panel whose screen was unplugged moves to the primary screen until that screen comes back.
-        var monitor = (p.Screen is { } screen ? Screens.Find(screen.Id) : null) ?? Screens.Find(_platform.PrimaryScreenId);
+        var monitor = (p.Screen is { } screen ? Screens.Find(screen.Id) : null) ??
+                      Screens.Find(_platform.PrimaryScreenId);
         if (monitor is null)
             return;
         Scale = monitor.Scale;
@@ -84,6 +85,7 @@ internal sealed class HostPlacement
             appBar.Remove();
             area = monitor.Area;
         }
+
         var rect = DesktopSpace.Anchor(area, p, Scale);
         var topmost = p.AboveWindows && !_platform.FullscreenOn(monitor.Info.Id);
         SetExStyle(Win32.WS_EX_TOPMOST, topmost);
@@ -98,8 +100,10 @@ internal sealed class HostPlacement
         _host.Focus.SetPopup(placement.GrabFocus);
         // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
         var monitors = Screens.Enumerate();
-        var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y), monitors.Select(m => m.Info.Geometry).ToList());
-        var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ?? (at is { } i ? monitors[i] : monitors.FirstOrDefault());
+        var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y),
+            monitors.Select(m => m.Info.Geometry).ToList());
+        var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ??
+                      (at is { } i ? monitors[i] : monitors.FirstOrDefault());
         if (monitor is null)
             return;
         Scale = monitor.Scale;
@@ -151,6 +155,7 @@ internal sealed class HostPlacement
         {
             Placing = false;
         }
+
         UpdateSize();
     }
 
@@ -212,6 +217,7 @@ internal sealed class HostPlacement
             SetClickThrough(false);
             return;
         }
+
         if (rects.Count == 0)
         {
             // Nothing takes input: let every click through, but keep drawing.
@@ -219,14 +225,17 @@ internal sealed class HostPlacement
             SetClickThrough(true);
             return;
         }
+
         SetClickThrough(false);
         var region = Win32.CreateRectRgn(0, 0, 0, 0);
         foreach (var r in rects)
         {
-            var part = Win32.CreateRectRgn((int)Math.Floor(r.X * Scale), (int)Math.Floor(r.Y * Scale), (int)Math.Ceiling(r.Right * Scale), (int)Math.Ceiling(r.Bottom * Scale));
+            var part = Win32.CreateRectRgn((int)Math.Floor(r.X * Scale), (int)Math.Floor(r.Y * Scale),
+                (int)Math.Ceiling(r.Right * Scale), (int)Math.Ceiling(r.Bottom * Scale));
             _ = Win32.CombineRgn(region, region, part, Win32.RGN_OR);
             Win32.DeleteObject(part);
         }
+
         // The window owns the region once it is set.
         Win32.SetWindowRgn(Handle, region, true);
     }
@@ -241,7 +250,11 @@ internal sealed class HostPlacement
             Win32.SetLayeredWindowAttributes(Handle, 0, 255, Win32.LWA_ALPHA);
     }
 
-    public void Raise() => Win32.SetWindowPos(Handle, Win32.HWND_TOP, 0, 0, 0, 0, Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+    public void Raise()
+    {
+        Win32.SetWindowPos(Handle, Win32.HWND_TOP, 0, 0, 0, 0,
+            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+    }
 
     public void StartSystemMove()
     {
@@ -262,7 +275,7 @@ internal sealed class HostPlacement
             Edges.Bottom => 6,
             Edges.Bottom | Edges.Left => 7,
             Edges.Bottom | Edges.Right => 8,
-            _ => 8,
+            _ => 8
         };
         Win32.ReleaseCapture();
         Win32.SendMessageW(Handle, Win32.WM_SYSCOMMAND, (nint)(Win32.SC_SIZE + code), 0);

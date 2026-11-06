@@ -46,7 +46,8 @@ public sealed partial class Shell
 
     // The graph is owned first, so it is disposed after the service whose peak meters read it.
     /// <summary>Playback and recording devices, and the audio sessions on them.</summary>
-    public AudioService Audio => Own(ref _audio, () => new AudioService(Own(ref _audioGraph, () => new AudioGraph(Loop, Log)), Log));
+    public AudioService Audio => Own(ref _audio,
+        () => new AudioService(Own(ref _audioGraph, () => new AudioGraph(Loop, Log)), Log));
 
     /// <summary>The Bluetooth adapter and the paired and nearby devices.</summary>
     public BluetoothService Bluetooth => Own(ref _bluetooth, () => new BluetoothService(Loop, Log));
@@ -55,7 +56,8 @@ public sealed partial class Shell
     public BrightnessService Brightness => Own(ref _brightness, () => new BrightnessService(Loop, Log));
 
     /// <summary>Whether Explorer's taskbar is hidden. Winshell shows it again when it exits.</summary>
-    public ExplorerTaskbarService ExplorerTaskbar => _explorerTaskbar ??= new ExplorerTaskbarService(Own(ref _explorerTaskbarSession, ExplorerTaskbarSession.ForThisProcess));
+    public ExplorerTaskbarService ExplorerTaskbar => _explorerTaskbar ??=
+        new ExplorerTaskbarService(Own(ref _explorerTaskbarSession, ExplorerTaskbarSession.ForThisProcess));
 
     /// <summary>The recent and frequent documents of an app, as its jump list shows them.</summary>
     public JumpListService JumpLists => _jumpLists ??= new JumpListService();
@@ -91,7 +93,8 @@ public sealed partial class Shell
     public UpdatesService Updates => Own(ref _updates, () => new UpdatesService(Loop, Log, Updater));
 
     /// <summary>The virtual desktops Task View shows.</summary>
-    public VirtualDesktopsService VirtualDesktops => Own(ref _virtualDesktops, () => new VirtualDesktopsService(Loop, Log));
+    public VirtualDesktopsService VirtualDesktops =>
+        Own(ref _virtualDesktops, () => new VirtualDesktopsService(Loop, Log));
 
     /// <summary>The app windows the taskbar and Alt+Tab list.</summary>
     public WindowListService WindowList => Own(ref _windows, () =>
@@ -119,10 +122,16 @@ public sealed partial class Shell
     internal ShellNotices? Notices { get; set; }
 
     /// <summary>A hotkey that works anywhere in Windows. Set its <see cref="Hotkey.Sequence"/>, and dispose it to give the keys back.</summary>
-    public Hotkey NewHotkey() => new(Loop);
+    public Hotkey NewHotkey()
+    {
+        return new Hotkey(Loop);
+    }
 
     /// <summary>Tells when there has been no input for a while.</summary>
-    public IdleMonitor NewIdleMonitor() => new(Loop);
+    public IdleMonitor NewIdleMonitor()
+    {
+        return new IdleMonitor(Loop);
+    }
 
     private T Own<T>(ref T? field, Func<T> make)
         where T : class, IDisposable
@@ -132,6 +141,7 @@ public sealed partial class Shell
             field = make();
             _services.Add(field);
         }
+
         return field;
     }
 

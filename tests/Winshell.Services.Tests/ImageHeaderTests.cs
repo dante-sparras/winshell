@@ -7,11 +7,18 @@ namespace Winshell.Services.Tests;
 public sealed class ImageHeaderTests
 {
     // 3 by 2 pictures from real encoders: Skia for the PNG, the JPEG and the lossy WebP.
-    private const string Png = "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAABHNCSVQICAgIfAhkiAAAAB5JREFUCJkFwcEJAAAIBCAvgl7tP25pcCNGtA0O5QEeFQIkjAn5PAAAAABJRU5ErkJggg==";
-    private const string Jpeg = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAACAAMDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAZEAADAAMAAAAAAAAAAAAAAAAAAQISIpH/xAAVAQEBAAAAAAAAAAAAAAAAAAACA//EABYRAQEBAAAAAAAAAAAAAAAAAAABMf/aAAwDAQACEQMRAD8AmKZnFargAApMf//Z";
+    private const string Png =
+        "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAYAAACddGYaAAAABHNCSVQICAgIfAhkiAAAAB5JREFUCJkFwcEJAAAIBCAvgl7tP25pcCNGtA0O5QEeFQIkjAn5PAAAAABJRU5ErkJggg==";
+
+    private const string Jpeg =
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAACAAMDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAZEAADAAMAAAAAAAAAAAAAAAAAAQISIpH/xAAVAQEBAAAAAAAAAAAAAAAAAAACA//EABYRAQEBAAAAAAAAAAAAAAAAAAABMf/aAAwDAQACEQMRAD8AmKZnFargAApMf//Z";
+
     private const string WebP = "UklGRjAAAABXRUJQVlA4ICQAAADQAQCdASoDAAIAAUAmJZwCdAEfbfUlgAD+/wuX85lhocmFMAA=";
 
-    private static byte[] Bytes(string base64) => Convert.FromBase64String(base64);
+    private static byte[] Bytes(string base64)
+    {
+        return Convert.FromBase64String(base64);
+    }
 
     private static byte[] PngOf(uint width, uint height)
     {
@@ -63,16 +70,26 @@ public sealed class ImageHeaderTests
     }
 
     // Width 9000 less one is 0x2327, and height 2 less one is 1, packed into 14 bits each.
-    private static byte[] LosslessWebP() => Riff("VP8L", 0x2F, 0x27, 0x63, 0x00, 0x00);
+    private static byte[] LosslessWebP()
+    {
+        return Riff("VP8L", 0x2F, 0x27, 0x63, 0x00, 0x00);
+    }
 
     // A 3-byte width 20000 less one, 0x4E1F, and a 3-byte height 3 less one.
-    private static byte[] ExtendedWebP() => Riff("VP8X", 0, 0, 0, 0, 0x1F, 0x4E, 0, 2, 0, 0);
+    private static byte[] ExtendedWebP()
+    {
+        return Riff("VP8X", 0, 0, 0, 0, 0x1F, 0x4E, 0, 2, 0, 0);
+    }
 
-    private static byte[] Segment(byte marker, params byte[] body) =>
-        [0xFF, marker, (byte)((body.Length + 2) >> 8), (byte)(body.Length + 2), .. body];
+    private static byte[] Segment(byte marker, params byte[] body)
+    {
+        return [0xFF, marker, (byte)((body.Length + 2) >> 8), (byte)(body.Length + 2), .. body];
+    }
 
-    private static byte[] JpegFrame(byte marker, ushort width, ushort height) =>
-        Segment(marker, 8, (byte)(height >> 8), (byte)height, (byte)(width >> 8), (byte)width, 3);
+    private static byte[] JpegFrame(byte marker, ushort width, ushort height)
+    {
+        return Segment(marker, 8, (byte)(height >> 8), (byte)height, (byte)(width >> 8), (byte)width, 3);
+    }
 
     [Fact]
     public void Pictures_from_real_encoders_give_their_size()
@@ -125,7 +142,8 @@ public sealed class ImageHeaderTests
     public void A_jpeg_size_comes_from_its_frame_and_not_a_thumbnail_before_it()
     {
         byte[] thumbnail = [.. JpegFrame(0xC0, 160, 120)];
-        byte[] jpeg = [0xFF, 0xD8, .. Segment(0xE1, thumbnail), .. Segment(0xDB, 1, 2, 3), .. JpegFrame(0xC2, 8000, 8000)];
+        byte[] jpeg =
+            [0xFF, 0xD8, .. Segment(0xE1, thumbnail), .. Segment(0xDB, 1, 2, 3), .. JpegFrame(0xC2, 8000, 8000)];
 
         Assert.Equal(((uint)8000, (uint)8000), ImageHeader.ReadSize(jpeg));
     }
@@ -180,7 +198,11 @@ public sealed class ImageHeaderTests
     [Fact]
     public void A_cut_off_header_has_no_size_and_does_not_throw()
     {
-        foreach (var data in new[] { Bytes(Png), Bytes(Jpeg), GifOf(3, 2), BmpOf(3, 2), CoreBmpOf(3, 2), Bytes(WebP), LosslessWebP(), ExtendedWebP() })
+        foreach (var data in new[]
+                 {
+                     Bytes(Png), Bytes(Jpeg), GifOf(3, 2), BmpOf(3, 2), CoreBmpOf(3, 2), Bytes(WebP), LosslessWebP(),
+                     ExtendedWebP()
+                 })
         {
             var whole = ImageHeader.ReadSize(data);
             Assert.NotNull(whole);
@@ -209,7 +231,11 @@ public sealed class ImageHeaderTests
     [Fact]
     public async Task Art_that_says_it_has_too_many_pixels_is_dropped()
     {
-        foreach (var art in new[] { PngOf(8193, 2049), PngOf(uint.MaxValue, uint.MaxValue), PngOf(4097, 4096), GifOf(65535, 65535), BmpOf(9000, -9000), Riff("VP8X", 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF) })
+        foreach (var art in new[]
+                 {
+                     PngOf(8193, 2049), PngOf(uint.MaxValue, uint.MaxValue), PngOf(4097, 4096), GifOf(65535, 65535),
+                     BmpOf(9000, -9000), Riff("VP8X", 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF)
+                 })
             Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
     }
 

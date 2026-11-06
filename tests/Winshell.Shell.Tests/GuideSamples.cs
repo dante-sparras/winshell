@@ -1,6 +1,4 @@
 using Microsoft.UI.Xaml.Controls;
-using Winshell;
-using Winshell.Input;
 
 namespace Winshell.ShellTests;
 
@@ -26,7 +24,7 @@ public static class GuideSamples
             Height = 48,
             ReservedSize = 48,
             Content = new TextBlock { Text = "Winshell" },
-            Visible = true,
+            Visible = true
         };
     }
 
@@ -34,7 +32,7 @@ public static class GuideSamples
     {
         // The registration stays for the life of the shell. The call below is a docs sample.
         _registration =
-        shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
+            shell.Ipc.Handle("notes", "hello", (string name) => "hi " + name);
         _ = _registration;
     }
 
@@ -65,5 +63,9 @@ public sealed class AppShell : ShellConfiguration
 public sealed class ShellPreferences(string path, IEventLoop loop) : TomlFile(path, loop)
 {
     [TomlComment("\"system\" follows Windows; or \"light\" or \"dark\".")]
-    public string ColorScheme { get; set => Set(ref field, value); } = "system";
+    public string ColorScheme
+    {
+        get;
+        set => Set(ref field, value);
+    } = "system";
 }

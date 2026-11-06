@@ -8,11 +8,14 @@ public class WindowThumbnailPeekTests
     private readonly List<string> _calls = [];
     private bool _turnedOn = true;
 
-    private WindowPeek Peek(bool succeeds = true) => new(() => _turnedOn, (on, window, _) =>
+    private WindowPeek Peek(bool succeeds = true)
     {
-        _calls.Add((on ? "on " : "off ") + window);
-        return succeeds;
-    });
+        return new WindowPeek(() => _turnedOn, (on, window, _) =>
+        {
+            _calls.Add((on ? "on " : "off ") + window);
+            return succeeds;
+        });
+    }
 
     [Fact]
     public void Peek_shows_the_window_until_it_is_turned_off()
@@ -65,7 +68,7 @@ public class WindowThumbnailPeekTests
     [Fact]
     public void A_peek_Windows_refused_is_not_ended()
     {
-        var peek = Peek(succeeds: false);
+        var peek = Peek(false);
 
         peek.Show(7, 0);
         peek.End();

@@ -69,34 +69,52 @@ public sealed class WifiProfile : ObservableObject
     private string ShownError => _actionError.Length > 0 ? _actionError : _info.Error;
 
     /// <summary>The profile's fields. There is no key in the result.</summary>
-    public Dictionary<string, object?> Read() => new()
+    public Dictionary<string, object?> Read()
     {
-        ["id"] = _info.Id,
-        ["name"] = _info.Name,
-        ["ssid"] = _info.Ssid,
-        ["autoConnect"] = _info.AutoConnect,
-        ["security"] = _info.Security.ToString(),
-        ["hasPassword"] = _info.HasPassword,
-        ["loaded"] = _info.Loaded,
-    };
+        return new Dictionary<string, object?>
+        {
+            ["id"] = _info.Id,
+            ["name"] = _info.Name,
+            ["ssid"] = _info.Ssid,
+            ["autoConnect"] = _info.AutoConnect,
+            ["security"] = _info.Security.ToString(),
+            ["hasPassword"] = _info.HasPassword,
+            ["loaded"] = _info.Loaded
+        };
+    }
 
     /// <summary>Removes every key element and writes the profile back. The key text is not read.</summary>
-    public void ClearPassword() => _ = ClearPasswordAsync();
+    public void ClearPassword()
+    {
+        _ = ClearPasswordAsync();
+    }
 
     /// <summary>Deletes this saved profile by its profile name.</summary>
-    public void Forget() => _ = ForgetAsync();
-
-    internal Task SetAutoConnectAsync(bool value) =>
-        WriteAsync(() => _network.Device.Backend.SetProfileAutoConnectAsync(_network.Device.NativeId, _info.Name, value));
-
-    internal Task ClearPasswordAsync() =>
-        WriteAsync(() => _network.Device.Backend.ClearProfilePasswordAsync(_network.Device.NativeId, _info.Name));
-
-    internal Task ForgetAsync() => WriteAsync(() => Task.Run(() =>
+    public void Forget()
     {
-        var error = _network.Device.Backend.Forget(_network.Device.NativeId, _info.Name);
-        return error == 0 ? null : new Win32Exception((int)error).Message;
-    }));
+        _ = ForgetAsync();
+    }
+
+    internal Task SetAutoConnectAsync(bool value)
+    {
+        return WriteAsync(() =>
+            _network.Device.Backend.SetProfileAutoConnectAsync(_network.Device.NativeId, _info.Name, value));
+    }
+
+    internal Task ClearPasswordAsync()
+    {
+        return WriteAsync(() =>
+            _network.Device.Backend.ClearProfilePasswordAsync(_network.Device.NativeId, _info.Name));
+    }
+
+    internal Task ForgetAsync()
+    {
+        return WriteAsync(() => Task.Run(() =>
+        {
+            var error = _network.Device.Backend.Forget(_network.Device.NativeId, _info.Name);
+            return error == 0 ? null : new Win32Exception((int)error).Message;
+        }));
+    }
 
     internal void Update(WifiProfileInfo info)
     {
@@ -112,7 +130,10 @@ public sealed class WifiProfile : ObservableObject
         Changed(oldError != ShownError, nameof(Error));
     }
 
-    internal void Remove() => Removed = true;
+    internal void Remove()
+    {
+        Removed = true;
+    }
 
     private void SetActionError(string error)
     {

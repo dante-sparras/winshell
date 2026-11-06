@@ -20,14 +20,18 @@ internal static class DoctorReport
             {
                 CheckStatus.Pass => "PASS",
                 CheckStatus.Warn => "WARN",
-                _ => "FAIL",
+                _ => "FAIL"
             };
             if (color)
-                label = (check.Status switch { CheckStatus.Pass => "\e[32m", CheckStatus.Warn => "\e[33m", _ => "\e[31m" }) + label + "\e[0m";
+                label = check.Status switch
+                {
+                    CheckStatus.Pass => "\e[32m", CheckStatus.Warn => "\e[33m", _ => "\e[31m"
+                } + label + "\e[0m";
             text.AppendLine(CultureInfo.InvariantCulture, $"  {label}  {check.Title.PadRight(width)}{check.Message}");
             if (check.Fix is not null)
                 text.AppendLine(CultureInfo.InvariantCulture, $"        {new string(' ', width)}Fix: {check.Fix}");
         }
+
         text.AppendLine();
         text.AppendLine(Summary(checks));
         return text.ToString();
@@ -64,6 +68,7 @@ internal static class DoctorReport
                     json.WriteString("fix", check.Fix);
                 json.WriteEndObject();
             }
+
             json.WriteEndArray();
             json.WriteStartObject("summary");
             json.WriteNumber("pass", checks.Count(c => c.Status == CheckStatus.Pass));
@@ -72,6 +77,7 @@ internal static class DoctorReport
             json.WriteEndObject();
             json.WriteEndObject();
         }
+
         return Encoding.UTF8.GetString(stream.ToArray());
     }
 }

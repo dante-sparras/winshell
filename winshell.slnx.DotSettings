@@ -1,0 +1,54 @@
+<wpf:ResourceDictionary xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                        xmlns:s="clr-namespace:System;assembly=mscorlib"
+                        xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <!-- Only formatting, syntax style and imports. Member layout, property conversions,
+       readonly conversion and semantic XAML redundancy removal remain disabled. -->
+  <s:String x:Key="/Default/CodeStyle/CodeCleanup/Profiles/=Winshell/@EntryIndexedValue">&lt;Profile name="Winshell"&gt;
+  &lt;CSReformatCode&gt;True&lt;/CSReformatCode&gt;
+  &lt;CSharpFormatDocComments&gt;False&lt;/CSharpFormatDocComments&gt;
+  &lt;CSOptimizeUsings&gt;
+    &lt;OptimizeUsings&gt;True&lt;/OptimizeUsings&gt;
+    &lt;EmbraceInRegion&gt;False&lt;/EmbraceInRegion&gt;
+  &lt;/CSOptimizeUsings&gt;
+  &lt;CSShortenReferences&gt;True&lt;/CSShortenReferences&gt;
+  &lt;CSArrangeQualifiers&gt;True&lt;/CSArrangeQualifiers&gt;
+  &lt;CSFixBuiltinTypeReferences&gt;True&lt;/CSFixBuiltinTypeReferences&gt;
+  &lt;CSCodeStyleAttributes ArrangeVarStyle="True"
+                         ArrangeTypeAccessModifier="True"
+                         ArrangeTypeMemberAccessModifier="True"
+                         SortModifiers="True"
+                         ArrangeAccessors="True"
+                         ArrangeArgumentsStyle="True"
+                         RemoveRedundantParentheses="True"
+                         AddMissingParentheses="True"
+                         ArrangeBraces="True"
+                         ArrangeAttributes="True"
+                         ArrangeCodeBodyStyle="True"
+                         ArrangeTrailingCommas="True"
+                         ArrangeObjectCreation="True"
+                         ArrangeDefaultValue="True"
+                         ArrangeEmptyString="True"
+                         ArrangeNamespaces="True"
+                         ArrangeNullCheckingPattern="True" /&gt;
+  &lt;CSReorderTypeMembers&gt;False&lt;/CSReorderTypeMembers&gt;
+  &lt;RemoveCodeRedundancies&gt;False&lt;/RemoveCodeRedundancies&gt;
+  &lt;CSUseAutoProperty&gt;False&lt;/CSUseAutoProperty&gt;
+  &lt;CSMakeFieldReadonly&gt;False&lt;/CSMakeFieldReadonly&gt;
+  &lt;CSMakeAutoPropertyGetOnly&gt;False&lt;/CSMakeAutoPropertyGetOnly&gt;
+  &lt;XMLReformatCode&gt;True&lt;/XMLReformatCode&gt;
+  &lt;XAMLCollapseEmptyTags&gt;True&lt;/XAMLCollapseEmptyTags&gt;
+  &lt;Xaml.RemoveRedundantNamespaceAlias&gt;True&lt;/Xaml.RemoveRedundantNamespaceAlias&gt;
+  &lt;Xaml.RedundantFreezeAttribute&gt;False&lt;/Xaml.RedundantFreezeAttribute&gt;
+  &lt;Xaml.RemoveRedundantModifiersAttribute&gt;False&lt;/Xaml.RemoveRedundantModifiersAttribute&gt;
+  &lt;Xaml.RemoveRedundantNameAttribute&gt;False&lt;/Xaml.RemoveRedundantNameAttribute&gt;
+  &lt;Xaml.RemoveRedundantResource&gt;False&lt;/Xaml.RemoveRedundantResource&gt;
+  &lt;Xaml.RemoveRedundantCollectionProperty&gt;False&lt;/Xaml.RemoveRedundantCollectionProperty&gt;
+  &lt;Xaml.RemoveRedundantAttachedPropertySetter&gt;False&lt;/Xaml.RemoveRedundantAttachedPropertySetter&gt;
+  &lt;Xaml.RemoveRedundantStyledValue&gt;False&lt;/Xaml.RemoveRedundantStyledValue&gt;
+  &lt;Xaml.RemoveForbiddenResourceName&gt;False&lt;/Xaml.RemoveForbiddenResourceName&gt;
+  &lt;Xaml.RemoveRedundantGridDefinitionsAttribute&gt;False&lt;/Xaml.RemoveRedundantGridDefinitionsAttribute&gt;
+  &lt;Xaml.RemoveRedundantUpdateSourceTriggerAttribute&gt;False&lt;/Xaml.RemoveRedundantUpdateSourceTriggerAttribute&gt;
+  &lt;Xaml.RemoveRedundantBindingModeAttribute&gt;False&lt;/Xaml.RemoveRedundantBindingModeAttribute&gt;
+  &lt;Xaml.RemoveRedundantGridSpanAttribut&gt;False&lt;/Xaml.RemoveRedundantGridSpanAttribut&gt;
+&lt;/Profile&gt;</s:String>
+</wpf:ResourceDictionary>

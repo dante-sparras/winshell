@@ -16,16 +16,18 @@ internal static class Screens
     {
         var result = new List<ConnectedMonitor>();
         foreach (var handle in Monitors.List())
-        {
             if (Describe(handle) is { } monitor)
                 result.Add(monitor);
-        }
         // Put the primary screen first, as Windows does.
-        return result.OrderByDescending(m => m.Info.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top).ToList();
+        return result.OrderByDescending(m => m.Info.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top)
+            .ToList();
     }
 
     /// <summary>The connected monitor with a device name, or null once it is gone.</summary>
-    public static ConnectedMonitor? Find(string deviceName) => Enumerate().FirstOrDefault(m => m.Info.Id == deviceName);
+    public static ConnectedMonitor? Find(string deviceName)
+    {
+        return Enumerate().FirstOrDefault(m => m.Info.Id == deviceName);
+    }
 
     public static ConnectedMonitor? Describe(nint handle)
     {
@@ -74,5 +76,8 @@ internal static class Screens
         return parts.Length > 2 ? parts[2] : "";
     }
 
-    private static int RefreshRate(string device) => Monitors.RefreshRate(device) is { } hertz ? (int)hertz : 60;
+    private static int RefreshRate(string device)
+    {
+        return Monitors.RefreshRate(device) is { } hertz ? (int)hertz : 60;
+    }
 }

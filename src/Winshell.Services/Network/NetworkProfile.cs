@@ -5,7 +5,10 @@ public sealed class NetworkProfile : ObservableObject
 {
     private NetworkProfileInfo _info;
 
-    internal NetworkProfile(NetworkProfileInfo info) => _info = info;
+    internal NetworkProfile(NetworkProfileInfo info)
+    {
+        _info = info;
+    }
 
     /// <summary>The adapter's ID and the profile's name, joined by a colon.</summary>
     public string Id => _info.Id;
@@ -37,8 +40,10 @@ public sealed class NetworkProfile : ObservableObject
     /// <summary>The signal strength, from 0 to 1. 0 when <see cref="SignalAvailable"/> is false.</summary>
     public double SignalStrength => _info.SignalStrength ?? 0;
 
-    private static bool IsMetered(NetworkProfileInfo info) =>
-        info.Cost is NetworkCost.Fixed or NetworkCost.Variable || info.Roaming || info.OverDataLimit;
+    private static bool IsMetered(NetworkProfileInfo info)
+    {
+        return info.Cost is NetworkCost.Fixed or NetworkCost.Variable || info.Roaming || info.OverDataLimit;
+    }
 
     internal void Update(NetworkProfileInfo info)
     {

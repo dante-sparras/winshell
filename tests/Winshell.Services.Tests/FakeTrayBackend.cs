@@ -47,15 +47,30 @@ internal sealed class FakeTrayBackend : ITrayBackend
     public Dictionary<nint, PixelImage> Images { get; } = [];
 
     /// <summary>An app's <c>Shell_NotifyIcon</c> call, and the tray's answer.</summary>
-    public bool Send(NotifyIconCall call) => (_apply ?? throw new InvalidOperationException("The tray has not opened its window."))(call);
+    public bool Send(NotifyIconCall call)
+    {
+        return (_apply ?? throw new InvalidOperationException("The tray has not opened its window."))(call);
+    }
 
-    public void SignalTaskbarCreated() => TaskbarCreated?.Invoke();
+    public void SignalTaskbarCreated()
+    {
+        TaskbarCreated?.Invoke();
+    }
 
-    public void SignalExplorerInFront() => ExplorerInFront?.Invoke();
+    public void SignalExplorerInFront()
+    {
+        ExplorerInFront?.Invoke();
+    }
 
-    public void SignalSettingsChanged() => SettingsChanged?.Invoke();
+    public void SignalSettingsChanged()
+    {
+        SettingsChanged?.Invoke();
+    }
 
-    public bool TryOwn() => !Taken;
+    public bool TryOwn()
+    {
+        return !Taken;
+    }
 
     public bool Open(Func<NotifyIconCall, bool> apply)
     {
@@ -70,9 +85,15 @@ internal sealed class FakeTrayBackend : ITrayBackend
         _apply = null;
     }
 
-    public void Dispose() => Calls.Add("dispose");
+    public void Dispose()
+    {
+        Calls.Add("dispose");
+    }
 
-    public void Raise() => Calls.Add("raise");
+    public void Raise()
+    {
+        Calls.Add("raise");
+    }
 
     public bool Lower()
     {
@@ -80,21 +101,45 @@ internal sealed class FakeTrayBackend : ITrayBackend
         return IsOpen && Explorer != 0;
     }
 
-    public void Broadcast() => Calls.Add("broadcast");
+    public void Broadcast()
+    {
+        Calls.Add("broadcast");
+    }
 
-    public IReadOnlyList<TrayIconSetting> ReadSettings() => [.. Settings];
+    public IReadOnlyList<TrayIconSetting> ReadSettings()
+    {
+        return [.. Settings];
+    }
 
-    public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon) => (Images.GetValueOrDefault(icon), null);
+    public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon)
+    {
+        return (Images.GetValueOrDefault(icon), null);
+    }
 
-    public uint ProcessOf(nint window) => Windows.GetValueOrDefault(window);
+    public uint ProcessOf(nint window)
+    {
+        return Windows.GetValueOrDefault(window);
+    }
 
-    public string ProgramOf(nint window) => Programs.GetValueOrDefault(window, "");
+    public string ProgramOf(nint window)
+    {
+        return Programs.GetValueOrDefault(window, "");
+    }
 
-    public uint? IntegrityOf(uint processId) => Integrities.TryGetValue(processId, out var level) ? level : ProcessIntegrity.Medium;
+    public uint? IntegrityOf(uint processId)
+    {
+        return Integrities.TryGetValue(processId, out var level) ? level : ProcessIntegrity.Medium;
+    }
 
-    public void MoveCursor((int X, int Y) point) => Calls.Add($"move {point.X},{point.Y}");
+    public void MoveCursor((int X, int Y) point)
+    {
+        Calls.Add($"move {point.X},{point.Y}");
+    }
 
-    public void LetAppTakeForeground(nint window, uint processId) => Calls.Add($"foreground {window:x} {processId}");
+    public void LetAppTakeForeground(nint window, uint processId)
+    {
+        Calls.Add($"foreground {window:x} {processId}");
+    }
 
     public void Notify(nint window, uint message, nint wParam, nint lParam)
     {

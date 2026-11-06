@@ -15,7 +15,8 @@ internal static class StandardHandles
     /// </summary>
     public static void KeepFromChildren()
     {
-        foreach (var stream in (ReadOnlySpan<StandardStream>)[StandardStream.Input, StandardStream.Output, StandardStream.Error])
+        foreach (var stream in (ReadOnlySpan<StandardStream>)
+                 [StandardStream.Input, StandardStream.Output, StandardStream.Error])
         {
             var handle = ProcessConsole.StandardHandle(stream);
             // 0 is no such handle, and -1 a call that failed.

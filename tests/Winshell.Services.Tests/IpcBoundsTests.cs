@@ -1,8 +1,6 @@
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Time.Testing;
-using Winshell.TestSupport;
 
 namespace Winshell.Services.Tests;
 
@@ -32,8 +30,9 @@ public class IpcBoundsTests
             {
             }
         }, TestContext.Current.CancellationToken);
-        using var reader = new StreamReader(client, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 256, leaveOpen: true);
-        var line = await reader.ReadLineAsync(TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        using var reader = new StreamReader(client, Encoding.UTF8, false, 256, true);
+        var line = await reader.ReadLineAsync(TestContext.Current.CancellationToken).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.NotNull(line);
         var response = JsonSerializer.Deserialize(line, IpcJson.Default.IpcResponse);
         Assert.NotNull(response);
@@ -49,7 +48,8 @@ public class IpcBoundsTests
         await parked.WriteAsync(held, TestContext.Current.CancellationToken);
         server.Dispose();
 
-        var n = await parked.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var n = await parked.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask()
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(0, n);
         try
         {
@@ -58,6 +58,7 @@ public class IpcBoundsTests
         catch (IOException)
         {
         }
+
         loop.RunDue();
         Assert.False(control.Killed);
     }
@@ -111,7 +112,8 @@ public class IpcBoundsTests
             await Fill(probe, held, IpcServer.MaxClients);
 
             await using var extra = await Connect(probe.Pipe);
-            var n = await extra.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            var n = await extra.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(0, n);
         }
         finally
@@ -138,13 +140,14 @@ public class IpcBoundsTests
             // The request runs on the loop, which this test pumps between checks.
             var answered = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
             var asking = Task.CompletedTask;
-            await Wait.UntilAsync(() => answered.Task.IsCompleted, "The idle clients never gave their slots back.", () =>
-            {
-                time.Advance(IpcServer.RequestTimeout);
-                loop.Process();
-                if (asking.IsCompleted)
-                    asking = Ask(name, answered);
-            });
+            await Wait.UntilAsync(() => answered.Task.IsCompleted, "The idle clients never gave their slots back.",
+                () =>
+                {
+                    time.Advance(IpcServer.RequestTimeout);
+                    loop.Process();
+                    if (asking.IsCompleted)
+                        asking = Ask(name, answered);
+                });
             var answer = await answered.Task;
             var response = JsonSerializer.Deserialize(answer, IpcJson.Default.IpcResponse);
             Assert.NotNull(response);
@@ -168,7 +171,9 @@ public class IpcBoundsTests
         var value = new string('a', 128 * 1024);
         probe.Ping.Emit(value);
         var first = new byte[1];
-        Assert.Equal(1, await client.ReadAsync(first, TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        Assert.Equal(1,
+            await client.ReadAsync(first, TestContext.Current.CancellationToken).AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
         // Short, so the test reads a full queue quickly. Only the first has to hold the server in its write.
         for (var i = 0; i < IpcServer.MaxQueuedSignals + 20; i++)
             probe.Ping.Emit("queued");
@@ -185,10 +190,12 @@ public class IpcBoundsTests
         Assert.Equal(value, values[0]);
         Assert.All(values.Skip(1), queued => Assert.Equal("queued", queued));
         await Assert.ThrowsAsync<TimeoutException>(async () =>
-            await client.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
+            await client.ReadAsync(new byte[1], TestContext.Current.CancellationToken).AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
     }
 
-    private static readonly byte[] ListenRequest = Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n");
+    private static readonly byte[] ListenRequest =
+        Encoding.UTF8.GetBytes("{\"op\":\"listen\",\"target\":\"probe\",\"name\":\"ping\"}\n");
 
     /// <summary>
     /// Listens, then returns once the server is following the signal and the stream is empty. A signal before that is
@@ -230,7 +237,8 @@ public class IpcBoundsTests
         var one = new byte[1];
         while (true)
         {
-            var n = await stream.ReadAsync(one, TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            var n = await stream.ReadAsync(one, TestContext.Current.CancellationToken).AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             if (n == 0)
                 return null;
             if (one[0] != (byte)'\n')
@@ -238,6 +246,7 @@ public class IpcBoundsTests
                 line.Add(one[0]);
                 continue;
             }
+
             var response = JsonSerializer.Deserialize(line.ToArray(), IpcJson.Default.IpcResponse);
             Assert.NotNull(response);
             Assert.True(response.Ok);
@@ -245,7 +254,10 @@ public class IpcBoundsTests
         }
     }
 
-    private static string PipeName() => "winshell-test-" + Guid.NewGuid().ToString("N");
+    private static string PipeName()
+    {
+        return "winshell-test-" + Guid.NewGuid().ToString("N");
+    }
 
     private static async Task<NamedPipeClientStream> Connect(string name)
     {
@@ -260,7 +272,7 @@ public class IpcBoundsTests
         {
             await using var client = await Connect(name);
             await client.WriteAsync("{\"op\":\"show\"}\n"u8.ToArray());
-            using var reader = new StreamReader(client, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, leaveOpen: true);
+            using var reader = new StreamReader(client, Encoding.UTF8, false, leaveOpen: true);
             if (await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(2)) is { } line)
                 answered.TrySetResult(line);
         }
@@ -307,9 +319,9 @@ public class IpcBoundsTests
                 Assert.Fail($"The listener delivered {lines.Count} lines, not {count}.");
                 throw;
             }
+
             Assert.NotEqual(0, n);
             for (var i = 0; i < n; i++)
-            {
                 if (buf[i] == (byte)'\n')
                 {
                     lines.Add(Encoding.UTF8.GetString(pending.ToArray()));
@@ -318,9 +330,11 @@ public class IpcBoundsTests
                         break;
                 }
                 else if (buf[i] != (byte)'\r')
+                {
                     pending.Add(buf[i]);
-            }
+                }
         }
+
         return lines;
     }
 
@@ -347,13 +361,19 @@ public class IpcBoundsTests
 
         public ShellIpc Ipc => _ipc;
 
-        public string? Reload(string? program) => null;
+        public string? Reload(string? program)
+        {
+            return null;
+        }
 
         public void Quit()
         {
         }
 
-        public Task WaitUntil(Func<bool> ready, string why) => Wait.UntilAsync(ready, why, Loop.Process);
+        public Task WaitUntil(Func<bool> ready, string why)
+        {
+            return Wait.UntilAsync(ready, why, Loop.Process);
+        }
 
         public void Dispose()
         {
@@ -366,10 +386,16 @@ public class IpcBoundsTests
     {
         public bool Killed { get; private set; }
 
-        public ShellIpc Ipc { get; } = new ShellIpc(Log.Default);
+        public ShellIpc Ipc { get; } = new(Log.Default);
 
-        public string? Reload(string? program) => null;
+        public string? Reload(string? program)
+        {
+            return null;
+        }
 
-        public void Quit() => Killed = true;
+        public void Quit()
+        {
+            Killed = true;
+        }
     }
 }

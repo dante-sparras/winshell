@@ -1,7 +1,7 @@
-using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Registry;
+using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
@@ -20,8 +20,11 @@ internal static class RegistryChange
         {
             key.DangerousAddRef(ref keyAdded);
             signal.DangerousAddRef(ref signalAdded);
-            const REG_NOTIFY_FILTER filter = REG_NOTIFY_FILTER.REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_FILTER.REG_NOTIFY_CHANGE_LAST_SET | REG_NOTIFY_FILTER.REG_NOTIFY_THREAD_AGNOSTIC;
-            return PInvoke.RegNotifyChangeKeyValue((HKEY)key.DangerousGetHandle(), true, filter, (HANDLE)signal.DangerousGetHandle(), true) == WIN32_ERROR.NO_ERROR;
+            const REG_NOTIFY_FILTER filter = REG_NOTIFY_FILTER.REG_NOTIFY_CHANGE_NAME |
+                                             REG_NOTIFY_FILTER.REG_NOTIFY_CHANGE_LAST_SET |
+                                             REG_NOTIFY_FILTER.REG_NOTIFY_THREAD_AGNOSTIC;
+            return PInvoke.RegNotifyChangeKeyValue((HKEY)key.DangerousGetHandle(), true, filter,
+                (HANDLE)signal.DangerousGetHandle(), true) == WIN32_ERROR.NO_ERROR;
         }
         finally
         {

@@ -44,16 +44,15 @@ internal static class AppRank
             best = Prefix + Closeness(app.Name.Length - text.Length);
         var words = Words(app.Name);
         foreach (var word in words)
-        {
             if (word.StartsWith(text, StringComparison.OrdinalIgnoreCase))
                 best = Math.Max(best, Word + Closeness(word.Length - text.Length));
-        }
         if (text.Length >= 2)
         {
             var initials = Initials(words);
             if (initials.StartsWith(text, StringComparison.OrdinalIgnoreCase))
                 best = Math.Max(best, Acronym + Closeness(initials.Length - text.Length));
         }
+
         var at = app.Name.IndexOf(text, StringComparison.OrdinalIgnoreCase);
         if (at >= 0)
             best = Math.Max(best, Contains - Math.Min(at, 200) * 10);
@@ -68,7 +67,10 @@ internal static class AppRank
         return best == 0 ? 0 : best + UsageBoost(usage, nowUnixMilliseconds);
     }
 
-    private static int Closeness(int extra) => Math.Max(0, 500 - extra);
+    private static int Closeness(int extra)
+    {
+        return Math.Max(0, 500 - extra);
+    }
 
     private static int UsageBoost(AppUsage usage, long nowUnixMilliseconds)
     {
@@ -87,7 +89,8 @@ internal static class AppRank
 
     private static bool ContainsTarget(AppRecord app, string query)
     {
-        if (app.AppId.Contains(query, StringComparison.OrdinalIgnoreCase) || app.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
+        if (app.AppId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            app.Id.Contains(query, StringComparison.OrdinalIgnoreCase))
             return true;
         if (app.Target.Length == 0)
             return false;
@@ -110,6 +113,7 @@ internal static class AppRank
                 start = -1;
             }
         }
+
         return words;
     }
 
@@ -117,10 +121,8 @@ internal static class AppRank
     {
         var letters = new List<char>(words.Count);
         foreach (var word in words)
-        {
             if (word.Length > 0 && char.IsLetter(word[0]))
                 letters.Add(word[0]);
-        }
         return new string(letters.ToArray());
     }
 
@@ -142,6 +144,7 @@ internal static class AppRank
                 atWord = true;
                 continue;
             }
+
             var matches = index < query.Length && char.ToUpperInvariant(ch) == char.ToUpperInvariant(query[index]);
             if (matches && (started || atWord))
             {
@@ -155,8 +158,10 @@ internal static class AppRank
             {
                 gap++;
             }
+
             atWord = false;
         }
+
         return index == query.Length && skipped <= query.Length;
     }
 }
@@ -189,6 +194,7 @@ internal static class AppIndex
                     byId[entry.Id] = entry;
             }
         }
+
         return byId.Values.ToList();
     }
 
@@ -199,7 +205,8 @@ internal static class AppIndex
         var display = (name ?? "").Trim();
         if (id.Length == 0 || display.Length == 0)
             return null;
-        if (display.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) || display.StartsWith("@{", StringComparison.Ordinal))
+        if (display.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) ||
+            display.StartsWith("@{", StringComparison.Ordinal))
             return null;
         var launch = AppsFolderPrefix + id;
         var text = (description ?? "").Trim();
@@ -222,6 +229,7 @@ internal static class AppIndex
                 continue;
             byId[shortcut.Id] = shortcut;
         }
+
         foreach (var package in packages)
             byId.TryAdd(package.Id, package);
         return byId.Values.OrderBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
@@ -232,13 +240,15 @@ internal static class AppIndex
         if (string.IsNullOrEmpty(name))
             return null;
         return apps.FirstOrDefault(app => app.Id == name)
-            ?? apps.FirstOrDefault(app => app.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? apps.FirstOrDefault(app => app.AppId.Length > 0 && app.AppId == name)
-            ?? apps.FirstOrDefault(app => app.AppId.Length > 0 && app.AppId.Equals(name, StringComparison.OrdinalIgnoreCase))
-            ?? apps.FirstOrDefault(app => app.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+               ?? apps.FirstOrDefault(app => app.Id.Equals(name, StringComparison.OrdinalIgnoreCase))
+               ?? apps.FirstOrDefault(app => app.AppId.Length > 0 && app.AppId == name)
+               ?? apps.FirstOrDefault(app =>
+                   app.AppId.Length > 0 && app.AppId.Equals(name, StringComparison.OrdinalIgnoreCase))
+               ?? apps.FirstOrDefault(app => app.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
-    public static List<AppRecord> Search(IReadOnlyList<AppRecord> apps, string query, Func<AppRecord, AppUsage> usage, long nowUnixMilliseconds)
+    public static List<AppRecord> Search(IReadOnlyList<AppRecord> apps, string query, Func<AppRecord, AppUsage> usage,
+        long nowUnixMilliseconds)
     {
         var ranked = new List<(AppRecord App, int Score, AppUsage Usage)>();
         foreach (var app in apps)
@@ -250,6 +260,7 @@ internal static class AppIndex
             if (score > 0)
                 ranked.Add((app, score, use));
         }
+
         ranked.Sort(static (a, b) =>
         {
             var score = b.Score.CompareTo(a.Score);
@@ -266,21 +277,27 @@ internal static class AppIndex
         return ranked.Select(row => row.App).ToList();
     }
 
-    public static List<AppRecord> Recent(IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage> usage) =>
-        apps.Where(app => !app.Hidden && usage(app).LastUsedUnixMilliseconds > 0)
+    public static List<AppRecord> Recent(IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage> usage)
+    {
+        return apps.Where(app => !app.Hidden && usage(app).LastUsedUnixMilliseconds > 0)
             .OrderByDescending(app => usage(app).LastUsedUnixMilliseconds)
             .ThenBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+    }
 
-    public static List<AppRecord> Frequent(IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage> usage) =>
-        apps.Where(app => !app.Hidden && usage(app).RunCount > 0)
+    public static List<AppRecord> Frequent(IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage> usage)
+    {
+        return apps.Where(app => !app.Hidden && usage(app).RunCount > 0)
             .OrderByDescending(app => usage(app).RunCount)
             .ThenByDescending(app => usage(app).LastUsedUnixMilliseconds)
             .ThenBy(app => app.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+    }
 
-    public static bool Same(AppRecord a, AppRecord b) =>
-        a with { Folders = b.Folders } == b && a.Folders.SequenceEqual(b.Folders);
+    public static bool Same(AppRecord a, AppRecord b)
+    {
+        return a with { Folders = b.Folders } == b && a.Folders.SequenceEqual(b.Folders);
+    }
 
     private static IEnumerable<string> Files(string folder)
     {
@@ -290,7 +307,7 @@ internal static class AppIndex
             {
                 RecurseSubdirectories = true,
                 IgnoreInaccessible = true,
-                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System,
+                AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
             }).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -324,14 +341,21 @@ internal static class AppIndex
         var hasTarget = link.Target.Length > 0 && File.Exists(link.Target);
         var extension = hasTarget ? Path.GetExtension(link.Target).ToLowerInvariant() : "";
         var hidden = name.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
-            || extension is ".txt" or ".chm" or ".pdf" or ".htm" or ".html" or ".url" or ".rtf" or ".doc" or ".docx";
+                     || extension is ".txt" or ".chm" or ".pdf" or ".htm" or ".html" or ".url" or ".rtf" or ".doc"
+                         or ".docx";
         var appId = link.AppUserModelId.Length > 0
             ? link.AppUserModelId
-            : hasTarget && extension == ".exe" ? Path.GetFileNameWithoutExtension(link.Target).ToLowerInvariant() : "";
+            : hasTarget && extension == ".exe"
+                ? Path.GetFileNameWithoutExtension(link.Target).ToLowerInvariant()
+                : "";
         var startIn = link.WorkingDirectory.Length > 0
             ? link.WorkingDirectory
-            : hasTarget ? Path.GetDirectoryName(link.Target) ?? "" : "";
-        var command = hasTarget ? CommandLine(link.Target, link.Arguments) : CommandLine("explorer.exe", "\"" + path + "\"");
+            : hasTarget
+                ? Path.GetDirectoryName(link.Target) ?? ""
+                : "";
+        var command = hasTarget
+            ? CommandLine(link.Target, link.Arguments)
+            : CommandLine("explorer.exe", "\"" + path + "\"");
         return new AppRecord(
             id,
             name,

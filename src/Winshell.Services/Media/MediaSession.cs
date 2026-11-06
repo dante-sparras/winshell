@@ -75,11 +75,13 @@ public sealed class MediaSession : ObservableObject
                 Warn("Cannot set the position of {0} because position is not supported.");
                 return;
             }
+
             if (!_session.CanSeek)
             {
                 Warn("Cannot set the position of {0} because CanSeek is false.");
                 return;
             }
+
             _session.SetPosition(value);
         }
     }
@@ -106,7 +108,7 @@ public sealed class MediaSession : ObservableObject
                 ["title"] = _session.Title,
                 ["artist"] = _session.Artist,
                 ["album"] = _session.Album,
-                ["albumArtist"] = _session.AlbumArtist,
+                ["albumArtist"] = _session.AlbumArtist
             };
             if (_session.ArtUrl.Length > 0)
                 metadata["artUrl"] = _session.ArtUrl;
@@ -198,6 +200,7 @@ public sealed class MediaSession : ObservableObject
                 Warn("Cannot set the loop state of {0} because loop state is not supported.");
                 return;
             }
+
             if (value != LoopState)
                 _session.SetLoopState((int)value);
         }
@@ -216,9 +219,11 @@ public sealed class MediaSession : ObservableObject
                 return;
             if (value < MinRate || value > MaxRate)
             {
-                Warn($"Cannot set the rate of {{0}} to {value.ToString(CultureInfo.InvariantCulture)}, outside of {MinRate.ToString(CultureInfo.InvariantCulture)} to {MaxRate.ToString(CultureInfo.InvariantCulture)}.");
+                Warn(
+                    $"Cannot set the rate of {{0}} to {value.ToString(CultureInfo.InvariantCulture)}, outside of {MinRate.ToString(CultureInfo.InvariantCulture)} to {MaxRate.ToString(CultureInfo.InvariantCulture)}.");
                 return;
             }
+
             _session.SetRate(value);
         }
     }
@@ -243,6 +248,7 @@ public sealed class MediaSession : ObservableObject
                 Warn("Cannot set shuffle for {0} because shuffle is not supported.");
                 return;
             }
+
             _session.SetShuffle(value);
         }
     }
@@ -257,13 +263,22 @@ public sealed class MediaSession : ObservableObject
     public event Action? PostTrackChanged;
 
     /// <summary>Asks the app to play. Logs a warning when <see cref="CanPlay"/> is false.</summary>
-    public void Play() => PlaybackState = MediaPlaybackState.Playing;
+    public void Play()
+    {
+        PlaybackState = MediaPlaybackState.Playing;
+    }
 
     /// <summary>Asks the app to pause. Logs a warning when <see cref="CanPause"/> is false.</summary>
-    public void Pause() => PlaybackState = MediaPlaybackState.Paused;
+    public void Pause()
+    {
+        PlaybackState = MediaPlaybackState.Paused;
+    }
 
     /// <summary>Asks the app to stop. Logs a warning when <see cref="CanStop"/> is false.</summary>
-    public void Stop() => PlaybackState = MediaPlaybackState.Stopped;
+    public void Stop()
+    {
+        PlaybackState = MediaPlaybackState.Stopped;
+    }
 
     /// <summary>Calls <see cref="Pause"/> while playing, and <see cref="Play"/> otherwise.</summary>
     public void TogglePlaying()
@@ -282,6 +297,7 @@ public sealed class MediaSession : ObservableObject
             Warn("Cannot call Next() on {0} because CanGoNext is false.");
             return;
         }
+
         _session.Next();
     }
 
@@ -293,6 +309,7 @@ public sealed class MediaSession : ObservableObject
             Warn("Cannot call Previous() on {0} because CanGoPrevious is false.");
             return;
         }
+
         _session.Previous();
     }
 
@@ -304,6 +321,7 @@ public sealed class MediaSession : ObservableObject
             Warn("Cannot call Seek() on {0} because CanSeek is false.");
             return;
         }
+
         _session.SetPosition(_session.PositionNow() + offset);
     }
 
@@ -341,11 +359,16 @@ public sealed class MediaSession : ObservableObject
     }
 
     // Windows reports each command on its own. One flag says whether any of them works.
-    private bool AcceptsControl() =>
-        _session.CanPlay || _session.CanPause || _session.CanStop
-        || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;
+    private bool AcceptsControl()
+    {
+        return _session.CanPlay || _session.CanPause || _session.CanStop
+               || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;
+    }
 
-    private bool FindCanSwitchTo() => _session.AppId.Contains('!') || MainWindow() != 0;
+    private bool FindCanSwitchTo()
+    {
+        return _session.AppId.Contains('!') || MainWindow() != 0;
+    }
 
     /// <summary>The main window of the program behind the session, when its id is a program name.</summary>
     private nint MainWindow()
@@ -354,17 +377,19 @@ public sealed class MediaSession : ObservableObject
         if (!appId.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             return 0;
         foreach (var process in Process.GetProcessesByName(appId[..^4]))
-        {
             using (process)
             {
                 if (process.MainWindowHandle != 0)
                     return process.MainWindowHandle;
             }
-        }
+
         return 0;
     }
 
-    private void Warn(string message) => _log.Warn("media", string.Format(CultureInfo.InvariantCulture, message, AppName));
+    private void Warn(string message)
+    {
+        _log.Warn("media", string.Format(CultureInfo.InvariantCulture, message, AppName));
+    }
 
     private void OnChanged(IReadOnlyList<string> names, bool trackChanged)
     {

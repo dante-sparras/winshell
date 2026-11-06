@@ -27,14 +27,15 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
     private (string, string)[] Folders =>
     [
         ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")),
-        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local"))
     ];
 
     [GeneratedRegex(@"^Log: (?<path>.+), last \d+ lines\r?$", RegexOptions.Multiline)]
     private static partial Regex LogLine();
 
     // The probe's program is <project>\bin\shell\<name>.exe.
-    private static string Project => Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(ProbeShell.Program)))!;
+    private static string Project =>
+        Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(ProbeShell.Program)))!;
 
     [Fact]
     public void List_log_ipc_and_kill_reach_the_program()
@@ -47,7 +48,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
 
         var row = Assert.Single(Rows());
         Assert.Equal("probe", row.GetProperty("shellId").GetString());
-        Assert.Equal(ProbeShell.Program, row.GetProperty("configPath").GetString(), ignoreCase: true);
+        Assert.Equal(ProbeShell.Program, row.GetProperty("configPath").GetString(), true);
 
         var log = Cli("log", "--pid", pid);
         log.AssertExitCode(0);
@@ -128,6 +129,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
             crashed.Kill();
             crashed.WaitForExit();
         }
+
         NextShell(first);
 
         // The taskbar came back before the second shell started, and that shell found no file telling it to hide it.
@@ -170,15 +172,17 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
             info.Environment[name] = value;
         var run = Process.Start(info)!;
         _started.Add(run);
+
         // Read the output so the supervisor never blocks on a full pipe, and keep it for a wrong exit code to show.
         void Print(object sender, DataReceivedEventArgs e)
         {
             if (e.Data is not null)
-            {
                 lock (_printed)
+                {
                     _printed.AppendLine(e.Data);
-            }
+                }
         }
+
         run.ErrorDataReceived += Print;
         run.OutputDataReceived += Print;
         run.BeginErrorReadLine();
@@ -194,7 +198,10 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         return pid;
     }
 
-    private List<int> Listed() => Rows().Select(row => row.GetProperty("pid").GetInt32()).ToList();
+    private List<int> Listed()
+    {
+        return Rows().Select(row => row.GetProperty("pid").GetInt32()).ToList();
+    }
 
     private List<JsonElement> Rows()
     {
@@ -202,7 +209,10 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         return listed.RootElement.EnumerateArray().Select(row => row.Clone()).ToList();
     }
 
-    private ChildProcess Cli(params string[] args) => WinshellCli.Run(args, Folders);
+    private ChildProcess Cli(params string[] args)
+    {
+        return WinshellCli.Run(args, Folders);
+    }
 
     public void Dispose()
     {
@@ -210,11 +220,13 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         {
             if (!run.HasExited)
             {
-                run.Kill(entireProcessTree: true);
+                run.Kill(true);
                 run.WaitForExit();
             }
+
             run.Dispose();
         }
+
         // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
         if (!_taskbarHidden)
             ExplorerTaskbarRecovery.Restore();

@@ -53,10 +53,12 @@ internal sealed partial class ConfigurationProject
         {
             full = Path.GetFullPath(program);
         }
-        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException or IOException)
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException
+                                      or IOException)
         {
             return null;
         }
+
         var shell = Path.GetDirectoryName(full);
         var bin = shell is null ? null : Path.GetDirectoryName(shell);
         var folder = bin is null ? null : Path.GetDirectoryName(bin);
@@ -64,12 +66,15 @@ internal sealed partial class ConfigurationProject
         if (folder is null
             || output is null
             || !Path.GetFileName(bin!).Equals("bin", StringComparison.OrdinalIgnoreCase)
-            || !(output.Equals("shell", StringComparison.OrdinalIgnoreCase) || output.Equals("shell.next", StringComparison.OrdinalIgnoreCase)))
+            || !(output.Equals("shell", StringComparison.OrdinalIgnoreCase) ||
+                 output.Equals("shell.next", StringComparison.OrdinalIgnoreCase)))
             return null;
         var project = In(folder, out _);
         if (project is null)
             return null;
-        return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase) ? project : null;
+        return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase)
+            ? project
+            : null;
     }
 
     /// <summary>
@@ -82,11 +87,17 @@ internal sealed partial class ConfigurationProject
         {
             var program = ProgramIn(OutputFolder);
             var beside = ProgramIn(OutputFolder + ".next");
-            return File.Exists(beside) && (!File.Exists(program) || File.GetLastWriteTimeUtc(beside) > File.GetLastWriteTimeUtc(program)) ? beside : program;
+            return File.Exists(beside) && (!File.Exists(program) ||
+                                           File.GetLastWriteTimeUtc(beside) > File.GetLastWriteTimeUtc(program))
+                ? beside
+                : program;
         }
     }
 
-    private string ProgramIn(string folder) => Path.Combine(folder, AssemblyName() + ".exe");
+    private string ProgramIn(string folder)
+    {
+        return Path.Combine(folder, AssemblyName() + ".exe");
+    }
 
     /// <summary>
     /// The project to run: <paramref name="path"/>, a project or a folder holding one; or a named folder in
@@ -106,11 +117,13 @@ internal sealed partial class ConfigurationProject
                 error = $"No .csproj at {full}.";
                 return null;
             }
+
             var found = In(full, out error);
             if (found is null && error is null)
                 error = $"No .csproj at {full}.";
             return found;
         }
+
         if (name is not null)
         {
             var folder = Path.Combine(root, name);
@@ -119,6 +132,7 @@ internal sealed partial class ConfigurationProject
                 error = $"No config named \"{name}\" in {root}.";
             return found;
         }
+
         // Several projects in the root is a refusal, not a miss: neither default nor a lone folder may stand in for it.
         if (In(root, out error) is { } atRoot)
             return atRoot;
@@ -131,9 +145,11 @@ internal sealed partial class ConfigurationProject
         var folders = Directory.EnumerateDirectories(root).Where(folder => Projects(folder).Length > 0).ToList();
         if (folders.Count > 1)
         {
-            error = $"Several configs in {root}; pick one with -c: {string.Join(", ", folders.Select(Path.GetFileName))}.";
+            error =
+                $"Several configs in {root}; pick one with -c: {string.Join(", ", folders.Select(Path.GetFileName))}.";
             return null;
         }
+
         return folders.Count == 1 ? In(folders[0], out error) : null;
     }
 
@@ -164,11 +180,13 @@ internal sealed partial class ConfigurationProject
     /// The first file MSBuild would run that came from the internet, or null. Beside the project that means its props
     /// and targets as well, which run as much as the project does.
     /// </summary>
-    public string? Downloaded() =>
-        Directory.EnumerateFiles(Folder)
+    public string? Downloaded()
+    {
+        return Directory.EnumerateFiles(Folder)
             .Where(file => Path.GetExtension(file).ToUpperInvariant() is ".CSPROJ" or ".PROPS" or ".TARGETS")
             .Order(StringComparer.Ordinal)
             .FirstOrDefault(ZoneIdentifier.IsDownloaded);
+    }
 
     /// <summary>Runs a program and collects what it prints, up to a limit. The streams get a short wait after it exits, because a build server that outlives it keeps them open. They have threads of their own, so a busy pool cannot lose the last lines.</summary>
     public static CommandResult Run(string file, IReadOnlyList<string> arguments, string folder)
@@ -179,25 +197,27 @@ internal sealed partial class ConfigurationProject
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            RedirectStandardError = true
         };
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         var lines = new List<string>();
+
         Thread Read(StreamReader stream)
         {
             var reader = new Thread(() =>
-            {
-                while (stream.ReadLine() is { } line)
                 {
-                    lock (lines)
-                        lines.Add(line);
-                }
-            })
-            { IsBackground = true };
+                    while (stream.ReadLine() is { } line)
+                        lock (lines)
+                        {
+                            lines.Add(line);
+                        }
+                })
+                { IsBackground = true };
             reader.Start();
             return reader;
         }
+
         try
         {
             // Not disposed: a reader may still be waiting on a stream that a build server holds.
@@ -205,13 +225,17 @@ internal sealed partial class ConfigurationProject
             Thread[] readers = [Read(process.StandardOutput), Read(process.StandardError)];
             if (!process.WaitForExit(BuildLimit))
             {
-                process.Kill(entireProcessTree: true);
-                return new CommandResult(-1, $"{Path.GetFileName(file)} was still running after {BuildLimit.TotalMinutes} minutes.");
+                process.Kill(true);
+                return new CommandResult(-1,
+                    $"{Path.GetFileName(file)} was still running after {BuildLimit.TotalMinutes} minutes.");
             }
+
             foreach (var reader in readers)
                 reader.Join(StreamLimit);
             lock (lines)
+            {
                 return new CommandResult(process.ExitCode, string.Join('\n', lines));
+            }
         }
         catch (Win32Exception)
         {
@@ -233,7 +257,9 @@ internal sealed partial class ConfigurationProject
             if (parked is null && Directory.Exists(destination))
                 return $"{Name} is running, and the build could not write a new program beside it.";
         }
-        var result = run("dotnet", ["build", ProjectFile, "-c", "Release", "-o", destination, "--nologo", "-v", "q"], Folder);
+
+        var result = run("dotnet", ["build", ProjectFile, "-c", "Release", "-o", destination, "--nologo", "-v", "q"],
+            Folder);
         if (result.ExitCode == 0)
         {
             QuietDelete(parked);
@@ -242,6 +268,7 @@ internal sealed partial class ConfigurationProject
                 File.SetLastWriteTimeUtc(built, TimeProvider.System.GetUtcNow().UtcDateTime);
             return null;
         }
+
         if (parked is not null)
             Restore(destination, parked);
         return $"{Name} did not build.\n{Errors(result.Output)}";
@@ -287,7 +314,7 @@ internal sealed partial class ConfigurationProject
             return;
         try
         {
-            Directory.Delete(path, recursive: true);
+            Directory.Delete(path, true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -298,7 +325,8 @@ internal sealed partial class ConfigurationProject
     private string Errors(string output)
     {
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var errors = lines.Where(line => line.Contains(": error ", StringComparison.Ordinal)).Select(line => ErrorLine(line, Folder)).Distinct().ToList();
+        var errors = lines.Where(line => line.Contains(": error ", StringComparison.Ordinal))
+            .Select(line => ErrorLine(line, Folder)).Distinct().ToList();
         return string.Join('\n', errors.Count > 0 ? errors.Take(MostErrors) : lines.TakeLast(MostErrors));
     }
 
@@ -321,8 +349,10 @@ internal sealed partial class ConfigurationProject
     {
         try
         {
-            using var reader = XmlReader.Create(ProjectFile, new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
-            var written = XDocument.Load(reader).Descendants().FirstOrDefault(element => element.Name.LocalName == "AssemblyName")?.Value.Trim();
+            using var reader = XmlReader.Create(ProjectFile,
+                new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null });
+            var written = XDocument.Load(reader).Descendants()
+                .FirstOrDefault(element => element.Name.LocalName == "AssemblyName")?.Value.Trim();
             return string.IsNullOrEmpty(written) || written.Contains('$', StringComparison.Ordinal) ? Name : written;
         }
         catch (Exception e) when (e is XmlException or IOException or UnauthorizedAccessException)
@@ -337,14 +367,18 @@ internal sealed partial class ConfigurationProject
         var projects = Projects(folder);
         if (projects.Length > 1)
         {
-            error = $"Several projects in {folder}; name one with -p: {string.Join(", ", projects.Select(Path.GetFileName))}.";
+            error =
+                $"Several projects in {folder}; name one with -p: {string.Join(", ", projects.Select(Path.GetFileName))}.";
             return null;
         }
+
         return projects.Length == 1 ? new ConfigurationProject(projects[0]) : null;
     }
 
-    private static string[] Projects(string folder) =>
-        Directory.Exists(folder) ? Directory.GetFiles(folder, "*.csproj") : [];
+    private static string[] Projects(string folder)
+    {
+        return Directory.Exists(folder) ? Directory.GetFiles(folder, "*.csproj") : [];
+    }
 
     /// <summary>The project's files. <c>bin</c>, <c>obj</c> and dot folders are what a build and an editor write.</summary>
     private static IEnumerable<string> Sources(string folder)

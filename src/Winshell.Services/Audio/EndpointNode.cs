@@ -38,7 +38,7 @@ internal sealed class EndpointNode : AudioGraphNode
             ["flow"] = render ? "playback" : "recording",
             ["adapter"] = PropertyStore.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
             ["icon"] = IconName(formFactor, render),
-            ["formFactor"] = FormFactorName(formFactor),
+            ["formFactor"] = FormFactorName(formFactor)
         };
         var format = PropertyStore.ReadBlob(store, CoreAudio.EngineDeviceFormat);
 
@@ -68,6 +68,7 @@ internal sealed class EndpointNode : AudioGraphNode
             {
                 return null;
             }
+
             return new WindowsAudioMeter(_meter);
         }
     }
@@ -78,14 +79,10 @@ internal sealed class EndpointNode : AudioGraphNode
             return;
         var context = AudioGraph.Context;
         if (volumes.All(v => v == volumes[0]) || volumes.Count != Channels.Length)
-        {
             _volume.SetMasterVolumeLevelScalar(Math.Clamp(volumes[0], 0, 1), ref context);
-        }
         else
-        {
             for (var i = 0; i < volumes.Count; i++)
                 _volume.SetChannelVolumeLevelScalar((uint)i, Math.Clamp(volumes[i], 0, 1), ref context);
-        }
         ReadVolume();
     }
 
@@ -108,7 +105,6 @@ internal sealed class EndpointNode : AudioGraphNode
         if (IsPlayback || Released)
             return null;
         if (_keepAliveCount++ == 0)
-        {
             try
             {
                 _keepAlive = CoreAudio.StartSharedStream(_device);
@@ -116,7 +112,7 @@ internal sealed class EndpointNode : AudioGraphNode
             catch (COMException)
             {
             }
-        }
+
         return new DisposeAction(() =>
         {
             if (--_keepAliveCount == 0)
@@ -137,6 +133,7 @@ internal sealed class EndpointNode : AudioGraphNode
         {
             // The device is gone already.
         }
+
         CoreAudio.Release(client);
     }
 
@@ -210,6 +207,7 @@ internal sealed class EndpointNode : AudioGraphNode
             // The session closed while it was being read, or has no volume control.
             return;
         }
+
         Sessions.Add(session);
         _graph.AddSession(session);
         session.Watch();
@@ -230,6 +228,7 @@ internal sealed class EndpointNode : AudioGraphNode
         {
             // The device is gone already.
         }
+
         StopKeepAlive();
         CoreAudio.Release(_meter);
         CoreAudio.Release(_sessionManager);
@@ -237,28 +236,34 @@ internal sealed class EndpointNode : AudioGraphNode
         CoreAudio.Release(_device);
     }
 
-    private static string IconName(uint? formFactor, bool render) => formFactor switch
+    private static string IconName(uint? formFactor, bool render)
     {
-        1 => "audio-speakers",
-        3 => "audio-headphones",
-        5 or 6 => "audio-headset",
-        4 => "audio-input-microphone",
-        _ => render ? "audio-card" : "audio-input-microphone",
-    };
+        return formFactor switch
+        {
+            1 => "audio-speakers",
+            3 => "audio-headphones",
+            5 or 6 => "audio-headset",
+            4 => "audio-input-microphone",
+            _ => render ? "audio-card" : "audio-input-microphone"
+        };
+    }
 
-    private static string FormFactorName(uint? formFactor) => formFactor switch
+    private static string FormFactorName(uint? formFactor)
     {
-        0 => "network",
-        1 => "speaker",
-        2 => "line",
-        3 => "headphone",
-        4 => "microphone",
-        5 => "headset",
-        6 => "handset",
-        8 => "spdif",
-        9 => "hdmi",
-        _ => "unknown",
-    };
+        return formFactor switch
+        {
+            0 => "network",
+            1 => "speaker",
+            2 => "line",
+            3 => "headphone",
+            4 => "microphone",
+            5 => "headset",
+            6 => "handset",
+            8 => "spdif",
+            9 => "hdmi",
+            _ => "unknown"
+        };
+    }
 
     private sealed class VolumeNotifications(EndpointNode node) : IAudioEndpointVolumeCallback
     {
@@ -285,6 +290,7 @@ internal sealed class EndpointNode : AudioGraphNode
                 node._graph.Log.Warn("audio", e.Message);
                 return 0;
             }
+
             node._graph.Post(() => node.AddSession((IAudioSessionControl2)ComApartment.Restore(stream)));
             return 0;
         }

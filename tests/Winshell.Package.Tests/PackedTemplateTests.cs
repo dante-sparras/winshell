@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Winshell;
 using System.Globalization;
 using System.IO.Compression;
 using System.Reflection;
@@ -38,7 +37,8 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
     {
         TestContext.Current.CancellationToken.ThrowIfCancellationRequested();
         // A version of its own here would drift from Directory.Packages.props and fail restore with NU1605.
-        Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.SmallProject), StringComparison.Ordinal);
+        Assert.DoesNotContain("Microsoft.WindowsAppSDK", File.ReadAllText(templates.SmallProject),
+            StringComparison.Ordinal);
     }
 
     [Fact(Timeout = PatienceMs)]
@@ -59,7 +59,7 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         (string Name, string Value)[] folders =
         [
             ("WINSHELL_CONFIG_DIR", Path.Combine(dir, "config")),
-            ("WINSHELL_LOCAL_DIR", Path.Combine(dir, "local")),
+            ("WINSHELL_LOCAL_DIR", Path.Combine(dir, "local"))
         ];
         Directory.CreateDirectory(folders[0].Value);
         Directory.CreateDirectory(folders[1].Value);
@@ -69,13 +69,15 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         {
             var pid = process.Id.ToString(CultureInfo.InvariantCulture);
             Wait.Until(() =>
-            {
-                if (process.HasExited)
-                    Assert.Fail($"The shell exited with {process.ExitCode}: {output}");
-                return Listed(folders).Any(row => row.GetProperty("pid").GetInt32() == process.Id);
-            }, $"instance {pid} in winshell list");
+                {
+                    if (process.HasExited)
+                        Assert.Fail($"The shell exited with {process.ExitCode}: {output}");
+                    return Listed(folders).Any(row => row.GetProperty("pid").GetInt32() == process.Id);
+                }, $"instance {pid} in winshell list");
 
-            Assert.Equal(shellId, Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId").GetString());
+            Assert.Equal(shellId,
+                Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId")
+                    .GetString());
             var log = CliRun(["log", "--pid", pid], folders);
             log.AssertExitCode(0);
             Assert.Contains($"Winshell {templates.Version} on Windows", log.Output, StringComparison.Ordinal);
@@ -89,9 +91,10 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         {
             if (!process.HasExited)
             {
-                process.Kill(entireProcessTree: true);
+                process.Kill(true);
                 process.WaitForExit();
             }
+
             process.Dispose();
             try
             {
@@ -112,17 +115,21 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         foreach (var (name, value) in environment)
             info.Environment[name] = value;
         var process = Process.Start(info)!;
+
         void Add(object sender, DataReceivedEventArgs e)
         {
             if (e.Data is not null)
                 lock (output)
+                {
                     output.AppendLine(e.Data);
+                }
         }
+
         process.OutputDataReceived += Add;
         process.ErrorDataReceived += Add;
         process.BeginOutputReadLine();
@@ -144,12 +151,13 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
         return Command(Cli, args, environment);
     }
 
-    private static ChildProcess Command(string file, IReadOnlyList<string> args, (string Name, string Value)[]? environment)
+    private static ChildProcess Command(string file, IReadOnlyList<string> args,
+        (string Name, string Value)[]? environment)
     {
         var info = new ProcessStartInfo(file)
         {
             StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
         };
         foreach (var arg in args)
             info.ArgumentList.Add(arg);
@@ -163,7 +171,8 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
 /// <summary>One pack and one copy of the template, shared by the tests that use it.</summary>
 public sealed class PackedTemplates : IDisposable
 {
-    private readonly string _work = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _work =
+        Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
 
     public PackedTemplates()
     {
@@ -173,7 +182,9 @@ public sealed class PackedTemplates : IDisposable
         // earlier run packed, and the test would pass on code it never packed.
         Version = "0.0.0-test." + Guid.NewGuid().ToString("N")[..12];
         var packages = Path.Combine(_work, "packages");
-        var packed = ConfigurationProject.Run("pwsh", ["-NoProfile", "-File", Path.Combine(root, "scripts", "pack.ps1"), "-Out", packages, "-Version", Version], root);
+        var packed = ConfigurationProject.Run("pwsh",
+            ["-NoProfile", "-File", Path.Combine(root, "scripts", "pack.ps1"), "-Out", packages, "-Version", Version],
+            root);
         Assert.True(packed.ExitCode == 0, packed.Output);
 
         var library = Path.Combine(packages, $"Winshell.{Version}.nupkg");
@@ -211,7 +222,6 @@ public sealed class PackedTemplates : IDisposable
             ? packages
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
         foreach (var folder in new[] { _work, Path.Combine(cached, "winshell", Version) })
-        {
             try
             {
                 Directory.Delete(folder, true);
@@ -219,7 +229,6 @@ public sealed class PackedTemplates : IDisposable
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
             }
-        }
     }
 
     private string Instantiate(string hive, string packages, string template)
@@ -229,15 +238,15 @@ public sealed class PackedTemplates : IDisposable
         created.AssertExitCode(0);
         var project = Assert.Single(Directory.GetFiles(folder, "*.csproj"));
         File.WriteAllText(Path.Combine(folder, "nuget.config"), $"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <configuration>
-              <packageSources>
-                <clear />
-                <add key="local" value="{packages}" />
-                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-              </packageSources>
-            </configuration>
-            """);
+                                                                 <?xml version="1.0" encoding="utf-8"?>
+                                                                 <configuration>
+                                                                   <packageSources>
+                                                                     <clear />
+                                                                     <add key="local" value="{packages}" />
+                                                                     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+                                                                   </packageSources>
+                                                                 </configuration>
+                                                                 """);
         return project;
     }
 
@@ -257,7 +266,11 @@ public sealed class PackedTemplates : IDisposable
         using var zip = ZipFile.OpenRead(nupkg);
         var names = zip.Entries.Select(entry => entry.FullName.Replace('\\', '/')).ToList();
         var lib = "lib/net10.0-windows10.0.22621.0/";
-        Assert.Equal([lib + "Winshell.Core.dll", lib + "Winshell.Native.dll", lib + "Winshell.Services.dll", lib + "Winshell.Shell.dll"], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
+        Assert.Equal(
+        [
+            lib + "Winshell.Core.dll", lib + "Winshell.Native.dll", lib + "Winshell.Services.dll",
+            lib + "Winshell.Shell.dll"
+        ], names.Where(name => name.StartsWith("lib/", StringComparison.Ordinal)).Order());
 
         var services = zip.GetEntry(lib + "Winshell.Services.dll")!;
         var extracted = Path.Combine(Path.GetTempPath(), "winshell-package-tests", Guid.NewGuid().ToString("N"));
@@ -268,17 +281,22 @@ public sealed class PackedTemplates : IDisposable
         Assert.False(IsPublic(dll, "Winshell", "ConfigurationProject"));
         Directory.Delete(extracted, true);
 
-        var nuspec = zip.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+        var nuspec =
+            zip.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
         using var stream = nuspec.Open();
         var dependencies = XDocument.Load(stream).Descendants().Where(element => element.Name.LocalName == "dependency")
             .ToDictionary(element => element.Attribute("id")!.Value, element => element.Attribute("version")!.Value);
         // A new project gets WindowsAppSDK through this package, so these are the versions it restores.
         var pinned = XDocument.Load(Path.Combine(Repo(), "Directory.Packages.props")).Descendants("PackageVersion")
-            .ToDictionary(element => element.Attribute("Include")!.Value, element => element.Attribute("Version")!.Value);
+            .ToDictionary(element => element.Attribute("Include")!.Value,
+                element => element.Attribute("Version")!.Value);
         Assert.Equal(pinned["Microsoft.WindowsAppSDK.WinUI"], dependencies["Microsoft.WindowsAppSDK.WinUI"]);
         Assert.Equal(pinned["Microsoft.WindowsAppSDK.Foundation"], dependencies["Microsoft.WindowsAppSDK.Foundation"]);
         Assert.Equal(
-            ["Microsoft.Win32.SystemEvents", "Microsoft.WindowsAppSDK.Foundation", "Microsoft.WindowsAppSDK.WinUI", "System.Management", "Tomlyn", "Vortice.Direct3D11", "Vortice.DXGI"],
+            [
+                "Microsoft.Win32.SystemEvents", "Microsoft.WindowsAppSDK.Foundation", "Microsoft.WindowsAppSDK.WinUI",
+                "System.Management", "Tomlyn", "Vortice.Direct3D11", "Vortice.DXGI"
+            ],
             dependencies.Keys.Order(StringComparer.OrdinalIgnoreCase));
     }
 
@@ -303,6 +321,7 @@ public sealed class PackedTemplates : IDisposable
                 continue;
             return blob.ReadSerializedString() ?? "";
         }
+
         throw new InvalidOperationException($"No informational version in {path}");
     }
 
@@ -317,6 +336,7 @@ public sealed class PackedTemplates : IDisposable
             if (reader.GetString(type.Namespace) == ns && reader.GetString(type.Name) == name)
                 return (type.Attributes & TypeAttributes.VisibilityMask) == TypeAttributes.Public;
         }
+
         throw new InvalidOperationException($"No type {ns}.{name} in {path}");
     }
 
@@ -329,6 +349,7 @@ public sealed class PackedTemplates : IDisposable
                 return dir.FullName;
             dir = dir.Parent;
         }
+
         throw new InvalidOperationException($"No scripts/pack.ps1 above {AppContext.BaseDirectory}");
     }
 }

@@ -1,5 +1,5 @@
+using Windows.ApplicationModel;
 using Microsoft.Win32;
-using global::Windows.ApplicationModel;
 
 namespace Winshell.Session;
 
@@ -44,7 +44,8 @@ internal static class SignInEntry
         {
             // Sync because StartupService reads the task as it is made, and a UI binds its properties.
 #pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
-            return Task.Run(static async () => await StartupTask.GetAsync(Name).AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+            return Task.Run(static async () => await StartupTask.GetAsync(Name).AsTask().ConfigureAwait(false))
+                .GetAwaiter().GetResult();
 #pragma warning restore VSTHRD002
         }
         catch (Exception e) when (e is not OutOfMemoryException)

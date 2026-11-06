@@ -1,10 +1,10 @@
-
 namespace Winshell.Core.Tests;
 
 /// <summary>Crash reports. Every report goes to a temp folder this class creates.</summary>
 public sealed class CrashTests : IDisposable
 {
-    private readonly string _folder = Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _folder =
+        Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
 
     public void Dispose()
     {
@@ -30,7 +30,8 @@ public sealed class CrashTests : IDisposable
         Directory.CreateDirectory(_folder);
         var log = Path.Combine(_folder, "log.txt");
         File.WriteAllLines(log, Enumerable.Range(1, 100).Select(i => $"12:00:00.000  INFO window: line {i}"));
-        var crashes = new CrashReports(Path.Combine(_folder, "crashes")) { ShellId = "my-shell", ConfigPath = @"C:\config\MyShell.exe", LogPath = log };
+        var crashes = new CrashReports(Path.Combine(_folder, "crashes"))
+            { ShellId = "my-shell", ConfigPath = @"C:\config\MyShell.exe", LogPath = log };
         CrashReport? raised = null;
         crashes.Written += r => raised = r;
 
@@ -62,7 +63,11 @@ public sealed class CrashTests : IDisposable
     public void The_same_failure_from_the_same_place_is_reported_once()
     {
         var crashes = new CrashReports(_folder);
-        Exception Same() => Thrown("again");
+
+        Exception Same()
+        {
+            return Thrown("again");
+        }
 
         Assert.NotNull(crashes.WriteOnce("event loop", Same()));
         Assert.Null(crashes.WriteOnce("event loop", Same()));

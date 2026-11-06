@@ -13,7 +13,10 @@ public sealed class SystemTrayTests
     private readonly ManualEventLoop _loop = new();
     private readonly FakeTrayBackend _backend = new() { Cursor = (5, 6) };
 
-    public SystemTrayTests() => _backend.Windows[App] = 42;
+    public SystemTrayTests()
+    {
+        _backend.Windows[App] = 42;
+    }
 
     private int Broadcasts => _backend.Calls.Count(call => call == "broadcast");
 
@@ -24,12 +27,23 @@ public sealed class SystemTrayTests
         return tray;
     }
 
-    private static NotifyIconCall Call(uint message, uint flags = 0) => new() { Message = message, Flags = flags, Window = App, Id = 1 };
+    private static NotifyIconCall Call(uint message, uint flags = 0)
+    {
+        return new NotifyIconCall { Message = message, Flags = flags, Window = App, Id = 1 };
+    }
 
-    private static NotifyIconCall Add() => Call(TrayProtocol.Add, TrayProtocol.NIF_TIP) with { Tip = "Tip" };
+    private static NotifyIconCall Add()
+    {
+        return Call(TrayProtocol.Add, TrayProtocol.NIF_TIP) with { Tip = "Tip" };
+    }
 
-    private static NotifyIconCall Hide(bool hidden) =>
-        Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with { State = hidden ? TrayProtocol.NIS_HIDDEN : 0, StateMask = TrayProtocol.NIS_HIDDEN };
+    private static NotifyIconCall Hide(bool hidden)
+    {
+        return Call(TrayProtocol.Modify, TrayProtocol.NIF_STATE) with
+        {
+            State = hidden ? TrayProtocol.NIS_HIDDEN : 0, StateMask = TrayProtocol.NIS_HIDDEN
+        };
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -48,7 +62,10 @@ public sealed class SystemTrayTests
 
         var image = new PixelImage(1, 1, new byte[4]);
         _backend.Images[0x42] = image;
-        var change = Call(TrayProtocol.Modify, TrayProtocol.NIF_TIP | TrayProtocol.NIF_ICON) with { Tip = "Changed", Icon = 0x42 };
+        var change = Call(TrayProtocol.Modify, TrayProtocol.NIF_TIP | TrayProtocol.NIF_ICON) with
+        {
+            Tip = "Changed", Icon = 0x42
+        };
         _backend.Send(change);
         _backend.Send(change);
 
@@ -100,7 +117,10 @@ public sealed class SystemTrayTests
         var balloons = new List<(string, string, BalloonIcon)>();
         tray.Items[0].Balloon += (title, message, kind) => balloons.Add((title, message, kind));
 
-        _backend.Send(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with { InfoTitle = "Title", Info = "Message", InfoFlags = flags });
+        _backend.Send(Call(TrayProtocol.Modify, TrayProtocol.NIF_INFO) with
+        {
+            InfoTitle = "Title", Info = "Message", InfoFlags = flags
+        });
 
         Assert.Equal(("Title", "Message", expected), Assert.Single(balloons));
     }
@@ -122,7 +142,7 @@ public sealed class SystemTrayTests
             item.Display,
             () => item.Display(10, 20),
             item.Menu.Display,
-            () => item.Menu.Display(30, 40),
+            () => item.Menu.Display(30, 40)
         ];
 
         Assert.Equal(
@@ -133,7 +153,7 @@ public sealed class SystemTrayTests
             "204 205 7b at 5,6",
             "204 205 7b at 10,20",
             "204 205 7b at 5,6",
-            "204 205 7b at 30,40",
+            "204 205 7b at 30,40"
         ], clicks.Select(Clicked));
     }
 
@@ -143,7 +163,8 @@ public sealed class SystemTrayTests
         _backend.Notified.Clear();
         click();
         var point = _backend.Notified[0].WParam;
-        return $"{string.Join(" ", _backend.Notified.Select(sent => $"{sent.LParam & 0xffff:x}"))} at {point & 0xffff},{point >> 16}";
+        return
+            $"{string.Join(" ", _backend.Notified.Select(sent => $"{sent.LParam & 0xffff:x}"))} at {point & 0xffff},{point >> 16}";
     }
 
     [Fact]
@@ -182,7 +203,7 @@ public sealed class SystemTrayTests
         _backend.Send(Add());
         Assert.True(tray.Items[0].Overflow);
 
-        _backend.Settings.Add(new TrayIconSetting(Guid.Empty, program, 1, Promoted: true));
+        _backend.Settings.Add(new TrayIconSetting(Guid.Empty, program, 1, true));
         _backend.SignalSettingsChanged();
 
         Assert.False(tray.Items[0].Overflow);
@@ -270,7 +291,9 @@ public sealed class SystemTrayTests
         _backend.Calls.Clear();
 
         using (SystemTray.ExplorerFirst())
+        {
             Assert.Equal(["lower"], _backend.Calls);
+        }
 
         Assert.Equal(["lower", "raise"], _backend.Calls);
     }
@@ -297,7 +320,8 @@ public sealed class SystemTrayTests
     [Fact]
     public void An_image_is_drawn_from_a_local_module_with_straight_alpha()
     {
-        var image = IconImage.FromResource(new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
+        var image = IconImage.FromResource(
+            new IconResource(Path.Combine(Environment.SystemDirectory, "shell32.dll"), 3, ""), 32);
 
         Assert.NotNull(image);
         Assert.Equal(32, image.Width);

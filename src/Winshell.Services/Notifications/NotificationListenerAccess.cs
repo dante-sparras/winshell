@@ -21,10 +21,13 @@ internal static class NotificationListenerAccess
         }
     }
 
-    public static NotificationAccessStatus Map(UserNotificationListenerAccessStatus access) => access switch
+    public static NotificationAccessStatus Map(UserNotificationListenerAccessStatus access)
     {
-        UserNotificationListenerAccessStatus.Allowed => NotificationAccessStatus.Allowed,
-        UserNotificationListenerAccessStatus.Denied => NotificationAccessStatus.Denied,
-        _ => NotificationAccessStatus.Unspecified,
-    };
+        return access switch
+        {
+            UserNotificationListenerAccessStatus.Allowed => NotificationAccessStatus.Allowed,
+            UserNotificationListenerAccessStatus.Denied => NotificationAccessStatus.Denied,
+            _ => NotificationAccessStatus.Unspecified
+        };
+    }
 }

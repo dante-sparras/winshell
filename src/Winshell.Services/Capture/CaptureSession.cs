@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Windows.Foundation;
+using SharpGen.Runtime;
 using Winshell.Windows;
 
 namespace Winshell.Capture;
@@ -96,7 +97,8 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         Set(ref _error, "", nameof(Error));
         try
         {
-            var chosen = _target ?? throw new InvalidOperationException("Choose a window or a screen before starting capture.");
+            var chosen = _target ??
+                         throw new InvalidOperationException("Choose a window or a screen before starting capture.");
             // The backend captures a handle. The app window stays here, so closing it can stop the session.
             var target = new CaptureTarget(chosen.Window, chosen.MonitorId);
             var generation = _generation;
@@ -118,29 +120,32 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         }
     }
 
-    private void Schedule(int generation) => _timer = _loop.Schedule(TimeSpan.FromMilliseconds(_frameInterval), () =>
+    private void Schedule(int generation)
     {
-        _timer = null;
-        if (generation != _generation || _backend is null)
-            return;
-        try
+        _timer = _loop.Schedule(TimeSpan.FromMilliseconds(_frameInterval), () =>
         {
-            if (_backend.ReadLatest() is { } frame)
+            _timer = null;
+            if (generation != _generation || _backend is null)
+                return;
+            try
             {
-                SetFrame(frame);
-                FrameReady?.Invoke();
+                if (_backend.ReadLatest() is { } frame)
+                {
+                    SetFrame(frame);
+                    FrameReady?.Invoke();
+                }
             }
-        }
-        catch (Exception e) when (IsCaptureError(e))
-        {
-            Fail(e);
-        }
-        finally
-        {
-            if (generation == _generation && _backend is not null)
-                Schedule(generation);
-        }
-    });
+            catch (Exception e) when (IsCaptureError(e))
+            {
+                Fail(e);
+            }
+            finally
+            {
+                if (generation == _generation && _backend is not null)
+                    Schedule(generation);
+            }
+        });
+    }
 
     /// <summary>Stops capturing and drops the current frame.</summary>
     public void Stop()
@@ -214,7 +219,9 @@ public sealed class CaptureSession : ObservableObject, IDisposable
             return null;
         if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
             return Uri.TryCreate(path, UriKind.Absolute, out var uri) ? uri.LocalPath : null;
-        return path.Contains("://", StringComparison.Ordinal) || path.StartsWith("data:", StringComparison.Ordinal) ? null : path;
+        return path.Contains("://", StringComparison.Ordinal) || path.StartsWith("data:", StringComparison.Ordinal)
+            ? null
+            : path;
     }
 
     private void SetFrame(PixelImage? frame)
@@ -231,9 +238,12 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         Set(ref _error, error.Message, nameof(Error));
     }
 
-    private static bool IsCaptureError(Exception e) => e is COMException or UnauthorizedAccessException or
-        InvalidOperationException or ArgumentException or IOException or NotSupportedException or Win32Exception or
-        SharpGen.Runtime.SharpGenException;
+    private static bool IsCaptureError(Exception e)
+    {
+        return e is COMException or UnauthorizedAccessException or
+            InvalidOperationException or ArgumentException or IOException or NotSupportedException or Win32Exception or
+            SharpGenException;
+    }
 
     private void Watch(AppWindow? window)
     {

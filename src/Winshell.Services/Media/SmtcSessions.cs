@@ -18,7 +18,10 @@ internal sealed class SmtcSessions : IMediaSessions
     private readonly AppNames _names;
     private readonly SessionManagerPoll _poll;
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
-    private TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>? _sessionsChanged;
+
+    private TypedEventHandler<GlobalSystemMediaTransportControlsSessionManager, SessionsChangedEventArgs>?
+        _sessionsChanged;
+
     private int _nextId = 1;
 
     internal SmtcSessions(IEventLoop loop, Log log,
@@ -84,11 +87,14 @@ internal sealed class SmtcSessions : IMediaSessions
                     held[existing].Rename(name);
                 continue;
             }
-            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, _names.Get(ids[i]) ?? AppDisplayName.Fallback(ids[i]));
+
+            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++,
+                _names.Get(ids[i]) ?? AppDisplayName.Fallback(ids[i]));
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
         }
+
         for (var i = 0; i < held.Count; i++)
         {
             if (kept[i])
@@ -119,6 +125,7 @@ internal sealed class SmtcSessions : IMediaSessions
                 break;
             }
         }
+
         return pair;
     }
 }

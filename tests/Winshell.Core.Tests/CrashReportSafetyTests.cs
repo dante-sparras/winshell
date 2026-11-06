@@ -10,22 +10,27 @@ namespace Winshell.Core.Tests;
 /// </summary>
 public sealed class CrashReportSafetyTests : IDisposable
 {
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _root =
+        Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
 
-    public CrashReportSafetyTests() => Directory.CreateDirectory(_root);
+    public CrashReportSafetyTests()
+    {
+        Directory.CreateDirectory(_root);
+    }
 
     public void Dispose()
     {
         // A junction is removed as a link, so what it points at is deleted once, through its own path.
         foreach (var dir in Directory.EnumerateDirectories(_root))
-        {
             if (new DirectoryInfo(dir).LinkTarget is not null)
                 Directory.Delete(dir);
-        }
         Directory.Delete(_root, true);
     }
 
-    private string Folder(string name = "crashes") => Path.Combine(_root, name);
+    private string Folder(string name = "crashes")
+    {
+        return Path.Combine(_root, name);
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static Exception Catch(Action action)
@@ -38,30 +43,48 @@ public sealed class CrashReportSafetyTests : IDisposable
         {
             return e;
         }
+
         throw new InvalidOperationException("nothing was thrown");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void Helper() => throw new InvalidOperationException("from the helper");
+    private static void Helper()
+    {
+        throw new InvalidOperationException("from the helper");
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void FirstCaller() => Helper();
+    private static void FirstCaller()
+    {
+        Helper();
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void SecondCaller() => Helper();
+    private static void SecondCaller()
+    {
+        Helper();
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void FirstTask() => throw new InvalidOperationException("first task");
+    private static void FirstTask()
+    {
+        throw new InvalidOperationException("first task");
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void SecondTask() => throw new InvalidOperationException("second task");
+    private static void SecondTask()
+    {
+        throw new InvalidOperationException("second task");
+    }
 
     // Privacy
 
     [Fact]
     public void Secrets_in_the_exception_and_its_inner_exceptions_are_taken_out()
     {
-        var inner = Catch(() => throw new InvalidOperationException("""request failed: api_key=SENTINEL-INNER-KEY-1 and "client_secret": "SENTINEL-JSON-2" """));
+        var inner = Catch(() =>
+            throw new InvalidOperationException(
+                """request failed: api_key=SENTINEL-INNER-KEY-1 and "client_secret": "SENTINEL-JSON-2" """));
         var outer = new HttpRequestException(
             "GET https://alice:SENTINEL-URLPW-3@example.com/path?token=SENTINEL-QUERY-4&x=1 failed\n" +
             "Authorization: Bearer SENTINEL-BEARER-5\n" +
@@ -97,7 +120,7 @@ public sealed class CrashReportSafetyTests : IDisposable
             "    continued: token=SENTINEL-NEXT-LINE-3",
             "12:00:04.000 ERROR network: Proxy-Authorization: Basic SENTINEL-LOG-4",
             "12:00:05.000 DEBUG scene: password=SENTINEL-LOG-5",
-            "12:00:06.000  INFO window: closed",
+            "12:00:06.000  INFO window: closed"
         ]);
         var crashes = new CrashReports(Folder()) { LogPath = log };
 
@@ -135,7 +158,7 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Ordinary_text_is_left_alone()
     {
         const string text = "at Winshell.Runtime.Core.SignalSlot.Emit(Object[] args) in C:\\src\\Signals.cs:line 78\n" +
-            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-xaml.txt";
+                            "Passed: 5, Author: Dante, shell id 5f4dcc3b5aa765d61d8327deb882cf99, crash-20261029-140312-1234567Z-4321-panelwindow-in-taskbar-xaml.txt";
 
         Assert.Equal(text, CrashRedaction.Redact(text));
     }
@@ -192,7 +215,7 @@ public sealed class CrashReportSafetyTests : IDisposable
             "0000-user-notes.txt",
             "crash-notes.txt",
             // Named like a report, but not one.
-            "crash-20000101-000000-0000000Z-1-old.txt",
+            "crash-20000101-000000-0000000Z-1-old.txt"
         };
         foreach (var name in others)
             File.WriteAllText(Path.Combine(folder, name), "not a crash report");
@@ -212,7 +235,8 @@ public sealed class CrashReportSafetyTests : IDisposable
         Directory.CreateDirectory(target);
         // Reports a user moved there, or another program's files: none is the crash folder's to delete.
         var crashes = new CrashReports(target);
-        var moved = Enumerable.Range(0, 3).Select(i => crashes.Write($"moved {i}", new InvalidOperationException("x"))!.Path).ToList();
+        var moved = Enumerable.Range(0, 3)
+            .Select(i => crashes.Write($"moved {i}", new InvalidOperationException("x"))!.Path).ToList();
         File.WriteAllText(Path.Combine(target, "0000-user-notes.txt"), "keep me");
         var link = Folder();
         Junction(link, target);
@@ -247,7 +271,8 @@ public sealed class CrashReportSafetyTests : IDisposable
     public void Retention_follows_the_utc_instant_across_a_clock_change()
     {
         // Daylight saving ends: 02:30 at +02:00 is 00:30 UTC; twenty minutes on the wall later it is 02:10 at +01:00, 01:10 UTC.
-        var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2)).ToUniversalTime());
+        var time = new FakeTimeProvider(new DateTimeOffset(2031, 10, 26, 2, 30, 0, TimeSpan.FromHours(2))
+            .ToUniversalTime());
         time.SetLocalTimeZone(ZoneAt(2));
         var crashes = new CrashReports(Folder()) { Keep = 1, Time = time };
 
@@ -260,25 +285,31 @@ public sealed class CrashReportSafetyTests : IDisposable
         Assert.Contains("Time: 2031-10-26 02:10:00.000 +01:00", File.ReadAllText(later), StringComparison.Ordinal);
     }
 
-    private static TimeZoneInfo ZoneAt(int hours) => TimeZoneInfo.CreateCustomTimeZone($"UTC+{hours}", TimeSpan.FromHours(hours), null, null);
+    private static TimeZoneInfo ZoneAt(int hours)
+    {
+        return TimeZoneInfo.CreateCustomTimeZone($"UTC+{hours}", TimeSpan.FromHours(hours), null, null);
+    }
 
     [Fact]
     public void Two_writers_sharing_the_folder_never_overwrite_each_other()
     {
         // As two instances would: separate writers, each with its own lock, on one folder at one instant.
         var instant = new DateTimeOffset(2032, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var writers = Enumerable.Range(0, 4).Select(_ => new CrashReports(Folder()) { Keep = 1000, Time = new FakeTimeProvider(instant) }).ToList();
+        var writers = Enumerable.Range(0, 4).Select(_ => new CrashReports(Folder())
+            { Keep = 1000, Time = new FakeTimeProvider(instant) }).ToList();
         using var start = new Barrier(writers.Count);
 
         var paths = writers.AsParallel().WithDegreeOfParallelism(writers.Count).SelectMany((writer, w) =>
         {
             start.SignalAndWait();
-            return Enumerable.Range(0, 25).Select(i => writer.Write($"writer {w}", new InvalidOperationException($"{w}/{i}"))!.Path).ToList();
+            return Enumerable.Range(0, 25)
+                .Select(i => writer.Write($"writer {w}", new InvalidOperationException($"{w}/{i}"))!.Path).ToList();
         }).ToList();
 
         Assert.Equal(100, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.Equal(100, Directory.GetFiles(Folder()).Length);
-        var messages = Directory.GetFiles(Folder()).Select(File.ReadAllText).Select(t => t[t.IndexOf("InvalidOperationException: ", StringComparison.Ordinal)..].Split('\n')[0].Trim()).ToList();
+        var messages = Directory.GetFiles(Folder()).Select(File.ReadAllText).Select(t =>
+            t[t.IndexOf("InvalidOperationException: ", StringComparison.Ordinal)..].Split('\n')[0].Trim()).ToList();
         Assert.Equal(100, messages.Distinct().Count());
 
         // The next write brings the folder back to what it keeps.
@@ -302,32 +333,31 @@ public sealed class CrashReportSafetyTests : IDisposable
         var failures = new ConcurrentQueue<string>();
         var writing = true;
         var reader = new Thread(() =>
-        {
-            while (Volatile.Read(ref writing))
             {
-                foreach (var file in Directory.GetFiles(folder))
-                {
-                    try
-                    {
-                        using var report = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
-                        lengths.GetOrAdd(file, _ => new()).Enqueue(report.ReadToEnd().Length);
-                    }
-                    catch (Exception e)
-                    {
-                        failures.Enqueue($"{Path.GetFileName(file)}: {e.GetType().Name}: {e.Message}");
-                    }
-                }
-            }
-        })
-        { IsBackground = true };
+                while (Volatile.Read(ref writing))
+                    foreach (var file in Directory.GetFiles(folder))
+                        try
+                        {
+                            using var report = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read,
+                                FileShare.Read | FileShare.Delete));
+                            lengths.GetOrAdd(file, _ => new ConcurrentQueue<int>()).Enqueue(report.ReadToEnd().Length);
+                        }
+                        catch (Exception e)
+                        {
+                            failures.Enqueue($"{Path.GetFileName(file)}: {e.GetType().Name}: {e.Message}");
+                        }
+            })
+            { IsBackground = true };
         reader.Start();
 
-        var paths = Enumerable.Range(0, 5).Select(i => crashes.Write($"report {i}", new InvalidOperationException(message))!.Path).ToList();
+        var paths = Enumerable.Range(0, 5)
+            .Select(i => crashes.Write($"report {i}", new InvalidOperationException(message))!.Path).ToList();
         Volatile.Write(ref writing, false);
         reader.Join();
 
         Assert.True(failures.IsEmpty, string.Join(Environment.NewLine, failures.Distinct()));
-        Assert.Equal(paths.Order(StringComparer.OrdinalIgnoreCase), Directory.GetFiles(folder).Order(StringComparer.OrdinalIgnoreCase));
+        Assert.Equal(paths.Order(StringComparer.OrdinalIgnoreCase),
+            Directory.GetFiles(folder).Order(StringComparer.OrdinalIgnoreCase));
         foreach (var (file, seen) in lengths)
             Assert.All(seen, length => Assert.Equal(File.ReadAllText(file).Length, length));
     }

@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Time.Testing;
-
 namespace Winshell.Tests;
 
 /// <summary>
@@ -10,14 +8,17 @@ public sealed class InstanceLogTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public InstanceLogTests() => Directory.CreateDirectory(_dir);
+    public InstanceLogTests()
+    {
+        Directory.CreateDirectory(_dir);
+    }
 
     [Fact]
     public void A_warning_lands_immediately_and_a_full_file_rolls()
     {
         var path = Path.Combine(_dir, "log.txt");
         var previous = Path.Combine(_dir, "log.1.txt");
-        using (var log = new InstanceLog(path, cap: 100, flushAfter: Timeout.InfiniteTimeSpan))
+        using (var log = new InstanceLog(path, 100, Timeout.InfiniteTimeSpan))
         {
             log.Write(LogLevel.Info, "info-still-buffered");
             Assert.DoesNotContain("info-still-buffered", Read(path), StringComparison.Ordinal);
@@ -57,7 +58,7 @@ public sealed class InstanceLogTests : IDisposable
         var path = Path.Combine(_dir, "log.txt");
         var time = new FakeTimeProvider();
         var delay = TimeSpan.FromMilliseconds(500);
-        using var log = new InstanceLog(path, cap: 10, flushAfter: delay, time: time);
+        using var log = new InstanceLog(path, 10, delay, time);
         log.Write(LogLevel.Warn, "fills-the-file-past-the-cap");
 
         // Move the file the log holds aside and keep a new one at its path open, so the roll cannot move or reopen it.

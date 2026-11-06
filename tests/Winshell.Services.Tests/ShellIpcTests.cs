@@ -7,14 +7,21 @@ public sealed class ShellIpcTests
 {
     private readonly List<string> _warnings = [];
 
-    private ShellIpc Ipc() => new(new Log { Sink = (_, _, message) => _warnings.Add(message) });
+    private ShellIpc Ipc()
+    {
+        return new ShellIpc(new Log { Sink = (_, _, message) => _warnings.Add(message) });
+    }
 
     [Fact]
     public void A_handler_gets_its_arguments_as_the_types_it_declares()
     {
         var ipc = Ipc();
         (string, int, bool, double, float, Color)? seen = null;
-        ipc.Handle("t", "all", (string text, int number, bool flag, double wide, float narrow, Color color) => { seen = (text, number, flag, wide, narrow, color); });
+        ipc.Handle("t", "all",
+            (string text, int number, bool flag, double wide, float narrow, Color color) =>
+            {
+                seen = (text, number, flag, wide, narrow, color);
+            });
 
         ipc.Call("t", "all", ["a b", "-7", "1", "2.5", "0.5", "#ff102030"]);
 
@@ -78,8 +85,10 @@ public sealed class ShellIpcTests
         var ran = false;
         ipc.Handle("t", "one", (string text) => ran = true);
 
-        Assert.Equal("Function t.one takes 1 argument, 0 given.", Assert.Throws<IpcException>(() => ipc.Call("t", "one", [])).Message);
-        Assert.Equal("Function t.one takes 1 argument, 2 given.", Assert.Throws<IpcException>(() => ipc.Call("t", "one", ["a", "b"])).Message);
+        Assert.Equal("Function t.one takes 1 argument, 0 given.",
+            Assert.Throws<IpcException>(() => ipc.Call("t", "one", [])).Message);
+        Assert.Equal("Function t.one takes 1 argument, 2 given.",
+            Assert.Throws<IpcException>(() => ipc.Call("t", "one", ["a", "b"])).Message);
         Assert.False(ran);
     }
 
@@ -100,7 +109,8 @@ public sealed class ShellIpcTests
         var ipc = Ipc();
         ipc.Handle("t", "paint", (Color color) => { });
 
-        Assert.Equal("Argument color is not a color: 12.", Assert.Throws<IpcException>(() => ipc.Call("t", "paint", ["12"])).Message);
+        Assert.Equal("Argument color is not a color: 12.",
+            Assert.Throws<IpcException>(() => ipc.Call("t", "paint", ["12"])).Message);
     }
 
     [Fact]
@@ -112,7 +122,7 @@ public sealed class ShellIpcTests
             () => new object(),
             (string[] many) => { },
             () => Task.CompletedTask,
-            (long big) => { },
+            (long big) => { }
         ];
 
         foreach (var handler in unpassable)
@@ -136,10 +146,14 @@ public sealed class ShellIpcTests
         var ipc = Ipc();
         ipc.Handle("t", "known", () => { });
 
-        Assert.Equal("Target not found: other.", Assert.Throws<IpcException>(() => ipc.Call("other", "known", [])).Message);
-        Assert.Equal("Function not found: t.other.", Assert.Throws<IpcException>(() => ipc.Call("t", "other", [])).Message);
-        Assert.Equal("Property not found: t.other.", Assert.Throws<IpcException>(() => ipc.GetProperty("t", "other")).Message);
-        Assert.Equal("Signal not found: t.other.", Assert.Throws<IpcException>(() => ipc.Listen("t", "other", _ => { })).Message);
+        Assert.Equal("Target not found: other.",
+            Assert.Throws<IpcException>(() => ipc.Call("other", "known", [])).Message);
+        Assert.Equal("Function not found: t.other.",
+            Assert.Throws<IpcException>(() => ipc.Call("t", "other", [])).Message);
+        Assert.Equal("Property not found: t.other.",
+            Assert.Throws<IpcException>(() => ipc.GetProperty("t", "other")).Message);
+        Assert.Equal("Signal not found: t.other.",
+            Assert.Throws<IpcException>(() => ipc.Listen("t", "other", _ => { })).Message);
     }
 
     [Fact]

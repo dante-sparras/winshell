@@ -5,7 +5,8 @@ public sealed class ShellImageTests
     [Fact]
     public void A_program_has_an_icon_at_least_the_size_asked_for()
     {
-        var image = ShellImage.Load(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), 32);
+        var image = ShellImage.Load(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"), 32);
 
         Assert.NotNull(image);
         Assert.True(image.Width >= 32 && image.Height >= 32, $"{image.Width}x{image.Height}");

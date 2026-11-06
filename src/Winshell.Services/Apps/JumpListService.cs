@@ -9,7 +9,10 @@ public sealed class JumpListService
     private readonly IJumpListReader _reader;
     private readonly Dictionary<string, AppJumpList> _byId = new(StringComparer.OrdinalIgnoreCase);
 
-    internal JumpListService(IJumpListReader? reader = null) => _reader = reader ?? WindowsJumpListReader.Instance;
+    internal JumpListService(IJumpListReader? reader = null)
+    {
+        _reader = reader ?? WindowsJumpListReader.Instance;
+    }
 
     /// <summary>
     /// The recent and frequent documents for an AppUserModelID. A blank id is not read. The same object is returned
@@ -28,6 +31,7 @@ public sealed class JumpListService
             var read = _reader.Read(appId);
             list.Apply(read.Available, read.Names);
         }
+
         return list;
     }
 }

@@ -49,6 +49,7 @@ internal static class WindowDesktop
                 Log.Default.Warn("desktops", $"MoveWindowToDesktop failed (0x{hr:X8}).");
                 return false;
             }
+
             return true;
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
@@ -69,6 +70,7 @@ internal static class WindowDesktop
             _loggedUnavailable = true;
             Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable (0x{hr:X8}).");
         }
+
         return _manager;
     }
 }

@@ -12,14 +12,26 @@ internal sealed class ExplorerTaskbarSession : IDisposable
     private IExplorerTaskbar? _taskbar;
     private bool _hidden;
 
-    internal ExplorerTaskbarSession(Func<IExplorerTaskbar> create) => _create = create;
+    internal ExplorerTaskbarSession(Func<IExplorerTaskbar> create)
+    {
+        _create = create;
+    }
 
     /// <summary>The session the running shell uses. Tests construct a session with a fake instead.</summary>
-    public static ExplorerTaskbarSession ForThisProcess() => new(() => new Win32ExplorerTaskbar());
+    public static ExplorerTaskbarSession ForThisProcess()
+    {
+        return new ExplorerTaskbarSession(() => new Win32ExplorerTaskbar());
+    }
 
     public bool Hidden
     {
-        get { lock (_gate) return _hidden; }
+        get
+        {
+            lock (_gate)
+            {
+                return _hidden;
+            }
+        }
     }
 
     public void Hide()
@@ -44,6 +56,7 @@ internal sealed class ExplorerTaskbarSession : IDisposable
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
                 }
+
                 throw;
             }
         }
@@ -71,5 +84,8 @@ internal sealed class ExplorerTaskbarSession : IDisposable
         }
     }
 
-    public void Dispose() => Restore();
+    public void Dispose()
+    {
+        Restore();
+    }
 }

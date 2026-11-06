@@ -11,23 +11,32 @@ public sealed record CaptureTarget(nint Window, string MonitorId)
     internal AppWindow? Source { get; init; }
 
     /// <summary>A top-level window, by its handle.</summary>
-    public static CaptureTarget ForWindow(nint window) => new(window, "");
+    public static CaptureTarget ForWindow(nint window)
+    {
+        return new CaptureTarget(window, "");
+    }
 
     /// <summary>An <see cref="AppWindow"/> from <see cref="WindowListService"/>. The caller does not need its handle.</summary>
     public static CaptureTarget ForWindow(AppWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);
-        return new(window.Hwnd, "") { Source = window };
+        return new CaptureTarget(window.Hwnd, "") { Source = window };
     }
 
     /// <summary>
     /// Lets an <see cref="AppWindow"/> be assigned where a target is expected, as <see cref="ForWindow(AppWindow)"/>
     /// does.
     /// </summary>
-    public static implicit operator CaptureTarget(AppWindow window) => ForWindow(window);
+    public static implicit operator CaptureTarget(AppWindow window)
+    {
+        return ForWindow(window);
+    }
 
     /// <summary>A whole screen, by its <see cref="ScreenInfo.Id"/>.</summary>
-    public static CaptureTarget ForScreen(ScreenInfo screen) => new(0, screen.Id);
+    public static CaptureTarget ForScreen(ScreenInfo screen)
+    {
+        return new CaptureTarget(0, screen.Id);
+    }
 }
 
 /// <summary>Owned by one session, used only on its loop's thread. Windows closure is posted to that thread.</summary>

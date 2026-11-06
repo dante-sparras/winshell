@@ -1,4 +1,3 @@
-
 namespace Winshell;
 
 /// <summary>
@@ -16,5 +15,8 @@ internal sealed class MonitorWarning(Func<Log> log, string category)
         log().Warn(category, e.Message);
     }
 
-    public void Succeeded() => _last = null;
+    public void Succeeded()
+    {
+        _last = null;
+    }
 }

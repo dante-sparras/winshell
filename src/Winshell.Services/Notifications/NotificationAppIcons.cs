@@ -21,7 +21,10 @@ internal readonly record struct IconHold(string Key, long Token)
 internal static class NotificationAppIcons
 {
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "winshell", "notification-icons");
-    private static readonly string Folder = Path.Combine(Root, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+
+    private static readonly string Folder =
+        Path.Combine(Root, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+
     private static readonly Dictionary<string, Slot> Slots = [];
     private static readonly HashSet<string> Logged = [];
     private static readonly Lock Gate = new();
@@ -38,7 +41,8 @@ internal static class NotificationAppIcons
     /// Reads <paramref name="appKey"/>'s logo and returns its url, or "" when Windows gives none or the read
     /// fails. A failure is logged at most once per app. Call off the UI thread.
     /// </summary>
-    public static IconRead Read(string appKey, string label, IAppLogoSource source, Log log, CancellationToken cancellation)
+    public static IconRead Read(string appKey, string label, IAppLogoSource source, Log log,
+        CancellationToken cancellation)
     {
         Slot slot;
         var reader = false;
@@ -67,8 +71,11 @@ internal static class NotificationAppIcons
             {
                 return new IconRead("", hold);
             }
+
             lock (Gate)
+            {
                 return new IconRead(slot.Url ?? "", hold);
+            }
         }
 
         // Old icons are older than a day, so this does not have to finish before the first picture is shown.
@@ -100,6 +107,7 @@ internal static class NotificationAppIcons
                 slot.Ready.Set();
             }
         }
+
         return new IconRead(url, hold);
     }
 
@@ -121,13 +129,17 @@ internal static class NotificationAppIcons
             retiring = slot;
             delete = slot.Url is { Length: > 0 } url ? url : null;
         }
+
         retiring?.Dispose();
         if (delete is not null)
             DeleteFile(delete);
     }
 
     /// <summary>Deletes icons left behind by earlier runs, and their folders once empty.</summary>
-    public static void CleanOld() => CleanOld(Root, Folder);
+    public static void CleanOld()
+    {
+        CleanOld(Root, Folder);
+    }
 
     internal static void CleanOld(string root, string keepFolder)
     {
@@ -135,24 +147,24 @@ internal static class NotificationAppIcons
         {
             if (!Directory.Exists(root) || (File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0)
                 return;
-            var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            var options = new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
             foreach (var file in Directory.EnumerateFiles(root, "*", options))
-            {
                 if (File.GetLastWriteTimeUtc(file) < TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-1))
                     File.Delete(file);
-            }
-            foreach (var dir in Directory.EnumerateDirectories(root, "*", new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
-            {
-                if (!string.Equals(dir, keepFolder, StringComparison.OrdinalIgnoreCase) && !Directory.EnumerateFileSystemEntries(dir).Any())
+            foreach (var dir in Directory.EnumerateDirectories(root, "*",
+                         new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
+                if (!string.Equals(dir, keepFolder, StringComparison.OrdinalIgnoreCase) &&
+                    !Directory.EnumerateFileSystemEntries(dir).Any())
                     Directory.Delete(dir);
-            }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
     }
 
-    private static string ReadSource(string appKey, long token, string label, IAppLogoSource source, Log log, CancellationToken cancellation)
+    private static string ReadSource(string appKey, long token, string label, IAppLogoSource source, Log log,
+        CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
         using var stream = source.Open(cancellation);
@@ -164,6 +176,7 @@ internal static class NotificationAppIcons
             LogOnce(appKey, label, log, "it is not a picture under the size limit");
             return "";
         }
+
         if (data.Length == 0)
             return "";
         if (!TryDescribe(data, out var extension))
@@ -171,6 +184,7 @@ internal static class NotificationAppIcons
             LogOnce(appKey, label, log, "it is not a picture under the size limit");
             return "";
         }
+
         var url = Write(appKey, token, data, extension);
         if (url.Length == 0)
             LogOnce(appKey, label, log, "it is not a picture under the size limit");
@@ -194,20 +208,23 @@ internal static class NotificationAppIcons
     }
 
     /// <summary>PNG, JPEG, GIF, BMP or WebP within <see cref="MaxPixels"/>. SVG is left out: the shell would render it at whatever size it asks for.</summary>
-    internal static bool TryDescribe(ReadOnlySpan<byte> data, out string extension) =>
-        ImageHeader.TryRead(data, out extension, out var width, out var height) && width > 0 && height > 0 && width <= MaxPixels / height;
+    internal static bool TryDescribe(ReadOnlySpan<byte> data, out string extension)
+    {
+        return ImageHeader.TryRead(data, out extension, out var width, out var height) && width > 0 && height > 0 &&
+               width <= MaxPixels / height;
+    }
 
     private static string Write(string appKey, long token, byte[] data, string extension)
     {
         var name = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(appKey)))[..32].ToLowerInvariant()
-            + "-" + token.ToString(CultureInfo.InvariantCulture) + extension;
+                   + "-" + token.ToString(CultureInfo.InvariantCulture) + extension;
         var path = Path.Combine(Folder, name);
         var temporary = path + ".tmp";
         try
         {
             Directory.CreateDirectory(Folder);
             File.WriteAllBytes(temporary, data);
-            File.Move(temporary, path, overwrite: true);
+            File.Move(temporary, path, true);
             return new Uri(path).AbsoluteUri;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -219,6 +236,7 @@ internal static class NotificationAppIcons
             catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
             {
             }
+
             return "";
         }
     }
@@ -247,6 +265,7 @@ internal static class NotificationAppIcons
             if (!Logged.Add(appKey))
                 return;
         }
+
         var who = label.Length > 0 ? label : "an app";
         log.Warn("notifications", $"Cannot read the icon from {who}: {reason}");
     }
@@ -259,6 +278,9 @@ internal static class NotificationAppIcons
         public bool Reading;
         public ManualResetEventSlim Ready { get; } = new(false);
 
-        public void Dispose() => Ready.Dispose();
+        public void Dispose()
+        {
+            Ready.Dispose();
+        }
     }
 }

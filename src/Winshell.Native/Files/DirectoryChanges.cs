@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Storage.FileSystem;
+using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
@@ -15,7 +15,9 @@ namespace Winshell.Native;
 internal sealed unsafe class DirectoryChanges : IDisposable
 {
     private const int BufferSize = 16 * 1024;
+
     private const uint FileListDirectory = 1;
+
     // NextEntryOffset, Action and FileNameLength come before the name.
     private const int HeaderSize = 3 * sizeof(uint);
 
@@ -24,7 +26,10 @@ internal sealed unsafe class DirectoryChanges : IDisposable
     private readonly bool _subtree;
     private readonly ManualResetEvent _completed = new(false);
     private readonly byte* _buffer = (byte*)NativeMemory.Alloc(BufferSize);
-    private readonly NativeOverlapped* _overlapped = (NativeOverlapped*)NativeMemory.AllocZeroed((nuint)sizeof(NativeOverlapped));
+
+    private readonly NativeOverlapped* _overlapped =
+        (NativeOverlapped*)NativeMemory.AllocZeroed((nuint)sizeof(NativeOverlapped));
+
     private int _disposed;
 
     private DirectoryChanges(SafeFileHandle handle, uint filter, bool subtree)
@@ -40,19 +45,24 @@ internal sealed unsafe class DirectoryChanges : IDisposable
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
     internal static DirectoryChanges? Open(string path, uint filter, bool subtree)
     {
-        var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0, (uint)FileMode.Open,
+        var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0,
+            (uint)FileMode.Open,
             (uint)FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS | Win32.FILE_FLAG_OVERLAPPED, 0);
         if (handle.IsInvalid)
         {
             handle.Dispose();
             return null;
         }
+
         return new DirectoryChanges(handle, filter, subtree);
     }
 
     /// <summary>Starts the next read. False when the folder can no longer be read.</summary>
-    internal bool Read() =>
-        PInvoke.ReadDirectoryChanges(Handle, _buffer, BufferSize, _subtree, (FILE_NOTIFY_CHANGE)_filter, null, _overlapped, null);
+    internal bool Read()
+    {
+        return PInvoke.ReadDirectoryChanges(Handle, _buffer, BufferSize, _subtree, (FILE_NOTIFY_CHANGE)_filter, null,
+            _overlapped, null);
+    }
 
     /// <summary>
     /// Waits for the read to finish and adds the name of each thing that changed, relative to the folder, to
@@ -76,11 +86,15 @@ internal sealed unsafe class DirectoryChanges : IDisposable
                 break;
             offset += (int)entry->NextEntryOffset;
         }
+
         return true;
     }
 
     /// <summary>Cancels the outstanding read, so <see cref="Wait"/> returns.</summary>
-    internal void Cancel() => PInvoke.CancelIoEx(Handle, null);
+    internal void Cancel()
+    {
+        PInvoke.CancelIoEx(Handle, null);
+    }
 
     private HANDLE Handle => new(_handle.DangerousGetHandle());
 

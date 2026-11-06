@@ -77,7 +77,8 @@ internal sealed class ShellInstance
         {
             Quietly(() => log.Error("shell", $"A background task failed: {e.Exception}"));
             e.SetObserved();
-            instance.Reported(instance.Crashes.WriteOnce("background task", e.Exception, recovery: "A background task failed. Winshell is still running."));
+            instance.Reported(instance.Crashes.WriteOnce("background task", e.Exception,
+                recovery: "A background task failed. Winshell is still running."));
         };
         return instance;
     }
@@ -95,6 +96,7 @@ internal sealed class ShellInstance
             Log.Error("shell", "The control pipe is already taken.");
             return false;
         }
+
         if (!string.Equals(pipe, Pipe, StringComparison.Ordinal))
             Log.Warn("shell", $"The control pipe {Pipe} was taken. Listening on {pipe}.");
         Pipe = pipe;
@@ -135,7 +137,7 @@ internal sealed class ShellInstance
         if (ReferenceEquals(_fatal, error))
             return false;
         _fatal = error;
-        var report = Crashes.Write("Winshell", error, fatal: true);
+        var report = Crashes.Write("Winshell", error, true);
         Quietly(() => Log.Write(LogLevel.Fatal, "", $"Winshell crashed: {error}"));
         Reported(report);
         return false;
@@ -173,7 +175,7 @@ internal sealed class ShellInstance
         CloseLog();
         try
         {
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -200,7 +202,7 @@ internal sealed class ShellInstance
             LogLevel.Info => " INFO",
             LogLevel.Warn => " WARN",
             LogLevel.Error => "ERROR",
-            _ => "FATAL",
+            _ => "FATAL"
         };
         var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
         lock (_logGate)
@@ -210,11 +212,13 @@ internal sealed class ShellInstance
             try
             {
                 if (!_logClosed)
-                    _file.Write(level, $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
+                    _file.Write(level,
+                        $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
             }
             catch (Exception e) when (e is IOException or ObjectDisposedException)
             {
             }
+
             Console.Error.WriteLine(line);
         }
     }

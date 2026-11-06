@@ -34,11 +34,17 @@ internal static class ServiceSupport
     }
 
     /// <summary>A MAC address as <c>XX:XX:XX:XX:XX:XX</c>.</summary>
-    public static string FormatMac(ulong address) =>
-        string.Join(':', Enumerable.Range(0, 6).Select(i => ((address >> (8 * (5 - i))) & 0xff).ToString("X2", CultureInfo.InvariantCulture)));
+    public static string FormatMac(ulong address)
+    {
+        return string.Join(':',
+            Enumerable.Range(0, 6).Select(i =>
+                ((address >> (8 * (5 - i))) & 0xff).ToString("X2", CultureInfo.InvariantCulture)));
+    }
 
-    public static string FormatMac(ReadOnlySpan<byte> bytes) =>
-        string.Join(':', bytes.ToArray().Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+    public static string FormatMac(ReadOnlySpan<byte> bytes)
+    {
+        return string.Join(':', bytes.ToArray().Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
+    }
 }
 
 /// <summary>
@@ -55,7 +61,10 @@ internal abstract class SnapshotSource<T>
     private bool _started;
     private int _refreshQueued;
 
-    protected SnapshotSource(T initial) => _current = initial;
+    protected SnapshotSource(T initial)
+    {
+        _current = initial;
+    }
 
     protected abstract string Category { get; }
 
@@ -64,7 +73,9 @@ internal abstract class SnapshotSource<T>
         get
         {
             lock (_lock)
+            {
                 return _current;
+            }
         }
     }
 
@@ -78,12 +89,15 @@ internal abstract class SnapshotSource<T>
             start = !_started;
             _started = true;
         }
+
         if (start)
             ServiceSupport.Run(Category, StartAsync);
         return new DisposeAction(() =>
         {
             lock (_lock)
+            {
                 _listeners -= listener;
+            }
         });
     }
 
@@ -129,6 +143,7 @@ internal abstract class SnapshotSource<T>
             _current = next;
             listeners = _listeners;
         }
+
         listeners?.Invoke(next);
     }
 }

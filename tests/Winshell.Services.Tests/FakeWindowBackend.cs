@@ -32,11 +32,18 @@ internal sealed class FakeWindowBackend : IWindowBackend
     public event Action<nint>? Flashed;
 
     /// <summary>The facts of a normal window with a title: the taskbar lists it.</summary>
-    public static TaskbarWindowFacts Normal { get; } = new(true, true, false, false, false, false, false, false, true, false);
+    public static TaskbarWindowFacts Normal { get; } =
+        new(true, true, false, false, false, false, false, false, true, false);
 
-    public static WindowRead Window(string title = "Title") => new(title, false, false, false, "M1", "", "", @"C:\app.exe");
+    public static WindowRead Window(string title = "Title")
+    {
+        return new WindowRead(title, false, false, false, "M1", "", "", @"C:\app.exe");
+    }
 
-    public void Show(nint hwnd, string title = "Title") => Show(hwnd, Window(title));
+    public void Show(nint hwnd, string title = "Title")
+    {
+        Show(hwnd, Window(title));
+    }
 
     /// <summary>Shows a window, or changes one, and says its name changed.</summary>
     public void Show(nint hwnd, WindowRead read, TaskbarWindowFacts? facts = null)
@@ -59,21 +66,39 @@ internal sealed class FakeWindowBackend : IWindowBackend
         Raise(Win32.EVENT_SYSTEM_FOREGROUND, hwnd);
     }
 
-    public void Flash(nint hwnd) => Flashed?.Invoke(hwnd);
+    public void Flash(nint hwnd)
+    {
+        Flashed?.Invoke(hwnd);
+    }
 
-    private void Raise(uint eventType, nint hwnd) => WinEvent?.Invoke(eventType, hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF);
+    private void Raise(uint eventType, nint hwnd)
+    {
+        WinEvent?.Invoke(eventType, hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF);
+    }
 
     public void Start(Log log)
     {
     }
 
-    public IReadOnlyList<nint> TopLevel() => [.. Shown.Keys];
+    public IReadOnlyList<nint> TopLevel()
+    {
+        return [.. Shown.Keys];
+    }
 
-    public nint OwnerOf(nint hwnd) => Owners.GetValueOrDefault(hwnd);
+    public nint OwnerOf(nint hwnd)
+    {
+        return Owners.GetValueOrDefault(hwnd);
+    }
 
-    public nint RootOf(nint hwnd) => hwnd;
+    public nint RootOf(nint hwnd)
+    {
+        return hwnd;
+    }
 
-    public TaskbarWindowFacts TaskbarFacts(nint hwnd) => Facts.GetValueOrDefault(hwnd);
+    public TaskbarWindowFacts TaskbarFacts(nint hwnd)
+    {
+        return Facts.GetValueOrDefault(hwnd);
+    }
 
     /// <summary>The window, with the package id and program path left out when they were not asked for.</summary>
     public WindowRead Read(nint hwnd, bool package, bool executable)
@@ -83,13 +108,19 @@ internal sealed class FakeWindowBackend : IWindowBackend
         return read with
         {
             PackageAppId = package && read.AppUserModelId.Length == 0 ? read.PackageAppId : null,
-            Executable = executable ? read.Executable : null,
+            Executable = executable ? read.Executable : null
         };
     }
 
-    public ScreenInfo? Screen(string deviceName) => Screens.GetValueOrDefault(deviceName);
+    public ScreenInfo? Screen(string deviceName)
+    {
+        return Screens.GetValueOrDefault(deviceName);
+    }
 
-    public string DesktopId(nint hwnd) => DesktopIds.GetValueOrDefault(hwnd, "");
+    public string DesktopId(nint hwnd)
+    {
+        return DesktopIds.GetValueOrDefault(hwnd, "");
+    }
 
     public bool MoveToDesktop(nint hwnd, Guid desktop)
     {
@@ -97,13 +128,28 @@ internal sealed class FakeWindowBackend : IWindowBackend
         return true;
     }
 
-    public void Activate(nint hwnd) => Calls.Add($"activate:{hwnd}");
+    public void Activate(nint hwnd)
+    {
+        Calls.Add($"activate:{hwnd}");
+    }
 
-    public void Close(nint hwnd) => Calls.Add($"close:{hwnd}");
+    public void Close(nint hwnd)
+    {
+        Calls.Add($"close:{hwnd}");
+    }
 
-    public void SetMaximized(nint hwnd, bool maximized) => Calls.Add($"maximize:{hwnd}:{maximized}");
+    public void SetMaximized(nint hwnd, bool maximized)
+    {
+        Calls.Add($"maximize:{hwnd}:{maximized}");
+    }
 
-    public void SetMinimized(nint hwnd, bool minimized) => Calls.Add($"minimize:{hwnd}:{minimized}");
+    public void SetMinimized(nint hwnd, bool minimized)
+    {
+        Calls.Add($"minimize:{hwnd}:{minimized}");
+    }
 
-    public void MoveToMonitor(nint hwnd, string deviceName) => Calls.Add($"move:{hwnd}:{deviceName}");
+    public void MoveToMonitor(nint hwnd, string deviceName)
+    {
+        Calls.Add($"move:{hwnd}:{deviceName}");
+    }
 }

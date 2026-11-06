@@ -29,7 +29,10 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
     }
 
     /// <summary>The registrar the hotkeys on a loop share. With nothing claimed, it holds no window and no hook.</summary>
-    public static WindowsHotkeyRegistrar For(IEventLoop loop) => PerLoop.GetValue(loop, static l => new WindowsHotkeyRegistrar(l));
+    public static WindowsHotkeyRegistrar For(IEventLoop loop)
+    {
+        return PerLoop.GetValue(loop, static l => new WindowsHotkeyRegistrar(l));
+    }
 
     internal int RegistrationCount => _window.Count;
 
@@ -37,7 +40,13 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
 
     internal bool NeedsHook
     {
-        get { lock (_bookLock) return _book.NeedsHook; }
+        get
+        {
+            lock (_bookLock)
+            {
+                return _book.NeedsHook;
+            }
+        }
     }
 
     internal static bool IsHookInstalled => KeyboardHook.IsInstalled;
@@ -54,12 +63,16 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             SyncHook();
             return HotkeyClaim.Idle;
         }
+
         var first = sequence.Chords[0];
         if (!first.IsWinOnly)
         {
             bool exists;
             lock (_bookLock)
+            {
                 exists = _book.HasOs(first.OsKey);
+            }
+
             if (!exists)
             {
                 var registered = _window.Register(first);
@@ -70,16 +83,25 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
                 }
             }
         }
+
         lock (_bookLock)
+        {
             _book.Add(listener, sequence);
+        }
+
         SyncHook();
         if (first.IsWinOnly && !_hook.IsAttached)
         {
             lock (_bookLock)
+            {
                 _book.Remove(listener);
+            }
+
             FlushRegistrations();
-            return HotkeyClaim.Invalid("Windows did not install a keyboard hook, so the Windows key cannot be registered.");
+            return HotkeyClaim.Invalid(
+                "Windows did not install a keyboard hook, so the Windows key cannot be registered.");
         }
+
         return HotkeyClaim.Active;
     }
 
@@ -103,6 +125,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             _timers.Clear();
             _book.Clear();
         }
+
         foreach (var timer in timers)
             timer.Dispose();
         _window.Dispose();
@@ -110,9 +133,15 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
     }
 
     /// <summary>Removes this process's hotkey hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
-    internal static void EmergencyUnhook() => KeyboardHook.EmergencyUnhook();
+    internal static void EmergencyUnhook()
+    {
+        KeyboardHook.EmergencyUnhook();
+    }
 
-    internal bool TryGetId(OsChord chord, out int id) => _window.TryGetId(chord, out id);
+    internal bool TryGetId(OsChord chord, out int id)
+    {
+        return _window.TryGetId(chord, out id);
+    }
 
     internal void OnHotkey(int id)
     {
@@ -126,6 +155,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             result = _book.Trigger(chord, NowMs());
             changed = before != _book.NeedsHook;
         }
+
         Deliver(result);
         if (changed)
             SyncHook();
@@ -147,22 +177,29 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
     {
         CancelTimer(listener);
         lock (_bookLock)
+        {
             _book.Remove(listener);
+        }
+
         FlushRegistrations();
     }
 
-    private void FlushRegistrations() => _window.UnregisterUnused(chord =>
+    private void FlushRegistrations()
     {
-        lock (_bookLock)
-            return _book.HasOs(chord);
-    });
+        _window.UnregisterUnused(chord =>
+        {
+            lock (_bookLock)
+            {
+                return _book.HasOs(chord);
+            }
+        });
+    }
 
     private void Deliver(BookResult result)
     {
         if (_disposed)
             return;
         foreach (var listener in result.Pressed)
-        {
             try
             {
                 listener.OnPressed(false);
@@ -171,7 +208,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             {
                 Log.Default.Warn("hotkey", e.Message);
             }
-        }
+
         foreach (var arm in result.Armed)
             ScheduleDisarm(arm);
     }
@@ -198,6 +235,7 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             _book.Disarm(listener, token);
             changed = before != _book.NeedsHook;
         }
+
         if (changed)
             SyncHook();
     }
@@ -208,7 +246,10 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             timer.Dispose();
     }
 
-    private long NowMs() => (long)_loop.Now.TotalMilliseconds;
+    private long NowMs()
+    {
+        return (long)_loop.Now.TotalMilliseconds;
+    }
 
     private void SyncHook()
     {
@@ -234,11 +275,13 @@ internal sealed class WindowsHotkeyRegistrar : IHotkeyRegistrar, IDisposable
             result = _book.Hook(virtualKey, isUp, modifiers, NowMs());
             changed = before != _book.NeedsHook;
         }
+
         if (result.Pressed.Count > 0 || result.Armed.Count > 0)
         {
             var posted = result;
             _loop.Post(() => Deliver(posted));
         }
+
         if (changed)
             PostSync();
         return Consume(result);

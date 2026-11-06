@@ -18,7 +18,8 @@ internal static class MonitorBrightness
     internal static bool TryRead(nint monitor, out int minimum, out int current, out int maximum)
     {
         uint low = 0, now = 0, high = 0;
-        var ok = WithFirstPhysical(monitor, physical => PInvoke.GetMonitorBrightness(physical, out low, out now, out high) != 0);
+        var ok = WithFirstPhysical(monitor,
+            physical => PInvoke.GetMonitorBrightness(physical, out low, out now, out high) != 0);
         minimum = (int)low;
         current = (int)now;
         maximum = (int)high;
@@ -27,12 +28,15 @@ internal static class MonitorBrightness
 
     /// <summary>Sets a display monitor's brightness. False when it does not answer.</summary>
     internal static bool TrySet(nint monitor, uint brightness)
-        => WithFirstPhysical(monitor, physical => PInvoke.SetMonitorBrightness(physical, brightness) != 0);
+    {
+        return WithFirstPhysical(monitor, physical => PInvoke.SetMonitorBrightness(physical, brightness) != 0);
+    }
 
     private static bool WithFirstPhysical(nint monitor, Func<HANDLE, bool> use)
     {
         var display = new HMONITOR(monitor);
-        if (!PInvoke.GetNumberOfPhysicalMonitorsFromHMONITOR(display, out var count) || count == 0 || count > MaxPhysicalMonitors)
+        if (!PInvoke.GetNumberOfPhysicalMonitorsFromHMONITOR(display, out var count) || count == 0 ||
+            count > MaxPhysicalMonitors)
             return false;
         Span<PHYSICAL_MONITOR> monitors = stackalloc PHYSICAL_MONITOR[(int)count];
         if (!PInvoke.GetPhysicalMonitorsFromHMONITOR(display, monitors))

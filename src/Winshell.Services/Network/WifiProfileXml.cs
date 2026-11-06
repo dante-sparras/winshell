@@ -38,11 +38,13 @@ internal static class WifiProfileXml
             error = Unreadable;
             return false;
         }
+
         if (xml.Length > MaxCharacters)
         {
             error = TooLarge;
             return false;
         }
+
         XmlDocument document;
         try
         {
@@ -51,6 +53,7 @@ internal static class WifiProfileXml
                 error = Unreadable;
                 return false;
             }
+
             document = new XmlDocument { XmlResolver = null };
             using var reader = XmlReader.Create(new StringReader(xml), ReaderSettings());
             document.Load(reader);
@@ -60,11 +63,13 @@ internal static class WifiProfileXml
             error = Unreadable;
             return false;
         }
+
         if (document.DocumentElement is not { LocalName: "WLANProfile" } root)
         {
             error = Unreadable;
             return false;
         }
+
         fields = ReadFields(root);
         error = "";
         return true;
@@ -89,12 +94,14 @@ internal static class WifiProfileXml
             error = Rejected;
             return false;
         }
+
         if (!TryParse(updated, out var after, out error) || after.AutoConnect != auto || !SameExceptMode(fields, after))
         {
             updated = xml;
             error = Rejected;
             return false;
         }
+
         changed = true;
         error = "";
         return true;
@@ -115,46 +122,53 @@ internal static class WifiProfileXml
             error = Rejected;
             return false;
         }
+
         if (!TryParse(updated, out var after, out error) || after.HasPassword || !SameExceptPassword(fields, after))
         {
             updated = xml;
             error = Rejected;
             return false;
         }
+
         changed = true;
         error = "";
         return true;
     }
 
-    private static bool SameExceptMode(Fields before, Fields after) =>
-        before.Name == after.Name && before.Ssid == after.Ssid && before.Security == after.Security
-        && before.HasPassword == after.HasPassword && before.Hidden == after.Hidden;
-
-    private static bool SameExceptPassword(Fields before, Fields after) =>
-        before.Name == after.Name && before.Ssid == after.Ssid && before.ConnectionMode == after.ConnectionMode
-        && before.Security == after.Security && before.Hidden == after.Hidden;
-
-    private static XmlReaderSettings ReaderSettings() => new()
+    private static bool SameExceptMode(Fields before, Fields after)
     {
-        DtdProcessing = DtdProcessing.Prohibit,
-        XmlResolver = null,
-        MaxCharactersInDocument = MaxCharacters,
-        MaxCharactersFromEntities = 1024,
-        IgnoreComments = true,
-        IgnoreProcessingInstructions = true,
-        IgnoreWhitespace = true,
-        CloseInput = true,
-    };
+        return before.Name == after.Name && before.Ssid == after.Ssid && before.Security == after.Security
+               && before.HasPassword == after.HasPassword && before.Hidden == after.Hidden;
+    }
+
+    private static bool SameExceptPassword(Fields before, Fields after)
+    {
+        return before.Name == after.Name && before.Ssid == after.Ssid && before.ConnectionMode == after.ConnectionMode
+               && before.Security == after.Security && before.Hidden == after.Hidden;
+    }
+
+    private static XmlReaderSettings ReaderSettings()
+    {
+        return new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = MaxCharacters,
+            MaxCharactersFromEntities = 1024,
+            IgnoreComments = true,
+            IgnoreProcessingInstructions = true,
+            IgnoreWhitespace = true,
+            CloseInput = true
+        };
+    }
 
     /// <summary>Rejects a document that is too deep before a DOM is built. A DTD fails the reader and is not resolved.</summary>
     private static bool WithinLimits(string xml)
     {
         using var reader = XmlReader.Create(new StringReader(xml), ReaderSettings());
         while (reader.Read())
-        {
             if (reader.Depth > MaxDepth)
                 return false;
-        }
         return true;
     }
 
@@ -178,6 +192,7 @@ internal static class WifiProfileXml
                 hasPassword = true;
                 continue;
             }
+
             if (depth == 1 && element.LocalName == "name" && xmlName is null)
                 xmlName = ElementText(element);
             else if (depth == 1 && element.LocalName == "connectionMode" && mode is null)
@@ -189,22 +204,21 @@ internal static class WifiProfileXml
             else if (element.LocalName == "encryption" && encryption is null)
                 encryption = ElementText(element).Trim();
             else if (element.LocalName == "SSID" && ssidName is null && ssidHex is null)
-            {
                 foreach (var child in ElementChildren(element))
-                {
                     if (child.LocalName == "name")
                         ssidName ??= ElementText(child);
                     else if (child.LocalName == "hex")
                         ssidHex ??= ElementText(child).Trim();
-                }
-            }
+
             if (depth >= MaxDepth)
                 continue;
             foreach (var child in ElementChildren(element))
                 pending.Enqueue((child, depth + 1));
         }
+
         var ssid = !string.IsNullOrEmpty(ssidName) ? ssidName : DecodeHexSsid(ssidHex);
-        return new Fields(xmlName ?? "", ssid, mode ?? "", MapSecurity(authentication, encryption), hasPassword, hidden == true);
+        return new Fields(xmlName ?? "", ssid, mode ?? "", MapSecurity(authentication, encryption), hasPassword,
+            hidden == true);
     }
 
     /// <summary>The element's own text. Descendant text, including a nested key, is not read.</summary>
@@ -212,10 +226,8 @@ internal static class WifiProfileXml
     {
         var builder = new StringBuilder();
         foreach (XmlNode child in element.ChildNodes)
-        {
             if (child is XmlText or XmlCDataSection)
                 builder.Append(child.Value);
-        }
         return builder.ToString();
     }
 
@@ -223,10 +235,8 @@ internal static class WifiProfileXml
     {
         var children = new List<XmlElement>();
         foreach (XmlNode child in element.ChildNodes)
-        {
             if (child is XmlElement elementChild)
                 children.Add(elementChild);
-        }
         return children;
     }
 
@@ -236,10 +246,9 @@ internal static class WifiProfileXml
             return "";
         var bytes = new byte[hex.Length / 2];
         for (var i = 0; i < bytes.Length; i++)
-        {
-            if (!byte.TryParse(hex.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out bytes[i]))
+            if (!byte.TryParse(hex.AsSpan(i * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture,
+                    out bytes[i]))
                 return "";
-        }
         return Encoding.UTF8.GetString(bytes);
     }
 
@@ -248,22 +257,24 @@ internal static class WifiProfileXml
         var auth = authentication ?? "";
         var cipher = encryption ?? "";
         if (auth.Equals("open", StringComparison.OrdinalIgnoreCase))
-        {
-            return cipher.Equals("WEP", StringComparison.OrdinalIgnoreCase) ? WifiSecurityType.StaticWep : WifiSecurityType.Open;
-        }
+            return cipher.Equals("WEP", StringComparison.OrdinalIgnoreCase)
+                ? WifiSecurityType.StaticWep
+                : WifiSecurityType.Open;
         if (auth.Equals("shared", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.StaticWep;
         if (auth.Equals("WPA", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.WpaEap;
         if (auth.Equals("WPAPSK", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.WpaPsk;
-        if (auth.Equals("WPA2", StringComparison.OrdinalIgnoreCase) || auth.Equals("WPA3ENT", StringComparison.OrdinalIgnoreCase))
+        if (auth.Equals("WPA2", StringComparison.OrdinalIgnoreCase) ||
+            auth.Equals("WPA3ENT", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.Wpa2Eap;
         if (auth.Equals("WPA2PSK", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.Wpa2Psk;
         if (auth.Equals("WPA3ENT192", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.Wpa3SuiteB192;
-        if (auth.Equals("WPA3SAE", StringComparison.OrdinalIgnoreCase) || auth.Equals("WPA3", StringComparison.OrdinalIgnoreCase))
+        if (auth.Equals("WPA3SAE", StringComparison.OrdinalIgnoreCase) ||
+            auth.Equals("WPA3", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.Sae;
         if (auth.Equals("OWE", StringComparison.OrdinalIgnoreCase))
             return WifiSecurityType.Owe;
@@ -286,7 +297,7 @@ internal static class WifiProfileXml
     private static bool TryRemoveKeyElements(string xml, out string updated)
     {
         updated = xml;
-        if (!TryCollectElements(xml, "keyMaterial", anyDepth: true, out var spans))
+        if (!TryCollectElements(xml, "keyMaterial", true, out var spans))
             return false;
         if (spans.Count == 0)
             return false;
@@ -299,6 +310,7 @@ internal static class WifiProfileXml
             builder.Append(xml, cursor, span.Start - cursor);
             cursor = span.End;
         }
+
         builder.Append(xml, cursor, xml.Length - cursor);
         updated = builder.ToString();
         return true;
@@ -307,7 +319,7 @@ internal static class WifiProfileXml
     private static bool TryFindDirectChild(string xml, string localName, out int contentStart, out int contentEnd)
     {
         contentStart = contentEnd = 0;
-        if (!TryCollectElements(xml, localName, anyDepth: false, out var spans))
+        if (!TryCollectElements(xml, localName, false, out var spans))
             return false;
         // A self-closing tag has no text to replace. An empty pair, <c></c>, does.
         if (spans.Count != 1 || spans[0].ContentStart >= spans[0].End)
@@ -335,6 +347,7 @@ internal static class WifiProfileXml
                 i++;
                 continue;
             }
+
             var tagAt = i;
             if (!TryReadTag(xml, ref i, out var kind, out var qualified, out var selfClosing))
                 return false;
@@ -347,6 +360,7 @@ internal static class WifiProfileXml
                     return false;
                 continue;
             }
+
             var local = LocalName(qualified);
             var match = local == localName && (anyDepth || depth == 1);
             if (selfClosing)
@@ -355,6 +369,7 @@ internal static class WifiProfileXml
                     spans.Add(new ElementSpan(tagAt, i, i, i));
                 continue;
             }
+
             if (match)
             {
                 if (!TrySkipElement(xml, i, qualified, out var endTag, out var after))
@@ -363,12 +378,19 @@ internal static class WifiProfileXml
                 i = after;
                 continue;
             }
+
             depth++;
         }
+
         return depth == 0;
     }
 
-    private enum TagKind { Start, End, Ignored }
+    private enum TagKind
+    {
+        Start,
+        End,
+        Ignored
+    }
 
     private static bool TryReadTag(string xml, ref int i, out TagKind kind, out string qualified, out bool selfClosing)
     {
@@ -385,6 +407,7 @@ internal static class WifiProfileXml
             i++;
             return SkipUntil(xml, ref i, "?>");
         }
+
         if (xml[i] == '!')
         {
             if (StartsWith(xml, i, "!--"))
@@ -392,13 +415,16 @@ internal static class WifiProfileXml
                 i += 3;
                 return SkipUntil(xml, ref i, "-->");
             }
+
             if (StartsWith(xml, i, "![CDATA["))
             {
                 i += 8;
                 return SkipUntil(xml, ref i, "]]>");
             }
+
             return false;
         }
+
         var end = xml[i] == '/';
         if (end)
             i++;
@@ -419,13 +445,15 @@ internal static class WifiProfileXml
             kind = TagKind.End;
             return true;
         }
+
         if (!SkipAttributes(xml, ref i, out selfClosing))
             return false;
         kind = TagKind.Start;
         return true;
     }
 
-    private static bool TrySkipElement(string xml, int contentStart, string qualified, out int endTagStart, out int after)
+    private static bool TrySkipElement(string xml, int contentStart, string qualified, out int endTagStart,
+        out int after)
     {
         endTagStart = after = 0;
         var depth = 1;
@@ -437,6 +465,7 @@ internal static class WifiProfileXml
                 i++;
                 continue;
             }
+
             var tagAt = i;
             if (!TryReadTag(xml, ref i, out var kind, out var name, out var selfClosing))
                 return false;
@@ -453,11 +482,14 @@ internal static class WifiProfileXml
                     after = i;
                     return true;
                 }
+
                 continue;
             }
+
             if (!selfClosing)
                 depth++;
         }
+
         return false;
     }
 
@@ -475,12 +507,14 @@ internal static class WifiProfileXml
                 i++;
                 return true;
             }
+
             if (xml[i] == '/' && i + 1 < xml.Length && xml[i + 1] == '>')
             {
                 i += 2;
                 selfClosing = true;
                 return true;
             }
+
             if (!IsNameStart(xml[i]))
                 return false;
             i++;
@@ -502,6 +536,7 @@ internal static class WifiProfileXml
                 return false;
             i++;
         }
+
         return false;
     }
 
@@ -514,8 +549,10 @@ internal static class WifiProfileXml
         return true;
     }
 
-    private static bool StartsWith(string xml, int index, string text) =>
-        index + text.Length <= xml.Length && xml.AsSpan(index, text.Length).SequenceEqual(text);
+    private static bool StartsWith(string xml, int index, string text)
+    {
+        return index + text.Length <= xml.Length && xml.AsSpan(index, text.Length).SequenceEqual(text);
+    }
 
     private static string LocalName(string qualified)
     {
@@ -523,7 +560,13 @@ internal static class WifiProfileXml
         return colon < 0 ? qualified : qualified[(colon + 1)..];
     }
 
-    private static bool IsNameStart(char c) => char.IsLetter(c) || c is '_' or ':';
+    private static bool IsNameStart(char c)
+    {
+        return char.IsLetter(c) || c is '_' or ':';
+    }
 
-    private static bool IsNameChar(char c) => IsNameStart(c) || char.IsDigit(c) || c is '-' or '.';
+    private static bool IsNameChar(char c)
+    {
+        return IsNameStart(c) || char.IsDigit(c) || c is '-' or '.';
+    }
 }

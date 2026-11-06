@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 
 namespace Winshell;
 
@@ -26,10 +27,12 @@ internal static class CrashFollowUp
                 if (newest is null || file.LastWriteTimeUtc > newest.LastWriteTimeUtc)
                     newest = file;
             }
+
             if (newest is null)
                 return null;
             var state = Read(stateFile);
-            if (state.Shown is not null && string.Equals(state.Shown, newest.FullName, StringComparison.OrdinalIgnoreCase))
+            if (state.Shown is not null &&
+                string.Equals(state.Shown, newest.FullName, StringComparison.OrdinalIgnoreCase))
                 return null;
             if (state.Clean is { } clean && newest.LastWriteTimeUtc <= clean.UtcDateTime)
                 return null;
@@ -74,6 +77,7 @@ internal static class CrashFollowUp
                 exception = line;
             afterException = line == "Exception";
         }
+
         return closed ? new Pending(path, exception ?? "") : null;
     }
 
@@ -87,11 +91,14 @@ internal static class CrashFollowUp
         {
             var line = raw.Trim();
             if (line.StartsWith("clean = ", StringComparison.Ordinal) && Unquote(line[8..]) is { } cleanText
-                && DateTimeOffset.TryParse(cleanText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var when))
+                                                                      && DateTimeOffset.TryParse(cleanText,
+                                                                          CultureInfo.InvariantCulture,
+                                                                          DateTimeStyles.RoundtripKind, out var when))
                 clean = when;
             else if (line.StartsWith("shown = ", StringComparison.Ordinal))
                 shown = Unquote(line[8..]);
         }
+
         return new State(clean, shown);
     }
 
@@ -100,7 +107,7 @@ internal static class CrashFollowUp
         var dir = Path.GetDirectoryName(stateFile);
         if (!string.IsNullOrEmpty(dir))
             Directory.CreateDirectory(dir);
-        var text = new System.Text.StringBuilder();
+        var text = new StringBuilder();
         if (clean is { } when)
             text.Append("clean = ").Append(Quote(when.ToString("o", CultureInfo.InvariantCulture))).Append('\n');
         if (shown is { Length: > 0 })
@@ -108,13 +115,18 @@ internal static class CrashFollowUp
         File.WriteAllText(stateFile, text.ToString());
     }
 
-    private static string Quote(string text) => "\"" + text.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    private static string Quote(string text)
+    {
+        return "\"" + text.Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    }
 
     private static string? Unquote(string token)
     {
         token = token.Trim();
         if (token.Length < 2 || token[0] != '"' || token[^1] != '"')
             return null;
-        return token[1..^1].Replace("\\\"", "\"", StringComparison.Ordinal).Replace("\\\\", "\\", StringComparison.Ordinal);
+        return token[1..^1].Replace("\\\"", "\"", StringComparison.Ordinal)
+            .Replace("\\\\", "\\", StringComparison.Ordinal);
     }
 }

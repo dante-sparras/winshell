@@ -28,5 +28,6 @@ internal static partial class DwmLivePreview
 
     // Undocumented, and the only way to ask for the peek Windows' own taskbar uses. dwmapi exports it by ordinal alone.
     [LibraryImport("dwmapi.dll", EntryPoint = "#113")]
-    private static partial int DwmpActivateLivePreview([MarshalAs(UnmanagedType.Bool)] bool on, nint window, nint above, uint type, nuint reserved);
+    private static partial int DwmpActivateLivePreview([MarshalAs(UnmanagedType.Bool)] bool on, nint window, nint above,
+        uint type, nuint reserved);
 }

@@ -121,9 +121,10 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
         {
             _parsed = null;
             _registrar.Release(this);
-            SetStatus(active: false, taken: false, error: parseError ?? "");
+            SetStatus(false, false, parseError ?? "");
             return;
         }
+
         _parsed = parsed;
         if (!_enabled)
         {
@@ -131,6 +132,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
             SetStatus(false, false, "");
             return;
         }
+
         var claim = _registrar.Claim(this, parsed);
         SetStatus(claim.Status == HotkeyClaimStatus.Active, claim.Status == HotkeyClaimStatus.Taken, claim.Error);
     }
@@ -161,6 +163,7 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
             ((IHotkeyListener)this).OnReleased();
             return;
         }
+
         _poll = _loop.Schedule(TimeSpan.FromMilliseconds(PollIntervalMs), Tick);
     }
 
@@ -173,14 +176,12 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
     private bool IsDown(HotkeyChord chord)
     {
         if (chord.IsWinOnly)
-        {
             return chord.Side switch
             {
                 WinKeySide.Left => _down(VirtualKeys.LeftWin),
                 WinKeySide.Right => _down(VirtualKeys.RightWin),
-                _ => _down(VirtualKeys.LeftWin) || _down(VirtualKeys.RightWin),
+                _ => _down(VirtualKeys.LeftWin) || _down(VirtualKeys.RightWin)
             };
-        }
         if (!_down(chord.VirtualKey))
             return false;
         if ((chord.Modifiers & HotkeyModifiers.Ctrl) != 0 && !_down(VkControl))

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace Winshell.Tests;
 
@@ -62,16 +63,18 @@ public class CliRunCommandTests
         Directory.CreateDirectory(local);
         try
         {
-            var result = WinshellCli.Run(args.Split(' '), ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+            var result = WinshellCli.Run(args.Split(' '), ("WINSHELL_CONFIG_DIR", config),
+                ("WINSHELL_LOCAL_DIR", local));
 
             Assert.Equal((0, "", ""), (result.Code, result.Output, result.Error));
-            var listed = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config), ("WINSHELL_LOCAL_DIR", local));
+            var listed = WinshellCli.Run(["list", "--json"], ("WINSHELL_CONFIG_DIR", config),
+                ("WINSHELL_LOCAL_DIR", local));
             listed.AssertExitCode(0);
             Assert.Equal("[]", listed.Output.Trim());
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            Directory.Delete(root, true);
         }
     }
 
@@ -89,18 +92,19 @@ public class CliRunCommandTests
             var dir = Path.Combine(root, "run", "runningabc");
             Directory.CreateDirectory(dir);
             using var self = Process.GetCurrentProcess();
-            File.WriteAllText(Path.Combine(dir, "instance.json"), System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
-            {
-                ["id"] = "runningabc",
-                ["pid"] = self.Id,
-                ["shellId"] = "bar",
-                ["configPath"] = Path.Combine(project, "bin", "shell.next", "Bar.exe"),
-                ["launchTime"] = DateTime.Now,
-                ["pipe"] = "winshell-runningabc",
-                ["log"] = Path.Combine(dir, "log.txt"),
-                ["processName"] = self.ProcessName,
-                ["processStart"] = self.StartTime.ToUniversalTime().Ticks,
-            }));
+            File.WriteAllText(Path.Combine(dir, "instance.json"), JsonSerializer.Serialize(
+                new Dictionary<string, object?>
+                {
+                    ["id"] = "runningabc",
+                    ["pid"] = self.Id,
+                    ["shellId"] = "bar",
+                    ["configPath"] = Path.Combine(project, "bin", "shell.next", "Bar.exe"),
+                    ["launchTime"] = DateTime.Now,
+                    ["pipe"] = "winshell-runningabc",
+                    ["log"] = Path.Combine(dir, "log.txt"),
+                    ["processName"] = self.ProcessName,
+                    ["processStart"] = self.StartTime.ToUniversalTime().Ticks
+                }));
 
             var result = WinshellCli.Run(["run", "-n", "-p", project], ("WINSHELL_LOCAL_DIR", root));
 
@@ -110,12 +114,14 @@ public class CliRunCommandTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            Directory.Delete(root, true);
         }
     }
 
-    private static ChildProcess Run(string[] args) =>
-        WinshellCli.Run(
+    private static ChildProcess Run(string[] args)
+    {
+        return WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-run-absent")));
+    }
 }

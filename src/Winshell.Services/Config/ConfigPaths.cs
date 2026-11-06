@@ -7,7 +7,10 @@ internal static class ConfigPaths
     public const string OverrideVariable = "WINSHELL_CONFIG_DIR";
 
     /// <summary><c>%APPDATA%\winshell</c>, or <see cref="OverrideVariable"/> when it is set.</summary>
-    public static string Root() => RootFrom(Environment.GetEnvironmentVariable(OverrideVariable));
+    public static string Root()
+    {
+        return RootFrom(Environment.GetEnvironmentVariable(OverrideVariable));
+    }
 
     /// <summary>The config root for an override value. A blank value uses <see cref="ShellLocations.ConfigRoot"/>.</summary>
     internal static string RootFrom(string? overrideValue)

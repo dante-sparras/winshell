@@ -47,8 +47,9 @@ internal enum TrayClick
     Left,
     Double,
     Middle,
+
     /// <summary>A right click, which asks the app for its menu.</summary>
-    Menu,
+    Menu
 }
 
 /// <summary>How Explorer and apps talk about notification-area icons.</summary>
@@ -65,7 +66,12 @@ internal static class TrayProtocol
 
     public const uint Add = 0, Modify = 1, Delete = 2, SetVersion = 4;
 
-    public const uint NIF_MESSAGE = 0x1, NIF_ICON = 0x2, NIF_TIP = 0x4, NIF_STATE = 0x8, NIF_INFO = 0x10, NIF_GUID = 0x20;
+    public const uint NIF_MESSAGE = 0x1,
+        NIF_ICON = 0x2,
+        NIF_TIP = 0x4,
+        NIF_STATE = 0x8,
+        NIF_INFO = 0x10,
+        NIF_GUID = 0x20;
 
     public const uint NIS_HIDDEN = 0x1;
 
@@ -112,7 +118,9 @@ internal static class TrayProtocol
             TimeoutOrVersion = U32(nid, TimeoutOffset),
             InfoTitle = Text(nid, InfoTitleOffset, InfoTitleChars),
             InfoFlags = U32(nid, InfoFlagsOffset),
-            Guid = (flags & NIF_GUID) != 0 && sent.Length >= GuidOffset + 16 ? new Guid(nid.Slice(GuidOffset, 16)) : Guid.Empty,
+            Guid = (flags & NIF_GUID) != 0 && sent.Length >= GuidOffset + 16
+                ? new Guid(nid.Slice(GuidOffset, 16))
+                : Guid.Empty
         };
     }
 
@@ -127,12 +135,20 @@ internal static class TrayProtocol
         var current = version >= Version;
         return click switch
         {
-            TrayClick.Left => current ? [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT] : [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP],
+            TrayClick.Left => current
+                ? [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT]
+                : [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP],
             TrayClick.Double => current
-                ? [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT, Win32.WM_LBUTTONDBLCLK, Win32.WM_LBUTTONUP, NIN_SELECT]
+                ?
+                [
+                    Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, NIN_SELECT, Win32.WM_LBUTTONDBLCLK, Win32.WM_LBUTTONUP,
+                    NIN_SELECT
+                ]
                 : [Win32.WM_LBUTTONDOWN, Win32.WM_LBUTTONUP, Win32.WM_LBUTTONDBLCLK, Win32.WM_LBUTTONUP],
             TrayClick.Middle => [Win32.WM_MBUTTONDOWN, Win32.WM_MBUTTONUP],
-            _ => current ? [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP, WM_CONTEXTMENU] : [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP],
+            _ => current
+                ? [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP, WM_CONTEXTMENU]
+                : [Win32.WM_RBUTTONDOWN, Win32.WM_RBUTTONUP]
         };
     }
 
@@ -148,10 +164,14 @@ internal static class TrayProtocol
             var l = (message & 0xffff) | ((iconId & 0xffff) << 16);
             return ((nint)w, (nint)l);
         }
+
         return ((nint)iconId, (nint)message);
     }
 
-    private static uint U32(ReadOnlySpan<byte> nid, int offset) => BinaryPrimitives.ReadUInt32LittleEndian(nid[offset..]);
+    private static uint U32(ReadOnlySpan<byte> nid, int offset)
+    {
+        return BinaryPrimitives.ReadUInt32LittleEndian(nid[offset..]);
+    }
 
     private static string Text(ReadOnlySpan<byte> nid, int offset, int chars)
     {

@@ -22,8 +22,10 @@ internal static class StartupError
     internal static Action<string, string?> Show = Dialog;
 
     /// <summary>Reads this process's console and reports <paramref name="message"/>.</summary>
-    internal static void Report(string message, string? folder) =>
+    internal static void Report(string message, string? folder)
+    {
         Report(message, folder, ProcessConsole.Window(), StderrType());
+    }
 
     /// <summary>
     /// Writes <paramref name="message"/> to standard error, then asks <see cref="Show"/> when
@@ -39,6 +41,7 @@ internal static class StartupError
         {
             // A windowless start can have no standard error. The dialog is the message then.
         }
+
         if (!NeedsDialog(consoleWindow, stderrType))
             return;
         Show(message, folder);
@@ -70,6 +73,7 @@ internal static class StartupError
             var parent = Path.GetDirectoryName(full);
             return parent is not null && Directory.Exists(parent) ? parent : null;
         }
+
         return Directory.Exists(configRoot) ? configRoot : null;
     }
 

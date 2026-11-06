@@ -34,9 +34,11 @@ internal static unsafe class IconBitmap
             if (size <= 0)
             {
                 size = 32;
-                if (Win32.GetObjectW(info.hbmColor != default ? info.hbmColor : info.hbmMask, sizeof(BITMAP), out var bmp) != 0)
+                if (Win32.GetObjectW(info.hbmColor != default ? info.hbmColor : info.hbmMask, sizeof(BITMAP),
+                        out var bmp) != 0)
                     size = Math.Clamp(bmp.bmWidth, 16, 256);
             }
+
             return Pixels((HICON)icon, size) is { } bgra ? (size, bgra) : null;
         }
         finally
@@ -49,7 +51,10 @@ internal static unsafe class IconBitmap
     {
         var header = new BITMAPINFO
         {
-            bmiHeader = new BITMAPINFOHEADER { biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32 },
+            bmiHeader = new BITMAPINFOHEADER
+            {
+                biSize = (uint)sizeof(BITMAPINFOHEADER), biWidth = size, biHeight = -size, biPlanes = 1, biBitCount = 32
+            }
         };
         var dc = PInvoke.CreateCompatibleDC(default);
         if (dc == default)
@@ -66,13 +71,12 @@ internal static unsafe class IconBitmap
             var pixels = new Span<uint>(bits, size * size);
             var hasAlpha = false;
             foreach (var p in pixels)
-            {
                 if ((p & 0xff000000) != 0)
                 {
                     hasAlpha = true;
                     break;
                 }
-            }
+
             if (!hasAlpha)
             {
                 // An old icon: draw its mask, which is black where the icon is opaque.
@@ -83,6 +87,7 @@ internal static unsafe class IconBitmap
                 for (var i = 0; i < pixels.Length; i++)
                     pixels[i] = (mask[i] & 0xffffff) == 0 ? pixels[i] | 0xff000000 : 0;
             }
+
             var bgra = new Span<byte>(bits, size * size * 4).ToArray();
             PInvoke.SelectObject(dc, old);
             return bgra;

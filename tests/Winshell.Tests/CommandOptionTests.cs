@@ -46,7 +46,9 @@ public partial class CommandOptionTests
         Assert.NotEmpty(named);
         foreach (var option in named)
         {
-            string[] args = option.Any(hasValue => hasValue) ? [command, .. Words(command), option.Key, "1"] : [command, .. Words(command), option.Key];
+            string[] args = option.Any(hasValue => hasValue)
+                ? [command, .. Words(command), option.Key, "1"]
+                : [command, .. Words(command), option.Key];
             var parsed = CliParser.Parse(args);
             Assert.Equal(command, parsed.Command);
         }
@@ -68,12 +70,15 @@ public partial class CommandOptionTests
     }
 
     /// <summary>What ipc and inspect need after them to be a whole command line.</summary>
-    private static string[] Words(string command) => command switch
+    private static string[] Words(string command)
     {
-        "ipc" => ["show"],
-        "inspect" => ["tree"],
-        _ => [],
-    };
+        return command switch
+        {
+            "ipc" => ["show"],
+            "inspect" => ["tree"],
+            _ => []
+        };
+    }
 
     /// <summary>An option in help text, such as <c>--force</c> or <c>-c &lt;name&gt;</c>. A <c>--</c> on its own is not one.</summary>
     [GeneratedRegex(@"(?<![\w<-])(?<name>--?[a-z][a-z-]*)(?<value> <\w+>)?")]

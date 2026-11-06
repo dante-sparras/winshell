@@ -93,17 +93,20 @@ public sealed class PanelWindow : ShellWindow
         }
     }
 
-    private protected override void ApplyPlacement() => Host!.Placement.SetPanel(new PanelPlacement(
-        Screen,
-        _anchors,
-        _margins.Left,
-        _margins.Top,
-        _margins.Right,
-        _margins.Bottom,
-        double.IsNaN(Width) ? 100 : Width,
-        double.IsNaN(Height) ? 100 : Height,
-        _coversScreen,
-        _reservedSize,
-        _aboveWindows,
-        _focusable));
+    private protected override void ApplyPlacement()
+    {
+        Host!.Placement.SetPanel(new PanelPlacement(
+            Screen,
+            _anchors,
+            _margins.Left,
+            _margins.Top,
+            _margins.Right,
+            _margins.Bottom,
+            double.IsNaN(Width) ? 100 : Width,
+            double.IsNaN(Height) ? 100 : Height,
+            _coversScreen,
+            _reservedSize,
+            _aboveWindows,
+            _focusable));
+    }
 }

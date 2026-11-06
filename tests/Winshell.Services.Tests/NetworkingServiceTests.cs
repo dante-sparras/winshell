@@ -8,47 +8,65 @@ public sealed class NetworkingServiceTests
     private const string Secret = "winshell-profile-key-9f3a";
 
     private const string SavedXml = """
-        <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-        	<name>Office</name>
-        	<SSIDConfig>
-        		<SSID>
-        			<name>Cafe</name>
-        		</SSID>
-        		<nonBroadcast>true</nonBroadcast>
-        	</SSIDConfig>
-        	<connectionMode>auto</connectionMode>
-        	<MSM>
-        		<security>
-        			<authEncryption>
-        				<authentication>WPA2PSK</authentication>
-        				<encryption>AES</encryption>
-        			</authEncryption>
-        			<sharedKey>
-        				<keyType>passPhrase</keyType>
-        				<protected>true</protected>
-        				<keyMaterial>winshell-profile-key-9f3a</keyMaterial>
-        			</sharedKey>
-        		</security>
-        	</MSM>
-        </WLANProfile>
-        """;
+                                    <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+                                    	<name>Office</name>
+                                    	<SSIDConfig>
+                                    		<SSID>
+                                    			<name>Cafe</name>
+                                    		</SSID>
+                                    		<nonBroadcast>true</nonBroadcast>
+                                    	</SSIDConfig>
+                                    	<connectionMode>auto</connectionMode>
+                                    	<MSM>
+                                    		<security>
+                                    			<authEncryption>
+                                    				<authentication>WPA2PSK</authentication>
+                                    				<encryption>AES</encryption>
+                                    			</authEncryption>
+                                    			<sharedKey>
+                                    				<keyType>passPhrase</keyType>
+                                    				<protected>true</protected>
+                                    				<keyMaterial>winshell-profile-key-9f3a</keyMaterial>
+                                    			</sharedKey>
+                                    		</security>
+                                    	</MSM>
+                                    </WLANProfile>
+                                    """;
 
     private static readonly Guid AdapterId = Guid.Parse("0b0f2811-87b5-48d6-9d7a-7a26ae12ff33");
 
-    private static NetworkInfo Wifi(string name = "Cafe", double strength = .6, params WifiProfileInfo[] profiles) =>
-        new(name, ConnectionState.Disconnected, true, strength, WifiSecurityType.Wpa2Psk, profiles);
+    private static NetworkInfo Wifi(string name = "Cafe", double strength = .6, params WifiProfileInfo[] profiles)
+    {
+        return new NetworkInfo(name, ConnectionState.Disconnected, true, strength, WifiSecurityType.Wpa2Psk, profiles);
+    }
 
-    private static NetworkDeviceInfo Adapter(params NetworkInfo[] networks) =>
-        new(AdapterId, DeviceType.Wifi, "Wi-Fi", "00:11:22:33:44:55", ConnectionState.Disconnected, false, 0, networks, WifiDeviceMode.Station);
+    private static NetworkDeviceInfo Adapter(params NetworkInfo[] networks)
+    {
+        return new NetworkDeviceInfo(AdapterId, DeviceType.Wifi, "Wi-Fi", "00:11:22:33:44:55",
+            ConnectionState.Disconnected, false, 0,
+            networks, WifiDeviceMode.Station);
+    }
 
-    private static NetworkSnapshot Snapshot(params NetworkInfo[] networks) =>
-        new(true, [Adapter(networks)], NetworkConnectivity.InternetAccess, true, true,
-            [new("profile", "Home", AdapterId, NetworkConnectivity.InternetAccess, NetworkCost.Fixed, false, false, .8)],
+    private static NetworkSnapshot Snapshot(params NetworkInfo[] networks)
+    {
+        return new NetworkSnapshot(true, [Adapter(networks)], NetworkConnectivity.InternetAccess, true, true,
+            [
+                new NetworkProfileInfo("profile", "Home", AdapterId, NetworkConnectivity.InternetAccess,
+                    NetworkCost.Fixed, false, false,
+                    .8)
+            ],
             NetworkAccessStatus.Allowed, AirplaneModeState.Off);
+    }
 
-    private static NetworkSnapshot RadioOff() => Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off };
+    private static NetworkSnapshot RadioOff()
+    {
+        return Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off };
+    }
 
-    private static WifiProfileInfo Described() => WifiProfiles.Describe(AdapterId, "Office", SavedXml, 0);
+    private static WifiProfileInfo Described()
+    {
+        return WifiProfiles.Describe(AdapterId, "Office", SavedXml, 0);
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -222,7 +240,8 @@ public sealed class NetworkingServiceTests
     [InlineData(NetworkCost.Unrestricted, false, true, true)]
     public void Metered_uses_cost_roaming_and_data_limit(NetworkCost cost, bool roaming, bool overLimit, bool expected)
     {
-        var profile = new NetworkProfile(new("profile", "Home", AdapterId, NetworkConnectivity.LocalAccess, cost, roaming, overLimit, null));
+        var profile = new NetworkProfile(new NetworkProfileInfo("profile", "Home", AdapterId,
+            NetworkConnectivity.LocalAccess, cost, roaming, overLimit, null));
 
         Assert.Equal(expected, profile.Metered);
         Assert.False(profile.SignalAvailable);
@@ -233,9 +252,14 @@ public sealed class NetworkingServiceTests
     public void Wired_and_wifi_adapters_report_their_own_state_and_only_a_real_change()
     {
         var wiredId = Guid.Parse("11111111-1111-1111-1111-111111111111");
-        var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff", ConnectionState.Connected, true, 1000, []);
-        NetworkSnapshot Shot(NetworkDeviceInfo wifi, NetworkDeviceInfo ethernet) =>
-            new(true, [wifi, ethernet], NetworkConnectivity.InternetAccess, true, true);
+        var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff",
+            ConnectionState.Connected, true, 1000, []);
+
+        NetworkSnapshot Shot(NetworkDeviceInfo wifi, NetworkDeviceInfo ethernet)
+        {
+            return new NetworkSnapshot(true, [wifi, ethernet], NetworkConnectivity.InternetAccess, true, true);
+        }
+
         using var session = new Session(Shot(Adapter(), wired));
         var device = Assert.IsType<WifiDevice>(session.Service.Devices[0]);
         var ethernet = Assert.IsType<WiredDevice>(session.Service.Devices[1]);
@@ -247,7 +271,8 @@ public sealed class NetworkingServiceTests
         var wiredChanges = Watch(ethernet);
 
         session.Show(Shot(Adapter() with { Name = "Wi-Fi 2" }, wired));
-        session.Show(Shot(Adapter() with { Name = "Wi-Fi 2", Mode = WifiDeviceMode.AccessPoint }, wired with { HasLink = false, LinkSpeed = 0 }));
+        session.Show(Shot(Adapter() with { Name = "Wi-Fi 2", Mode = WifiDeviceMode.AccessPoint },
+            wired with { HasLink = false, LinkSpeed = 0 }));
 
         Assert.Equal([nameof(WifiDevice.Name), nameof(WifiDevice.Mode)], changes);
         Assert.Equal([nameof(WiredDevice.LinkSpeed), nameof(WiredDevice.HasLink)], wiredChanges);
@@ -327,7 +352,8 @@ public sealed class NetworkingServiceTests
         Assert.Equal("Cafe", profile.Ssid);
         Assert.DoesNotContain(Secret, string.Join('|', fields.Values));
         Assert.DoesNotContain(Secret, Described().ToString());
-        Assert.DoesNotContain(typeof(WifiProfile).GetProperties(), p => p.Name.Contains("Key", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(typeof(WifiProfile).GetProperties(),
+            p => p.Name.Contains("Key", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -359,7 +385,8 @@ public sealed class NetworkingServiceTests
     [Fact]
     public void A_saved_profile_keeps_its_object_and_a_failed_read_raises_nothing()
     {
-        var failedRead = new WifiProfileInfo(WifiProfiles.Id(AdapterId, "Office"), "Office", "", false, WifiSecurityType.Unknown, false, false, false, WifiProfileXml.Unreadable);
+        var failedRead = new WifiProfileInfo(WifiProfiles.Id(AdapterId, "Office"), "Office", "", false,
+            WifiSecurityType.Unknown, false, false, false, WifiProfileXml.Unreadable);
         using var session = new Session(Snapshot(Wifi(profiles: Described())));
         var profile = session.Profile;
         var failed = Failures(h => profile.OperationFailed += h);
@@ -496,9 +523,12 @@ public sealed class NetworkingServiceTests
     {
         var wiredId = Guid.Parse("11111111-1111-1111-1111-111111111111");
         var info = Described() with { Id = WifiProfiles.Id(wiredId, "Office") };
-        var wiredNetwork = new NetworkInfo("Cafe", ConnectionState.Connected, true, 0, WifiSecurityType.Unknown, [info]);
-        var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff", ConnectionState.Connected, true, 1000, [wiredNetwork]);
-        using var session = new Session(new NetworkSnapshot(true, [wired], NetworkConnectivity.LocalAccess, true, true));
+        var wiredNetwork =
+            new NetworkInfo("Cafe", ConnectionState.Connected, true, 0, WifiSecurityType.Unknown, [info]);
+        var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff",
+            ConnectionState.Connected, true, 1000, [wiredNetwork]);
+        using var session =
+            new Session(new NetworkSnapshot(true, [wired], NetworkConnectivity.LocalAccess, true, true));
         var network = Assert.Single(Assert.IsType<WiredDevice>(Assert.Single(session.Service.Devices)).Networks);
         Assert.IsNotType<WifiNetwork>(network);
 
@@ -526,7 +556,9 @@ public sealed class NetworkingServiceTests
         {
             // The shell calls these on its UI thread, which must not wait for Windows.
             var cancellation = TestContext.Current.CancellationToken;
-            await Task.Run(() => { running = action == "disconnect" ? network.DisconnectAsync() : network.ForgetAsync(); }, cancellation)
+            await Task.Run(
+                    () => { running = action == "disconnect" ? network.DisconnectAsync() : network.ForgetAsync(); },
+                    cancellation)
                 .WaitAsync(TimeSpan.FromSeconds(5), cancellation);
             Assert.False(running!.IsCompleted); // Set by the call that just returned.
             Assert.True(network.Busy);
@@ -569,7 +601,10 @@ public sealed class NetworkingServiceTests
             Loop.Process();
         }
 
-        public void Dispose() => Service.Dispose();
+        public void Dispose()
+        {
+            Service.Dispose();
+        }
     }
 
     private sealed class FakeBackend : INetworkBackend
@@ -630,7 +665,10 @@ public sealed class NetworkingServiceTests
             _listener?.Invoke(snapshot);
         }
 
-        public void Refresh() => Calls.Add("refresh");
+        public void Refresh()
+        {
+            Calls.Add("refresh");
+        }
 
         public Task RequestAccessAsync()
         {
@@ -648,12 +686,19 @@ public sealed class NetworkingServiceTests
             return Task.FromResult(ApplyRadio(enabled, RadioError));
         }
 
-        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled) => ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled)
+        {
+            return ApplyRadio(enabled, await pending.ConfigureAwait(false));
+        }
 
         private string? ApplyRadio(bool enabled, string? error)
         {
             if (error is null)
-                Current = Current with { WifiEnabled = enabled, WifiHardwareEnabled = true, WifiState = enabled ? WifiRadioState.On : WifiRadioState.Off };
+                Current = Current with
+                {
+                    WifiEnabled = enabled, WifiHardwareEnabled = true,
+                    WifiState = enabled ? WifiRadioState.On : WifiRadioState.Off
+                };
             return error;
         }
 
@@ -668,7 +713,9 @@ public sealed class NetworkingServiceTests
         {
             Calls.Add("connect");
             Connection = (device, ssid, password);
-            return Failure is { } e ? Task.FromException<ConnectionFailReason?>(e) : ConnectTask ?? Task.FromResult(ConnectResult);
+            return Failure is { } e
+                ? Task.FromException<ConnectionFailReason?>(e)
+                : ConnectTask ?? Task.FromResult(ConnectResult);
         }
 
         /// <summary>Holds Disconnect and Forget until it is set, as Windows does until it answers.</summary>

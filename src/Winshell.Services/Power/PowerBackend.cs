@@ -24,10 +24,15 @@ internal sealed record PowerDeviceInfo(
     double HealthPercentage)
 {
     /// <summary>What a PC with no battery reports.</summary>
-    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false, PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0);
+    public static readonly PowerDeviceInfo NoBattery = new("", "", PowerDeviceType.Unknown, false, false,
+        PowerDeviceState.Unknown, 0, 0, 0, 0, 0, 0, 0);
 }
 
-internal sealed record PowerSnapshot(bool Ready, PowerDeviceInfo Display, IReadOnlyList<PowerDeviceInfo> Devices, bool OnBattery)
+internal sealed record PowerSnapshot(
+    bool Ready,
+    PowerDeviceInfo Display,
+    IReadOnlyList<PowerDeviceInfo> Devices,
+    bool OnBattery)
 {
     public static readonly PowerSnapshot Initial = new(false, PowerDeviceInfo.NoBattery, [], false);
 }
@@ -42,7 +47,9 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
     public static readonly PowerBackend Instance = new();
 
     private readonly object _batteriesLock = new();
+
     private readonly Dictionary<string, (WinBattery Battery, string Name)> _batteries = new(StringComparer.Ordinal);
+
     // Held so the objects whose events this listens to stay alive.
     private WinBattery? _aggregate;
     private DeviceWatcher? _watcher;
@@ -70,7 +77,10 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         _watcher.Removed += (_, update) =>
         {
             lock (_batteriesLock)
+            {
                 _batteries.Remove(update.Id);
+            }
+
             Refresh();
         };
         _watcher.Start();
@@ -83,7 +93,10 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             return;
         battery.ReportUpdated += (_, _) => Refresh();
         lock (_batteriesLock)
+        {
             _batteries[id] = (battery, name);
+        }
+
         Refresh();
     }
 
@@ -98,7 +111,13 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
 
         List<PowerDeviceInfo> devices;
         lock (_batteriesLock)
-            devices = [.. _batteries.Select(kv => Describe(kv.Value.Battery.GetReport(), kv.Key, kv.Value.Name, null)).Where(d => d.IsPresent)];
+        {
+            devices =
+            [
+                .. _batteries.Select(kv => Describe(kv.Value.Battery.GetReport(), kv.Key, kv.Value.Name, null))
+                    .Where(d => d.IsPresent)
+            ];
+        }
 
         var onBattery = aggregate.IsPresent && (PowerSupplyNotPresent() ?? (hasStatus && status.ACLineStatus == 0));
         return Task.FromResult(new PowerSnapshot(true, aggregate, devices, onBattery));
@@ -114,6 +133,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         catch (COMException)
         {
         }
+
         if (report is null || report.Status == BatteryStatus.NotPresent)
         {
             // GetSystemPowerStatus is the fallback when the battery API has nothing to say.
@@ -121,12 +141,18 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
                 return PowerDeviceInfo.NoBattery;
             var percentage = status.BatteryLifePercent / 100.0;
             var charging = (status.BatteryFlag & 8) != 0;
-            var state = charging ? PowerDeviceState.Charging
-                : status.ACLineStatus == 1 ? (percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging)
-                : PowerDeviceState.Discharging;
-            var timeToEmpty = state == PowerDeviceState.Discharging && status.BatteryLifeTime != uint.MaxValue ? status.BatteryLifeTime : 0;
-            return new PowerDeviceInfo("", "", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0, timeToEmpty, 0, 0);
+            var state = charging
+                ? PowerDeviceState.Charging
+                : status.ACLineStatus == 1
+                    ? percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging
+                    : PowerDeviceState.Discharging;
+            var timeToEmpty = state == PowerDeviceState.Discharging && status.BatteryLifeTime != uint.MaxValue
+                ? status.BatteryLifeTime
+                : 0;
+            return new PowerDeviceInfo("", "", PowerDeviceType.Battery, true, true, state, percentage, 0, 0, 0,
+                timeToEmpty, 0, 0);
         }
+
         double? remainingTime = null;
         try
         {
@@ -137,6 +163,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         catch (COMException)
         {
         }
+
         if (remainingTime is null && hasStatus && status.BatteryLifeTime != uint.MaxValue)
             remainingTime = status.BatteryLifeTime;
         return Describe(report, "", "", remainingTime);
@@ -155,17 +182,20 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
     }
 
     /// <summary>A battery report. Capacities are watt-hours and the charge rate is watts.</summary>
-    private static PowerDeviceInfo Describe(WinBatteryReport report, string nativePath, string model, double? timeToEmptyHint)
+    private static PowerDeviceInfo Describe(WinBatteryReport report, string nativePath, string model,
+        double? timeToEmptyHint)
     {
         if (report.Status == BatteryStatus.NotPresent)
-            return PowerDeviceInfo.NoBattery with { DeviceId = nativePath, Model = model, Type = PowerDeviceType.Battery, PowersTheSystem = true };
+            return PowerDeviceInfo.NoBattery with
+            {
+                DeviceId = nativePath, Model = model, Type = PowerDeviceType.Battery, PowersTheSystem = true
+            };
         var remaining = report.RemainingCapacityInMilliwattHours / 1000.0;
         var full = report.FullChargeCapacityInMilliwattHours / 1000.0;
         var design = report.DesignCapacityInMilliwattHours / 1000.0;
         var rate = (report.ChargeRateInMilliwatts ?? 0) / 1000.0;
         var percentage = remaining is { } r && full is > 0 ? Math.Clamp(r / full.Value, 0, 1) : 0;
         if (remaining is null || full is not > 0)
-        {
             try
             {
                 percentage = PowerManager.RemainingChargePercent / 100.0;
@@ -173,23 +203,25 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             catch (COMException)
             {
             }
-        }
+
         var state = report.Status switch
         {
             BatteryStatus.Charging => PowerDeviceState.Charging,
             BatteryStatus.Discharging => percentage <= 0 ? PowerDeviceState.Empty : PowerDeviceState.Discharging,
             // Idle: on line power and not charging, either full or held below full.
             BatteryStatus.Idle => percentage >= 0.99 ? PowerDeviceState.FullyCharged : PowerDeviceState.NotCharging,
-            _ => PowerDeviceState.Unknown,
+            _ => PowerDeviceState.Unknown
         };
         var timeToEmpty = 0.0;
         if (state == PowerDeviceState.Discharging)
             timeToEmpty = timeToEmptyHint ?? (rate < 0 && remaining is > 0 ? remaining.Value / -rate * 3600 : 0);
-        var timeToFull = state == PowerDeviceState.Charging && rate > 0 && remaining is { } now && full is { } max && max > now
+        var timeToFull = state == PowerDeviceState.Charging && rate > 0 && remaining is { } now && full is { } max &&
+                         max > now
             ? (max - now) / rate * 3600
             : 0;
         var health = full is > 0 && design is > 0 ? Math.Min(100, full.Value / design.Value * 100) : 0;
-        return new PowerDeviceInfo(nativePath, model, PowerDeviceType.Battery, true, true, state, percentage, remaining ?? 0, full ?? 0, rate,
+        return new PowerDeviceInfo(nativePath, model, PowerDeviceType.Battery, true, true, state, percentage,
+            remaining ?? 0, full ?? 0, rate,
             Math.Round(timeToEmpty), Math.Round(timeToFull), health);
     }
 }

@@ -21,5 +21,8 @@ public class ConfigNameTests
     [InlineData("work")]
     [InlineData("my config")]
     [InlineData("v1.2")]
-    public void A_folder_name_is_kept(string name) => Assert.Equal(name, CliParser.ParseOptions(["run", "-c", name], "run").Config);
+    public void A_folder_name_is_kept(string name)
+    {
+        Assert.Equal(name, CliParser.ParseOptions(["run", "-c", name], "run").Config);
+    }
 }

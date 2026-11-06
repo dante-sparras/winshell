@@ -13,13 +13,15 @@ public class StartupErrorTests
     [InlineData(0, 3u, false)]
     [InlineData(0, 0x8003u, false)]
     [InlineData(1, 2u, false)]
-    public void A_dialog_is_only_for_an_error_nobody_else_can_read(int window, uint stderrType, bool dialog) =>
+    public void A_dialog_is_only_for_an_error_nobody_else_can_read(int window, uint stderrType, bool dialog)
+    {
         Assert.Equal(dialog, StartupError.NeedsDialog(window, stderrType));
+    }
 
     [Fact]
     public void No_console_asks_the_dialog_with_the_message_and_the_folder()
     {
-        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", consoleWindow: 0, stderrType: 0));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", 0, 0));
 
         var call = Assert.Single(seen);
         Assert.Equal("No .csproj at C:\\missing.", call.Message);
@@ -29,7 +31,7 @@ public class StartupErrorTests
     [Fact]
     public void A_console_does_not_ask_the_dialog()
     {
-        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", consoleWindow: 1, stderrType: 2));
+        var seen = Asked(() => StartupError.Report("No .csproj at C:\\missing.", "C:\\configs", 1, 2));
 
         Assert.Empty(seen);
     }
@@ -37,7 +39,7 @@ public class StartupErrorTests
     [Fact]
     public void A_redirected_error_does_not_ask_the_dialog()
     {
-        var seen = Asked(() => StartupError.Report("No config named \"work\" in C:\\configs.", "C:\\configs", consoleWindow: 0, stderrType: 3));
+        var seen = Asked(() => StartupError.Report("No config named \"work\" in C:\\configs.", "C:\\configs", 0, 3));
 
         Assert.Empty(seen);
     }
@@ -57,7 +59,7 @@ public class StartupErrorTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            Directory.Delete(root, true);
         }
     }
 

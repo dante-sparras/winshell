@@ -7,9 +7,15 @@ public sealed class ConfigurationProjectTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<string> _commands = [];
 
-    public ConfigurationProjectTests() => Directory.CreateDirectory(_root);
+    public ConfigurationProjectTests()
+    {
+        Directory.CreateDirectory(_root);
+    }
 
-    public void Dispose() => Directory.Delete(_root, recursive: true);
+    public void Dispose()
+    {
+        Directory.Delete(_root, true);
+    }
 
     private const string Plain = "<Project Sdk=\"Microsoft.NET.Sdk\" />";
 
@@ -54,9 +60,9 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("mine\\Bar.csproj");
 
-        Assert.Equal(file, Found(path: file).ProjectFile);
-        Assert.Equal(file, Found(path: Path.Combine(_root, "mine")).ProjectFile);
-        Assert.StartsWith("No .csproj at ", Refusal(path: Path.Combine(_root, "other")), StringComparison.Ordinal);
+        Assert.Equal(file, Found(file).ProjectFile);
+        Assert.Equal(file, Found(Path.Combine(_root, "mine")).ProjectFile);
+        Assert.StartsWith("No .csproj at ", Refusal(Path.Combine(_root, "other")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -65,7 +71,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         Project("mine\\A.csproj");
         Project("mine\\B.csproj");
 
-        Assert.Contains("A.csproj, B.csproj", Refusal(path: Path.Combine(_root, "mine")), StringComparison.Ordinal);
+        Assert.Contains("A.csproj, B.csproj", Refusal(Path.Combine(_root, "mine")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -121,18 +127,19 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         File.WriteAllText(Path.Combine(_root, "notes.txt"), "hello");
 
-        Assert.StartsWith("No .csproj at ", Refusal(path: Path.Combine(_root, "notes.txt")), StringComparison.Ordinal);
+        Assert.StartsWith("No .csproj at ", Refusal(Path.Combine(_root, "notes.txt")), StringComparison.Ordinal);
     }
 
     [Fact]
     public void A_program_finds_its_project()
     {
         var file = Project("mine\\Bar.csproj");
-        var project = Found(path: Path.Combine(_root, "mine"));
+        var project = Found(Path.Combine(_root, "mine"));
 
         Assert.Equal(file, project.ProjectFile);
         Assert.Equal(file, ConfigurationProject.ForProgram(project.Program)!.ProjectFile);
-        Assert.Equal(file, ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder + ".next", "Bar.exe"))!.ProjectFile);
+        Assert.Equal(file,
+            ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder + ".next", "Bar.exe"))!.ProjectFile);
         Assert.Null(ConfigurationProject.ForProgram(Path.Combine(project.OutputFolder, "other.exe")));
         Assert.Null(ConfigurationProject.ForProgram(Path.Combine(_root, "winshell.exe")));
     }
@@ -144,7 +151,7 @@ public sealed class ConfigurationProjectTests : IDisposable
     [InlineData("not xml", "Bar.exe")]
     public void The_program_is_named_by_the_project(string text, string expected)
     {
-        var project = Found(path: Project("Bar.csproj", text));
+        var project = Found(Project("Bar.csproj", text));
 
         Assert.Equal(Path.Combine(_root, "bin", "shell", expected), project.Program);
     }
@@ -156,7 +163,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         var source = Project("Views\\Bar.xaml");
         File.SetLastWriteTimeUtc(file, Long);
         File.SetLastWriteTimeUtc(source, Long);
-        var project = Found(path: file);
+        var project = Found(file);
         Assert.True(project.NeedsBuild());
 
         Built(project, Long.AddMinutes(1));
@@ -171,7 +178,7 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("Bar.csproj");
         File.SetLastWriteTimeUtc(file, Long);
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, Long.AddMinutes(1));
 
         File.SetLastWriteTimeUtc(Project("obj\\project.assets.json"), Long.AddMinutes(2));
@@ -185,14 +192,15 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("Bar.csproj");
         File.SetLastWriteTimeUtc(file, Long);
-        var project = Found(path: file);
+        var project = Found(file);
 
-        Assert.Null(project.Prepare(noBuild: false, Builds));
+        Assert.Null(project.Prepare(false, Builds));
         var command = Assert.Single(_commands);
-        Assert.StartsWith($"dotnet build {file} -c Release -o {project.OutputFolder}", command, StringComparison.Ordinal);
+        Assert.StartsWith($"dotnet build {file} -c Release -o {project.OutputFolder}", command,
+            StringComparison.Ordinal);
 
         Built(project, Long.AddMinutes(1));
-        Assert.Null(project.Prepare(noBuild: false, Builds));
+        Assert.Null(project.Prepare(false, Builds));
         Assert.Single(_commands);
     }
 
@@ -201,10 +209,10 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("Bar.csproj");
         File.SetLastWriteTimeUtc(file, Long);
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, Long);
         // Opening the file here stops the rename. A running program does not: its mapping still lets the folder move.
-        File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), project.Program, overwrite: true);
+        File.Copy(Path.Combine(Environment.SystemDirectory, "cmd.exe"), project.Program, true);
         File.SetLastWriteTimeUtc(project.Program, Long);
         File.WriteAllText(Project("Program.cs"), "class Program {}");
         File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), Long.AddMinutes(2));
@@ -214,7 +222,7 @@ public sealed class ConfigurationProjectTests : IDisposable
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            ArgumentList = { "/c", "ping", "-n", "30", "127.0.0.1" },
+            ArgumentList = { "/c", "ping", "-n", "30", "127.0.0.1" }
         })!;
         try
         {
@@ -223,7 +231,8 @@ public sealed class ConfigurationProjectTests : IDisposable
             running.BeginOutputReadLine();
             running.BeginErrorReadLine();
             Assert.False(running.HasExited);
-            var reason = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, "error CS1002: ; expected [Bar.csproj]"));
+            var reason = project.Prepare(false,
+                (_, _, _) => new CommandResult(1, "error CS1002: ; expected [Bar.csproj]"));
 
             // Whether the folder moved or the build went beside it is the build's business. This is what must hold after either.
             Assert.Contains("error CS1002", reason, StringComparison.Ordinal);
@@ -235,7 +244,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         {
             if (!running.HasExited)
             {
-                running.Kill(entireProcessTree: true);
+                running.Kill(true);
                 running.WaitForExit();
             }
         }
@@ -246,13 +255,13 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("Bar.csproj");
         File.SetLastWriteTimeUtc(file, Long);
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, Long);
         File.WriteAllText(Project("Program.cs"), "class Program {}");
         File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), Long.AddMinutes(2));
         using (new FileStream(project.Program, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
-            var reason = project.Prepare(noBuild: false, BuildsInto);
+            var reason = project.Prepare(false, BuildsInto);
             Assert.Null(reason);
             Assert.Equal(Path.Combine(project.OutputFolder + ".next", "Bar.exe"), project.Program);
         }
@@ -263,7 +272,7 @@ public sealed class ConfigurationProjectTests : IDisposable
     {
         var file = Project("Bar.csproj");
         File.SetLastWriteTimeUtc(file, Long);
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, Long);
         var beside = Path.Combine(project.OutputFolder + ".next", "Bar.exe");
         Directory.CreateDirectory(Path.GetDirectoryName(beside)!);
@@ -274,7 +283,7 @@ public sealed class ConfigurationProjectTests : IDisposable
         // The second reload: the old program has exited, so the build replaces bin\shell and leaves shell.next behind.
         File.WriteAllText(Project("Program.cs"), "class Program {}");
         File.SetLastWriteTimeUtc(Path.Combine(project.Folder, "Program.cs"), DateTime.UtcNow.AddMinutes(-1));
-        Assert.Null(project.Prepare(noBuild: false, BuildsInto));
+        Assert.Null(project.Prepare(false, BuildsInto));
 
         Assert.Equal(Path.Combine(project.OutputFolder, "Bar.exe"), project.Program);
     }
@@ -291,10 +300,10 @@ public sealed class ConfigurationProjectTests : IDisposable
     public void No_build_runs_what_the_last_build_left_even_with_a_newer_source()
     {
         var file = Project("Bar.csproj");
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, Long);
 
-        Assert.Null(project.Prepare(noBuild: true, Builds));
+        Assert.Null(project.Prepare(true, Builds));
 
         Assert.Empty(_commands);
     }
@@ -302,9 +311,9 @@ public sealed class ConfigurationProjectTests : IDisposable
     [Fact]
     public void No_build_with_no_program_says_to_build_it()
     {
-        var project = Found(path: Project("Bar.csproj"));
+        var project = Found(Project("Bar.csproj"));
 
-        Assert.Equal("Bar has not been built. Run winshell run once to build it.", project.Prepare(noBuild: true, Builds));
+        Assert.Equal("Bar has not been built. Run winshell run once to build it.", project.Prepare(true, Builds));
         Assert.Empty(_commands);
     }
 
@@ -315,12 +324,12 @@ public sealed class ConfigurationProjectTests : IDisposable
     [InlineData("Bar.csproj", 4)]
     public void A_downloaded_project_never_reaches_a_build(string name, int zone)
     {
-        var project = Found(path: Project("Bar.csproj"));
+        var project = Found(Project("Bar.csproj"));
         var marked = Path.Combine(_root, name);
         File.AppendAllText(marked, "");
         File.WriteAllText(marked + ":Zone.Identifier", $"[ZoneTransfer]\r\nZoneId={zone}\r\n");
 
-        var refusal = project.Prepare(noBuild: false, Builds);
+        var refusal = project.Prepare(false, Builds);
 
         Assert.StartsWith($"{marked}: {name} was downloaded", refusal, StringComparison.Ordinal);
         Assert.Empty(_commands);
@@ -333,12 +342,12 @@ public sealed class ConfigurationProjectTests : IDisposable
     public void A_project_from_this_pc_or_the_intranet_can_be_prepared(int zone)
     {
         var file = Project("Bar.csproj");
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
         File.WriteAllText(file + ":Zone.Identifier", $"[ZoneTransfer]\r\nZoneId={zone}\r\n");
 
         Assert.False(ZoneIdentifier.IsDownloaded(file));
-        Assert.Null(project.Prepare(noBuild: false, Builds));
+        Assert.Null(project.Prepare(false, Builds));
         Assert.Empty(_commands);
     }
 
@@ -346,27 +355,27 @@ public sealed class ConfigurationProjectTests : IDisposable
     public void A_project_without_a_zone_can_be_prepared()
     {
         var file = Project("Bar.csproj");
-        var project = Found(path: file);
+        var project = Found(file);
         Built(project, new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.False(ZoneIdentifier.IsDownloaded(file));
         Assert.False(ZoneIdentifier.IsDownloaded(Path.Combine(_root, "missing.csproj")));
-        Assert.Null(project.Prepare(noBuild: false, Builds));
+        Assert.Null(project.Prepare(false, Builds));
         Assert.Empty(_commands);
     }
 
     [Fact]
     public void A_failed_build_gives_the_compiler_errors_once_each_without_the_project()
     {
-        var project = Found(path: Project("Bar.csproj"));
+        var project = Found(Project("Bar.csproj"));
         const string output = """
-            Bar.cs(1,1): error CS1002: ; expected [C:\x\Bar.csproj]
-            Bar.cs(1,1): error CS1002: ; expected [C:\x\Bar.csproj]
-              noise
-            Build FAILED.
-            """;
+                              Bar.cs(1,1): error CS1002: ; expected [C:\x\Bar.csproj]
+                              Bar.cs(1,1): error CS1002: ; expected [C:\x\Bar.csproj]
+                                noise
+                              Build FAILED.
+                              """;
 
-        var why = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, output));
+        var why = project.Prepare(false, (_, _, _) => new CommandResult(1, output));
 
         Assert.Equal("Bar did not build.\nBar.cs(1,1): error CS1002: ; expected", why);
     }
@@ -375,10 +384,11 @@ public sealed class ConfigurationProjectTests : IDisposable
     public void A_failed_build_names_a_file_in_the_project_from_its_folder()
     {
         var file = Project("Bar.csproj");
-        var project = Found(path: file);
-        var output = $"{Path.Combine(project.Folder, "Bar.cs")}(1,1): error CS1002: ; expected [{file}::TargetFramework=net10.0-windows10.0.22621.0]";
+        var project = Found(file);
+        var output =
+            $"{Path.Combine(project.Folder, "Bar.cs")}(1,1): error CS1002: ; expected [{file}::TargetFramework=net10.0-windows10.0.22621.0]";
 
-        var why = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, output));
+        var why = project.Prepare(false, (_, _, _) => new CommandResult(1, output));
 
         Assert.Equal("Bar did not build.\nBar.cs(1,1): error CS1002: ; expected", why);
     }
@@ -386,9 +396,9 @@ public sealed class ConfigurationProjectTests : IDisposable
     [Fact]
     public void A_failure_with_no_compiler_error_keeps_its_last_lines()
     {
-        var project = Found(path: Project("Bar.csproj"));
+        var project = Found(Project("Bar.csproj"));
 
-        var why = project.Prepare(noBuild: false, (_, _, _) => new CommandResult(1, "first\nsecond"));
+        var why = project.Prepare(false, (_, _, _) => new CommandResult(1, "first\nsecond"));
 
         Assert.Equal("Bar did not build.\nfirst\nsecond", why);
     }
@@ -406,18 +416,18 @@ public sealed class ConfigurationProjectTests : IDisposable
     public void A_real_build_puts_the_program_where_the_project_says()
     {
         const string text = """
-            <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup>
-                <OutputType>Exe</OutputType>
-                <TargetFramework>net10.0</TargetFramework>
-                <AssemblyName>Mine</AssemblyName>
-              </PropertyGroup>
-            </Project>
-            """;
-        var project = Found(path: Project("Bar.csproj", text));
+                            <Project Sdk="Microsoft.NET.Sdk">
+                              <PropertyGroup>
+                                <OutputType>Exe</OutputType>
+                                <TargetFramework>net10.0</TargetFramework>
+                                <AssemblyName>Mine</AssemblyName>
+                              </PropertyGroup>
+                            </Project>
+                            """;
+        var project = Found(Project("Bar.csproj", text));
         Project("Program.cs", "System.Console.Write(\"built\");");
 
-        var why = project.Prepare(noBuild: false, ConfigurationProject.Run);
+        var why = project.Prepare(false, ConfigurationProject.Run);
 
         Assert.Null(why);
         Assert.False(project.NeedsBuild());
@@ -430,7 +440,8 @@ public sealed class ConfigurationProjectTests : IDisposable
         // Hold every thread the pool has, and more than it can add meanwhile. Starting processes until it runs out takes
         // a burst so large that Windows refuses some of them.
         using var busy = new ManualResetEventSlim();
-        var held = Enumerable.Range(0, ThreadPool.ThreadCount + (Environment.ProcessorCount * 2)).Select(_ => Task.Run(busy.Wait)).ToArray();
+        var held = Enumerable.Range(0, ThreadPool.ThreadCount + Environment.ProcessorCount * 2)
+            .Select(_ => Task.Run(busy.Wait)).ToArray();
         try
         {
             for (var i = 0; i < 8; i++)
@@ -447,12 +458,17 @@ public sealed class ConfigurationProjectTests : IDisposable
     public async Task A_server_that_outlives_its_build_does_not_hold_up_the_result()
     {
         // The server outlives the wait below, so a Run that waited for it to close its output would not be done in time.
-        var run = Task.Run(() => ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 60 127.0.0.1 >nul & echo built"], Path.GetTempPath()));
+        var run = Task.Run(() =>
+            ConfigurationProject.Run("cmd", ["/c", "start /b ping -n 60 127.0.0.1 >nul & echo built"],
+                Path.GetTempPath()));
 
         Wait.Until(() => run.IsCompleted, "the result while the server still runs");
 
         Assert.Equal((0, "built"), ToTuple(await run));
     }
 
-    private static (int, string) ToTuple(CommandResult result) => (result.ExitCode, result.Output);
+    private static (int, string) ToTuple(CommandResult result)
+    {
+        return (result.ExitCode, result.Output);
+    }
 }

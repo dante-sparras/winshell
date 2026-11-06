@@ -22,6 +22,7 @@ public sealed class ShellInstanceTests
             responses.Add(response);
             break;
         }
+
         return responses;
     }
 
@@ -44,7 +45,8 @@ public sealed class ShellInstanceTests
 
         shell.Log.Warn("test", "sync --password SENTINEL-PASSWORD");
 
-        using var stream = new FileStream(info.Log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var stream = new FileStream(info.Log, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         var text = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
         Assert.Contains("WARN test: sync --password", text, StringComparison.Ordinal);
@@ -56,9 +58,12 @@ public sealed class ShellInstanceTests
     {
         var shell = await ShellFixture.Current();
 
-        Assert.Equal(Path.Combine(ShellLocations.DataRoot, "by-shell", "winshell-tests", "a.txt"), shell.DataPath("a.txt"));
-        Assert.Equal(Path.Combine(ShellLocations.StateRoot, "by-shell", "winshell-tests", "a.txt"), shell.StatePath("a.txt"));
-        Assert.Equal(Path.Combine(ShellLocations.CacheRoot, "by-shell", "winshell-tests", "a.txt"), shell.CachePath("a.txt"));
+        Assert.Equal(Path.Combine(ShellLocations.DataRoot, "by-shell", "winshell-tests", "a.txt"),
+            shell.DataPath("a.txt"));
+        Assert.Equal(Path.Combine(ShellLocations.StateRoot, "by-shell", "winshell-tests", "a.txt"),
+            shell.StatePath("a.txt"));
+        Assert.Equal(Path.Combine(ShellLocations.CacheRoot, "by-shell", "winshell-tests", "a.txt"),
+            shell.CachePath("a.txt"));
         Assert.Equal(Path.Combine(Path.GetDirectoryName(Environment.ProcessPath)!, "a.txt"), shell.ConfigPath("a.txt"));
         Assert.True(Directory.Exists(shell.DataDir));
     }
@@ -83,29 +88,35 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public async Task A_build_error_shows_on_the_running_shell() => await ShellFixture.Hold(async () =>
+    public async Task A_build_error_shows_on_the_running_shell()
     {
-        var shell = await ShellFixture.Current();
-        var response = Assert.Single(await Ask(IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj")));
+        await ShellFixture.Hold(async () =>
+        {
+            var shell = await ShellFixture.Current();
+            var response =
+                Assert.Single(await Ask(IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected",
+                    @"C:\mine\Bar.csproj")));
 
-        try
-        {
-            Assert.True(response.Ok);
-            Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
-            Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
-            Assert.Equal(Environment.ProcessId, (await Own()).Pid);
-        }
-        finally
-        {
-            // The shell is one for the whole run. A notice left up is a second window for the tests that follow.
-            await DismissNotice();
-        }
-    });
+            try
+            {
+                Assert.True(response.Ok);
+                Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
+                Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
+                Assert.Equal(Environment.ProcessId, (await Own()).Pid);
+            }
+            finally
+            {
+                // The shell is one for the whole run. A notice left up is a second window for the tests that follow.
+                await DismissNotice();
+            }
+        });
+    }
 
     [Fact]
     public async Task A_handler_that_throws_fails_the_call_and_the_shell_goes_on()
     {
-        using var handler = await ShellFixture.On(s => s.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no"))));
+        using var handler = await ShellFixture.On(s =>
+            s.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no"))));
 
         var failed = Assert.Single(await Ask(IpcRequest.ForCall("tests", "fail", [])));
         var shown = Assert.Single(await Ask(IpcRequest.ForShow(false)));
@@ -116,27 +127,34 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public async Task Work_that_fails_on_the_shell_thread_writes_a_report_and_the_shell_goes_on() => await ShellFixture.Hold(async () =>
+    public async Task Work_that_fails_on_the_shell_thread_writes_a_report_and_the_shell_goes_on()
     {
-        var shell = await ShellFixture.Current();
+        await ShellFixture.Hold(async () =>
+        {
+            var shell = await ShellFixture.Current();
 
-        shell.Loop.Post(() => throw new InvalidOperationException("SENTINEL posted failure"));
+            shell.Loop.Post(() => throw new InvalidOperationException("SENTINEL posted failure"));
 
-        await Wait.UntilAsync(
-            () => Directory.Exists(ShellLocations.CrashRoot)
-                && Directory.GetFiles(ShellLocations.CrashRoot).Any(f => ReadClosed(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
-            "a crash report for the posted failure");
-        Assert.True(await ShellFixture.On(_ => true));
-        // The report shows a notice. Take it down before another test looks at the shell's windows.
-        await DismissNotice();
-    });
+            await Wait.UntilAsync(
+                () => Directory.Exists(ShellLocations.CrashRoot)
+                      && Directory.GetFiles(ShellLocations.CrashRoot).Any(f =>
+                          ReadClosed(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
+                "a crash report for the posted failure");
+            Assert.True(await ShellFixture.On(_ => true));
+            // The report shows a notice. Take it down before another test looks at the shell's windows.
+            await DismissNotice();
+        });
+    }
 
     /// <summary>Closes the shell's notice. The show is already posted by the time a report or a build error is visible.</summary>
-    private static Task DismissNotice() => ShellFixture.On(shell =>
+    private static Task DismissNotice()
     {
-        shell.Notices?.Hide();
-        return true;
-    });
+        return ShellFixture.On(shell =>
+        {
+            shell.Notices?.Hide();
+            return true;
+        });
+    }
 
     /// <summary>
     /// A file's text, refusing to share with a writer as <see cref="File.ReadAllText(string)"/> does, so a report still
@@ -145,7 +163,8 @@ public sealed class ShellInstanceTests
     /// </summary>
     private static string ReadClosed(string path)
     {
-        using var reader = new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
+        using var reader =
+            new StreamReader(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete));
         return reader.ReadToEnd();
     }
 }

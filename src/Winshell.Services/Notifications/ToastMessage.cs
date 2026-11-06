@@ -123,6 +123,7 @@ public sealed class ToastMessage : ObservableObject
             ValidateUri(ActivationUri);
             root.Add(new XAttribute("activationType", "protocol"), new XAttribute("launch", ActivationUri));
         }
+
         if (Actions.Count > 5)
             throw new ArgumentException("Windows toasts support at most five actions.");
         if (Actions.Count > 0)
@@ -136,8 +137,10 @@ public sealed class ToastMessage : ObservableObject
                 actions.Add(new XElement("action", new XAttribute("content", action.Text),
                     new XAttribute("activationType", "protocol"), new XAttribute("arguments", action.ActivationUri)));
             }
+
             root.Add(actions);
         }
+
         if (Silent)
             root.Add(new XElement("audio", new XAttribute("silent", "true")));
         return root.ToString(SaveOptions.DisableFormatting);
@@ -149,11 +152,15 @@ public sealed class ToastMessage : ObservableObject
             throw new ArgumentException("Toast activation requires an absolute protocol URI.");
     }
 
-    private void ReportFailure(string message) => _loop.Post(() =>
+    private void ReportFailure(string message)
     {
-        Set(ref _error, string.IsNullOrWhiteSpace(message) ? "Windows could not send the toast." : message, nameof(Error));
-        Failed?.Invoke(_error);
-    });
+        _loop.Post(() =>
+        {
+            Set(ref _error, string.IsNullOrWhiteSpace(message) ? "Windows could not send the toast." : message,
+                nameof(Error));
+            Failed?.Invoke(_error);
+        });
+    }
 
     private static void SendNative(string appId, string xml, string tag, string group, Action<string> failed)
     {
@@ -167,7 +174,8 @@ public sealed class ToastMessage : ObservableObject
             toast.Group = group;
         var notifier = ToastNotificationManager.CreateToastNotifier(appId);
         if (notifier.Setting != NotificationSetting.Enabled)
-            throw new InvalidOperationException($"Windows disabled toast notifications for '{appId}': {notifier.Setting}.");
+            throw new InvalidOperationException(
+                $"Windows disabled toast notifications for '{appId}': {notifier.Setting}.");
         notifier.Show(toast);
     }
 }

@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+
 namespace Winshell.Tests;
 
 /// <summary>
@@ -12,7 +15,7 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
     private (string, string)[] Folders =>
     [
         ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")),
-        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+        ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local"))
     ];
 
     public DetachOutputTests()
@@ -37,7 +40,7 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
 
     private List<int> Running()
     {
-        using var listed = System.Text.Json.JsonDocument.Parse(WinshellCli.Run(["list", "-j"], Folders).Output);
+        using var listed = JsonDocument.Parse(WinshellCli.Run(["list", "-j"], Folders).Output);
         return listed.RootElement.EnumerateArray().Select(row => row.GetProperty("pid").GetInt32()).ToList();
     }
 
@@ -45,7 +48,7 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
     {
         // Asked, not ended: the winshell run that supervises the shell would start an ended one again.
         foreach (var pid in Running())
-            WinshellCli.Run(["kill", "--force", "--pid", pid.ToString(System.Globalization.CultureInfo.InvariantCulture)], Folders);
+            WinshellCli.Run(["kill", "--force", "--pid", pid.ToString(CultureInfo.InvariantCulture)], Folders);
         Wait.Until(Removed, "the test folder to be free");
     }
 
@@ -53,7 +56,7 @@ public sealed class DetachOutputTests : IDisposable, IClassFixture<ProbeBuild>
     {
         try
         {
-            Directory.Delete(_dir, recursive: true);
+            Directory.Delete(_dir, true);
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

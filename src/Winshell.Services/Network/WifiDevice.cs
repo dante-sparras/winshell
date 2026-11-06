@@ -24,7 +24,10 @@ public sealed class WifiDevice : NetworkDevice
     public string Error => _error;
 
     /// <summary>Scans once and updates <see cref="NetworkDevice.Networks"/>. Needs <see cref="NetworkingService.RequestAccess"/> first.</summary>
-    public void Scan() => _ = ScanAsync();
+    public void Scan()
+    {
+        _ = ScanAsync();
+    }
 
     internal async Task ScanAsync()
     {

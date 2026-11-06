@@ -1,6 +1,8 @@
+using System.Security;
+using System.Text;
 using System.Text.RegularExpressions;
+using Windows.ApplicationModel;
 using Microsoft.Win32;
-using global::Windows.ApplicationModel;
 
 namespace Winshell.Session;
 
@@ -13,7 +15,10 @@ internal interface IStartupRegistry
     bool IsRegistered();
 
     /// <summary>Whether the entry starts something other than this command.</summary>
-    bool PointsElsewhere() => false;
+    bool PointsElsewhere()
+    {
+        return false;
+    }
 
     bool TurnedOffInWindows();
 
@@ -23,29 +28,47 @@ internal interface IStartupRegistry
 }
 
 /// <summary>A value under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, for the current user only.</summary>
-internal sealed class WindowsStartupRegistry(string command, string runKey = SignInEntry.RunKey, string approvedKey = SignInEntry.ApprovedKey) : IStartupRegistry
+internal sealed class WindowsStartupRegistry(
+    string command,
+    string runKey = SignInEntry.RunKey,
+    string approvedKey = SignInEntry.ApprovedKey) : IStartupRegistry
 {
     public string Command => command;
 
-    public bool IsRegistered() => Try(() => SignInEntry.RegisteredCommand(runKey) is not null);
-
-    public bool PointsElsewhere() => Try(() => SignInEntry.RegisteredCommand(runKey) is { } value && !SameSignInCommand(value, command));
-
-    public bool TurnedOffInWindows() => Try(() => SignInEntry.TurnedOffInWindows(approvedKey));
-
-    public bool Register() => Try(() =>
+    public bool IsRegistered()
     {
-        using var key = Registry.CurrentUser.CreateSubKey(runKey);
-        key.SetValue(SignInEntry.Name, command, RegistryValueKind.String);
-        return true;
-    });
+        return Try(() => SignInEntry.RegisteredCommand(runKey) is not null);
+    }
 
-    public bool Unregister() => Try(() =>
+    public bool PointsElsewhere()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(runKey, writable: true);
-        key?.DeleteValue(SignInEntry.Name, throwOnMissingValue: false);
-        return true;
-    });
+        return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value && !SameSignInCommand(value, command));
+    }
+
+    public bool TurnedOffInWindows()
+    {
+        return Try(() => SignInEntry.TurnedOffInWindows(approvedKey));
+    }
+
+    public bool Register()
+    {
+        return Try(() =>
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(runKey);
+            key.SetValue(SignInEntry.Name, command, RegistryValueKind.String);
+            return true;
+        });
+    }
+
+    public bool Unregister()
+    {
+        return Try(() =>
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(runKey, true);
+            key?.DeleteValue(SignInEntry.Name, false);
+            return true;
+        });
+    }
 
     private static bool Try(Func<bool> action)
     {
@@ -53,7 +76,7 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
         {
             return action();
         }
-        catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException)
+        catch (Exception e) when (e is UnauthorizedAccessException or SecurityException or IOException)
         {
             return false;
         }
@@ -81,6 +104,7 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
             kept.Add(path ? Path.GetFullPath(a) : a);
             path = a is "-p" or "--path";
         }
+
         if (!kept.Any(a => a is "--no-build"))
         {
             var duplicate = kept.FindIndex(a => a is "-n" or "--no-duplicate");
@@ -89,6 +113,7 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
             else
                 kept.Add("--no-build");
         }
+
         if (!kept.Any(a => a is "-n" or "--no-duplicate"))
             kept.Add("--no-duplicate");
         var conhost = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "conhost.exe");
@@ -100,7 +125,7 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
     {
         if (arg.Length > 0 && !arg.Any(c => c is ' ' or '\t' or '"'))
             return arg;
-        var sb = new System.Text.StringBuilder("\"");
+        var sb = new StringBuilder("\"");
         var slashes = 0;
         foreach (var c in arg)
         {
@@ -109,10 +134,12 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
                 slashes++;
                 continue;
             }
+
             sb.Append('\\', c == '"' ? slashes * 2 + 1 : slashes);
             slashes = 0;
             sb.Append(c);
         }
+
         sb.Append('\\', slashes * 2).Append('"');
         return sb.ToString();
     }
@@ -127,11 +154,15 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
     }
 
     /// <summary>Whether two sign-in commands start the same install. The windowed name counts as the console name.</summary>
-    internal static bool SameSignInCommand(string left, string right) =>
-        string.Equals(NormalizeSignInExe(left), NormalizeSignInExe(right), StringComparison.OrdinalIgnoreCase);
+    internal static bool SameSignInCommand(string left, string right)
+    {
+        return string.Equals(NormalizeSignInExe(left), NormalizeSignInExe(right), StringComparison.OrdinalIgnoreCase);
+    }
 
-    private static string NormalizeSignInExe(string command) =>
-        Regex.Replace(command, @"winshellw\.exe(?=$|[\s""])", "winshell.exe", RegexOptions.IgnoreCase);
+    private static string NormalizeSignInExe(string command)
+    {
+        return Regex.Replace(command, @"winshellw\.exe(?=$|[\s""])", "winshell.exe", RegexOptions.IgnoreCase);
+    }
 }
 
 /// <summary>
@@ -140,33 +171,48 @@ internal sealed class WindowsStartupRegistry(string command, string runKey = Sig
 /// </summary>
 internal sealed class StartupTaskRegistry(IStartupTask task) : IStartupRegistry
 {
-    public bool IsRegistered() => Try(() => task.State is not StartupTaskState.Disabled);
-
-    public bool PointsElsewhere() => false;
-
-    public bool TurnedOffInWindows() => Try(() => task.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy);
-
-    public bool Register() => Try(() =>
+    public bool IsRegistered()
     {
-        var state = task.State;
-        if (state is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy)
-            return true;
-        // DisabledByUser and DisabledByPolicy stay as Windows left them. RequestEnable would not change that.
-        if (state is not StartupTaskState.Disabled)
-            return false;
-        var next = task.RequestEnable();
-        return next is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy;
-    });
+        return Try(() => task.State is not StartupTaskState.Disabled);
+    }
 
-    public bool Unregister() => Try(() =>
+    public bool PointsElsewhere()
     {
-        if (task.State is StartupTaskState.Disabled)
-            return true;
-        // Only a task this shell enabled can be disabled here. Policy and the Startup apps page are Windows'.
-        if (task.State is not StartupTaskState.Enabled)
-            return false;
-        return task.Disable();
-    });
+        return false;
+    }
+
+    public bool TurnedOffInWindows()
+    {
+        return Try(() => task.State is StartupTaskState.DisabledByUser or StartupTaskState.DisabledByPolicy);
+    }
+
+    public bool Register()
+    {
+        return Try(() =>
+        {
+            var state = task.State;
+            if (state is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy)
+                return true;
+            // DisabledByUser and DisabledByPolicy stay as Windows left them. RequestEnable would not change that.
+            if (state is not StartupTaskState.Disabled)
+                return false;
+            var next = task.RequestEnable();
+            return next is StartupTaskState.Enabled or StartupTaskState.EnabledByPolicy;
+        });
+    }
+
+    public bool Unregister()
+    {
+        return Try(() =>
+        {
+            if (task.State is StartupTaskState.Disabled)
+                return true;
+            // Only a task this shell enabled can be disabled here. Policy and the Startup apps page are Windows'.
+            if (task.State is not StartupTaskState.Enabled)
+                return false;
+            return task.Disable();
+        });
+    }
 
     private static bool Try(Func<bool> action)
     {
@@ -199,7 +245,10 @@ internal interface IStartupTask
 /// </summary>
 internal static class WindowsStartupTasks
 {
-    public static IStartupTask? Open() => SignInEntry.OpenTask() is { } task ? new Real(task) : null;
+    public static IStartupTask? Open()
+    {
+        return SignInEntry.OpenTask() is { } task ? new Real(task) : null;
+    }
 
     private sealed class Real(StartupTask task) : IStartupTask
     {
@@ -208,7 +257,8 @@ internal static class WindowsStartupTasks
         // Off the caller. Completing a WinRT async call on the shell's thread can deadlock it.
         public StartupTaskState RequestEnable() =>
 #pragma warning disable VSTHRD002 // Task.Run leaves the caller, so its context is not what it waits for.
-            Task.Run(async () => await task.RequestEnableAsync().AsTask().ConfigureAwait(false)).GetAwaiter().GetResult();
+            Task.Run(async () => await task.RequestEnableAsync().AsTask().ConfigureAwait(false)).GetAwaiter()
+                .GetResult();
 #pragma warning restore VSTHRD002
 
         public bool Disable()

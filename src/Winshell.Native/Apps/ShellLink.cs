@@ -4,7 +4,14 @@ using System.Text;
 namespace Winshell.Native;
 
 /// <summary>What a <c>.lnk</c> shortcut holds.</summary>
-internal sealed record ShellLinkInfo(string Target, string Arguments, string WorkingDirectory, string IconLocation, int IconIndex, string Description, string AppUserModelId);
+internal sealed record ShellLinkInfo(
+    string Target,
+    string Arguments,
+    string WorkingDirectory,
+    string IconLocation,
+    int IconIndex,
+    string Description,
+    string AppUserModelId);
 
 /// <summary>Reads <c>.lnk</c> files with the shell's own ShellLink object.</summary>
 internal static class ShellLink
@@ -36,10 +43,13 @@ internal static class ShellLink
             buffer.Clear();
             shell.GetDescription(buffer, buffer.Capacity);
             var description = buffer.ToString();
-            var aumid = link is IPropertyStore store ? PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? "" : "";
+            var aumid = link is IPropertyStore store
+                ? PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? ""
+                : "";
             return new ShellLinkInfo(target, arguments, workingDirectory, icon, iconIndex, description, aumid);
         }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or ArgumentException or InvalidCastException)
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException or ArgumentException
+                                      or InvalidCastException)
         {
             return null;
         }

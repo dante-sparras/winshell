@@ -8,7 +8,10 @@ public sealed class ExplorerTaskbarService : ObservableObject
 {
     private readonly ExplorerTaskbarSession _session;
 
-    internal ExplorerTaskbarService(ExplorerTaskbarSession session) => _session = session;
+    internal ExplorerTaskbarService(ExplorerTaskbarSession session)
+    {
+        _session = session;
+    }
 
     /// <summary>Whether Explorer's taskbar is hidden and its screen edge is released.</summary>
     public bool Hidden

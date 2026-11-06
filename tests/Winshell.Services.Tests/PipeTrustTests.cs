@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Json;
 using Winshell.Native;
 
 namespace Winshell.Services.Tests;
@@ -97,7 +98,7 @@ public class PipeTrustTests
 
         var line = await Ask(name, """{"op":"kill"}""");
 
-        var response = System.Text.Json.JsonSerializer.Deserialize(line!, IpcJson.Default.IpcResponse)!;
+        var response = JsonSerializer.Deserialize(line!, IpcJson.Default.IpcResponse)!;
         Assert.False(response.Ok);
         Assert.Equal("refused for the test", response.Error);
         loop.RunDue();
@@ -108,17 +109,22 @@ public class PipeTrustTests
     public async Task The_name_keeps_an_instance_after_clients_come_and_go()
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), new Control(), _ => "refused for the test");
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), new Control(),
+            _ => "refused for the test");
         for (var i = 0; i < 20; i++)
         {
             // A refused client and one that hangs up at once both close their instance quickly.
             if (i % 2 == 0)
+            {
                 await Ask(name, """{"op":"show"}""");
+            }
             else
             {
-                await using var quick = new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
+                await using var quick =
+                    new NamedPipeClientStream(".", name, PipeDirection.InOut, PipeOptions.Asynchronous);
                 await quick.ConnectAsync(3000, TestContext.Current.CancellationToken);
             }
+
             Assert.Throws<IOException>(() => IpcServer.OpenFirst(name).Dispose());
         }
     }
@@ -137,10 +143,16 @@ public class PipeTrustTests
     {
         public bool Killed { get; private set; }
 
-        public ShellIpc Ipc { get; } = new ShellIpc(Log.Default);
+        public ShellIpc Ipc { get; } = new(Log.Default);
 
-        public string? Reload(string? program) => null;
+        public string? Reload(string? program)
+        {
+            return null;
+        }
 
-        public void Quit() => Killed = true;
+        public void Quit()
+        {
+            Killed = true;
+        }
     }
 }

@@ -11,7 +11,10 @@ public sealed class SessionServiceTests
     private readonly List<string> _warnings = [];
     private readonly Log _log;
 
-    public SessionServiceTests() => _log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
+    public SessionServiceTests()
+    {
+        _log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
+    }
 
     private static List<string> Watch(INotifyPropertyChanged source)
     {
@@ -23,7 +26,7 @@ public sealed class SessionServiceTests
     [Fact]
     public void Lock_asks_Windows_once()
     {
-        var windows = new FakeSessionBackend(accepts: true);
+        var windows = new FakeSessionBackend(true);
 
         Assert.True(new SessionService(_log, windows).Lock());
 
@@ -34,7 +37,7 @@ public sealed class SessionServiceTests
     [Fact]
     public void Lock_reports_when_Windows_refuses()
     {
-        Assert.False(new SessionService(_log, new FakeSessionBackend(accepts: false)).Lock());
+        Assert.False(new SessionService(_log, new FakeSessionBackend(false)).Lock());
 
         Assert.Equal(["session: Windows did not lock the session."], _warnings);
     }
@@ -165,7 +168,8 @@ public sealed class SessionServiceTests
         Assert.Empty(changes);
         loop.Process();
 
-        Assert.Equal([nameof(UpdatesService.Status), nameof(UpdatesService.Version), nameof(UpdatesService.Error)], changes);
+        Assert.Equal([nameof(UpdatesService.Status), nameof(UpdatesService.Version), nameof(UpdatesService.Error)],
+            changes);
         Assert.Equal(UpdateStatus.Failed, updates.Status);
         Assert.Equal("1.2.3", updates.Version);
         Assert.Contains("the file is locked", updates.Error, StringComparison.Ordinal);
@@ -247,7 +251,10 @@ public sealed class SessionServiceTests
 
         public TimeSpan Now => TimeSpan.Zero;
 
-        public void Post(Action action) => _posted.Add(action);
+        public void Post(Action action)
+        {
+            _posted.Add(action);
+        }
 
         public void RunNewestFirst()
         {
@@ -256,9 +263,15 @@ public sealed class SessionServiceTests
             _posted.Clear();
         }
 
-        public IDisposable Schedule(TimeSpan delay, Action action) => throw new NotSupportedException();
+        public IDisposable Schedule(TimeSpan delay, Action action)
+        {
+            throw new NotSupportedException();
+        }
 
-        public void RequestFrame(Action action) => throw new NotSupportedException();
+        public void RequestFrame(Action action)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private sealed class FakeSessionBackend(bool accepts) : ISessionBackend
@@ -284,11 +297,20 @@ public sealed class SessionServiceTests
 
         public int Writes { get; private set; }
 
-        public bool IsRegistered() => Registered;
+        public bool IsRegistered()
+        {
+            return Registered;
+        }
 
-        public bool PointsElsewhere() => Elsewhere;
+        public bool PointsElsewhere()
+        {
+            return Elsewhere;
+        }
 
-        public bool TurnedOffInWindows() => TurnedOff;
+        public bool TurnedOffInWindows()
+        {
+            return TurnedOff;
+        }
 
         public bool Register()
         {
@@ -316,8 +338,14 @@ public sealed class SessionServiceTests
 
         public int Restores { get; private set; }
 
-        public void Hide() => Hides++;
+        public void Hide()
+        {
+            Hides++;
+        }
 
-        public void Restore() => Restores++;
+        public void Restore()
+        {
+            Restores++;
+        }
     }
 }

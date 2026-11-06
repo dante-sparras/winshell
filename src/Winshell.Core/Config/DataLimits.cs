@@ -11,11 +11,15 @@ internal static class DataLimits
     public const int MaxTextBytes = 1024 * 1024;
 
     /// <summary>Null when <paramref name="bytes"/> is within <paramref name="maxBytes"/>.</summary>
-    public static string? FileBytes(long bytes, int maxBytes) =>
-        bytes > maxBytes
+    public static string? FileBytes(long bytes, int maxBytes)
+    {
+        return bytes > maxBytes
             ? string.Create(CultureInfo.InvariantCulture, $"file is {bytes} bytes, above the limit of {maxBytes}")
             : null;
+    }
 
-    public static bool IsFileLimit(string message) =>
-        message.Contains("above the limit of ", StringComparison.Ordinal);
+    public static bool IsFileLimit(string message)
+    {
+        return message.Contains("above the limit of ", StringComparison.Ordinal);
+    }
 }

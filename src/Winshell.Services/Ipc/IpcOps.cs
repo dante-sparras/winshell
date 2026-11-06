@@ -24,27 +24,51 @@ internal static class IpcOps
     /// Whether a shell and a winshell of different releases refuse <paramref name="op"/>. Kill is left out: an update can
     /// change winshell under a running shell, and it must still be possible to stop it.
     /// </summary>
-    public static bool ChecksRelease(string op) => op != Kill;
+    public static bool ChecksRelease(string op)
+    {
+        return op != Kill;
+    }
 }
 
 internal sealed partial record IpcRequest
 {
-    public static IpcRequest ForShow(bool json) => new(IpcOps.Show, Json: json);
+    public static IpcRequest ForShow(bool json)
+    {
+        return new IpcRequest(IpcOps.Show, Json: json);
+    }
 
-    public static IpcRequest ForCall(string target, string name, List<string> args) => new(IpcOps.Call, target, name, args);
+    public static IpcRequest ForCall(string target, string name, List<string> args)
+    {
+        return new IpcRequest(IpcOps.Call, target, name, args);
+    }
 
-    public static IpcRequest ForProp(string target, string name) => new(IpcOps.Prop, target, name);
+    public static IpcRequest ForProp(string target, string name)
+    {
+        return new IpcRequest(IpcOps.Prop, target, name);
+    }
 
     /// <summary>Answers once, with the first signal.</summary>
-    public static IpcRequest ForWait(string target, string name) => new(IpcOps.Wait, target, name);
+    public static IpcRequest ForWait(string target, string name)
+    {
+        return new IpcRequest(IpcOps.Wait, target, name);
+    }
 
     /// <summary>Answers with each signal until the shell quits.</summary>
-    public static IpcRequest ForListen(string target, string name) => new(IpcOps.Listen, target, name);
+    public static IpcRequest ForListen(string target, string name)
+    {
+        return new IpcRequest(IpcOps.Listen, target, name);
+    }
 
-    public static IpcRequest ForKill() => new(IpcOps.Kill);
+    public static IpcRequest ForKill()
+    {
+        return new IpcRequest(IpcOps.Kill);
+    }
 
     /// <summary>A reload. A <paramref name="program"/> is the one a handover starts, and none keeps the program this shell runs.</summary>
-    public static IpcRequest ForReload(string? program = null) => new(IpcOps.Reload, Args: program is null ? null : [program]);
+    public static IpcRequest ForReload(string? program = null)
+    {
+        return new IpcRequest(IpcOps.Reload, Args: program is null ? null : [program]);
+    }
 
     /// <summary>The program a reload hands over to, or null.</summary>
     [JsonIgnore]
@@ -54,11 +78,17 @@ internal sealed partial record IpcRequest
     /// What a build came to. An empty <paramref name="error"/> says the project built, which closes that project's
     /// build-error notice.
     /// </summary>
-    public static IpcRequest ForBuild(string error, string projectFile) => new(IpcOps.Build, Args: [error, projectFile]);
+    public static IpcRequest ForBuild(string error, string projectFile)
+    {
+        return new IpcRequest(IpcOps.Build, Args: [error, projectFile]);
+    }
 
     /// <summary>The error and the project file of a build request, or null when it carries something else.</summary>
     [JsonIgnore]
     public (string Error, string ProjectFile)? BuildReport => Args is { Count: 2 } args ? (args[0], args[1]) : null;
 
-    public static IpcRequest ForInspect(string command, List<string> args) => new(IpcOps.Inspect, command, Args: args);
+    public static IpcRequest ForInspect(string command, List<string> args)
+    {
+        return new IpcRequest(IpcOps.Inspect, command, Args: args);
+    }
 }

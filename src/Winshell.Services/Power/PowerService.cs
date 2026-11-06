@@ -83,15 +83,19 @@ public sealed class PowerDevice : ObservableObject
         Changed(old.IsPresent != info.IsPresent, nameof(IsPresent));
         Changed(old.State != info.State, nameof(State));
         Changed(old.HealthPercentage != info.HealthPercentage, nameof(HealthPercentage));
-        Changed((old.HealthPercentage != 0) != HealthSupported, nameof(HealthSupported));
-        Changed((old.Type == PowerDeviceType.Battery && old.PowersTheSystem) != IsSystemBattery, nameof(IsSystemBattery));
+        Changed(old.HealthPercentage != 0 != HealthSupported, nameof(HealthSupported));
+        Changed((old.Type == PowerDeviceType.Battery && old.PowersTheSystem) != IsSystemBattery,
+            nameof(IsSystemBattery));
         Changed(old.DeviceId != info.DeviceId, nameof(DeviceId));
         Changed(old.Model != info.Model, nameof(Model));
         Set(ref _ready, ready, nameof(Ready));
     }
 
     /// <summary>A label for logs: the device ID, or <c>DisplayDevice</c> for the aggregate battery.</summary>
-    public override string ToString() => $"PowerDevice({(_info.DeviceId.Length > 0 ? _info.DeviceId : "DisplayDevice")})";
+    public override string ToString()
+    {
+        return $"PowerDevice({(_info.DeviceId.Length > 0 ? _info.DeviceId : "DisplayDevice")})";
+    }
 }
 
 /// <summary>The batteries of this PC, as Windows reports them.</summary>
@@ -123,7 +127,8 @@ public sealed class PowerService : ObservableObject, IDisposable
             return;
         DisplayDevice.Update(snapshot.Display, snapshot.Ready);
         Set(ref _onBattery, snapshot.OnBattery, nameof(OnBattery));
-        Devices.Sync(snapshot.Devices, d => d.DeviceId, i => i.DeviceId, _ => new PowerDevice(), (d, i) => d.Update(i, true));
+        Devices.Sync(snapshot.Devices, d => d.DeviceId, i => i.DeviceId, _ => new PowerDevice(),
+            (d, i) => d.Update(i, true));
     }
 
     /// <summary>Stops following battery changes.</summary>
@@ -146,7 +151,8 @@ public sealed class PowerModeService : ObservableObject, IDisposable
     private bool _ready;
     private bool _disposed;
 
-    internal PowerModeService(IEventLoop loop, Log log, SnapshotSource<PowerModeSnapshot>? source = null, Func<PowerModeLevel, uint>? set = null)
+    internal PowerModeService(IEventLoop loop, Log log, SnapshotSource<PowerModeSnapshot>? source = null,
+        Func<PowerModeLevel, uint>? set = null)
     {
         _log = log;
         source ??= PowerModeBackend.Instance;
@@ -169,6 +175,7 @@ public sealed class PowerModeService : ObservableObject, IDisposable
                 _log.Warn("power", $"Cannot set the power mode to {(int)value}, which is not a PowerModeLevel.");
                 return;
             }
+
             var error = _set(value);
             if (error != 0)
                 _log.Warn("power", $"Windows did not set the power mode (error {error}).");

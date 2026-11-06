@@ -13,7 +13,8 @@ internal static class IpHelper
     internal static InterfaceRow? GetInterface(Guid interfaceGuid)
     {
         var row = default(MIB_IF_ROW2);
-        if (PInvoke.ConvertInterfaceGuidToLuid(interfaceGuid, out row.InterfaceLuid) != 0 || PInvoke.GetIfEntry2(ref row) != 0)
+        if (PInvoke.ConvertInterfaceGuidToLuid(interfaceGuid, out row.InterfaceLuid) != 0 ||
+            PInvoke.GetIfEntry2(ref row) != 0)
             return null;
         var flags = row.InterfaceAndOperStatusFlags;
         return new InterfaceRow(flags.HardwareInterface && !flags.FilterInterface,

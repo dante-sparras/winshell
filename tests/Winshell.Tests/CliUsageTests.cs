@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Tests;
 
 /// <summary><c>--pid</c> and <c>--tail</c> that are not whole numbers exit 2, before any instance is touched.</summary>
@@ -56,8 +54,10 @@ public class CliUsageTests
         }
     }
 
-    private static ChildProcess Run(string[] args) =>
-        WinshellCli.Run(
+    private static ChildProcess Run(string[] args)
+    {
+        return WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-usage-absent")));
+    }
 }

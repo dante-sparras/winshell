@@ -9,14 +9,24 @@ namespace Winshell.Media;
 /// Windows' object behind one <see cref="SmtcSession"/>. Its events arrive on other threads; what they report is read
 /// there and posted to the UI thread, where the session takes it in.
 /// </summary>
-internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession target, GlobalSystemMediaTransportControlsSession session) : ISmtcLink
+internal sealed class SmtcSessionLink(
+    IEventLoop loop,
+    Log log,
+    SmtcSession target,
+    GlobalSystemMediaTransportControlsSession session) : ISmtcLink
 {
     private int _mediaRequest;
     private int _mediaApplied;
     private bool _released;
-    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>? _mediaChanged;
-    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>? _playbackChanged;
-    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>? _timelineChanged;
+
+    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>?
+        _mediaChanged;
+
+    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs>?
+        _playbackChanged;
+
+    private TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs>?
+        _timelineChanged;
 
     private GlobalSystemMediaTransportControlsSession _session = session;
 
@@ -92,7 +102,8 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
             _session.TimelinePropertiesChanged -= _timelineChanged;
     }
 
-    private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender, MediaPropertiesChangedEventArgs? args)
+    private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender,
+        MediaPropertiesChangedEventArgs? args)
     {
         var request = Interlocked.Increment(ref _mediaRequest);
         _ = Read();
@@ -127,11 +138,13 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
         if (_released || request != _mediaRequest)
             return;
         _mediaApplied = request;
-        target.ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "", properties.AlbumArtist ?? "",
+        target.ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "",
+            properties.AlbumArtist ?? "",
             properties.TrackNumber, properties.Genres, properties.Thumbnail);
     }
 
-    private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender, PlaybackInfoChangedEventArgs? args)
+    private void OnPlaybackInfoChanged(GlobalSystemMediaTransportControlsSession sender,
+        PlaybackInfoChangedEventArgs? args)
     {
         try
         {
@@ -161,11 +174,12 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
             LoopSupported = controls.IsRepeatEnabled,
             RateSupported = controls.IsPlaybackRateEnabled,
             Shuffle = info.IsShuffleActive ?? false,
-            LoopState = (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None),
+            LoopState = (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None)
         });
     }
 
-    private void OnTimelinePropertiesChanged(GlobalSystemMediaTransportControlsSession sender, TimelinePropertiesChangedEventArgs? args)
+    private void OnTimelinePropertiesChanged(GlobalSystemMediaTransportControlsSession sender,
+        TimelinePropertiesChangedEventArgs? args)
     {
         try
         {
@@ -178,9 +192,11 @@ internal sealed class SmtcSessionLink(IEventLoop loop, Log log, SmtcSession targ
         }
     }
 
-    private void ApplyTimeline(GlobalSystemMediaTransportControlsSessionTimelineProperties timeline, DateTimeOffset received)
+    private void ApplyTimeline(GlobalSystemMediaTransportControlsSessionTimelineProperties timeline,
+        DateTimeOffset received)
     {
         if (!_released)
-            target.ApplyTimeline(timeline.StartTime, timeline.EndTime, timeline.Position, timeline.LastUpdatedTime, received);
+            target.ApplyTimeline(timeline.StartTime, timeline.EndTime, timeline.Position, timeline.LastUpdatedTime,
+                received);
     }
 }

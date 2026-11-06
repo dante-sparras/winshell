@@ -19,7 +19,8 @@ internal static class DocumentLists
     /// Up to <paramref name="perCategory"/> names from each list. A list that cannot be read is null, and both are
     /// null when the app's lists cannot be opened.
     /// </summary>
-    internal static (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId, int perCategory)
+    internal static (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId,
+        int perCategory)
     {
         var iid = typeof(IApplicationDocumentLists).GUID;
         var hr = Win32.CoCreateInstance(in Clsid, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
@@ -38,6 +39,7 @@ internal static class DocumentLists
         {
             Marshal.Release(pointer);
         }
+
         try
         {
             if (lists.SetAppID(appUserModelId) < 0)
@@ -68,6 +70,7 @@ internal static class DocumentLists
                 if (!string.IsNullOrWhiteSpace(name))
                     names.Add(name);
             }
+
             return names;
         }
         finally
@@ -80,19 +83,18 @@ internal static class DocumentLists
     private static string? NameAt(IObjectArray array, uint index, Guid itemId, Guid linkId)
     {
         if (array.GetAt(index, in itemId, out var item) >= 0 && item is not null)
-        {
             try
             {
-                if (item is IShellItem shell && shell.GetDisplayName(0, out var name) >= 0 && !string.IsNullOrWhiteSpace(name))
+                if (item is IShellItem shell && shell.GetDisplayName(0, out var name) >= 0 &&
+                    !string.IsNullOrWhiteSpace(name))
                     return name;
             }
             finally
             {
                 Marshal.ReleaseComObject(item);
             }
-        }
+
         if (array.GetAt(index, in linkId, out var link) >= 0 && link is not null)
-        {
             try
             {
                 if (link is IShellLinkW shellLink)
@@ -110,7 +112,7 @@ internal static class DocumentLists
             {
                 Marshal.ReleaseComObject(link);
             }
-        }
+
         return null;
     }
 
@@ -123,6 +125,7 @@ internal static class DocumentLists
         int SetAppID([MarshalAs(UnmanagedType.LPWStr)] string appId);
 
         [PreserveSig]
-        int GetList(uint listType, uint count, in Guid iid, [MarshalAs(UnmanagedType.Interface)] out IObjectArray? array);
+        int GetList(uint listType, uint count, in Guid iid,
+            [MarshalAs(UnmanagedType.Interface)] out IObjectArray? array);
     }
 }

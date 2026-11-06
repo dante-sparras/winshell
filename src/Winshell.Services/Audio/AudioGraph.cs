@@ -63,21 +63,27 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
 
     public event Action? DefaultsChanged;
 
-    internal int NextId() => _nextId++;
-
-    internal void Post(Action action) => _loop.Post(() =>
+    internal int NextId()
     {
-        if (_disposed)
-            return;
-        try
+        return _nextId++;
+    }
+
+    internal void Post(Action action)
+    {
+        _loop.Post(() =>
         {
-            action();
-        }
-        catch (Exception e) when (e is COMException or InvalidCastException or InvalidOperationException)
-        {
-            _log.Warn("audio", e.Message);
-        }
-    });
+            if (_disposed)
+                return;
+            try
+            {
+                action();
+            }
+            catch (Exception e) when (e is COMException or InvalidCastException or InvalidOperationException)
+            {
+                _log.Warn("audio", e.Message);
+            }
+        });
+    }
 
     /// <summary>Makes a device the Windows default for apps (the console and multimedia roles).</summary>
     public void SetDefault(EndpointNode node)
@@ -92,7 +98,10 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         }
     }
 
-    void IAudioGraph.SetDefault(AudioGraphNode node) => SetDefault((EndpointNode)node);
+    void IAudioGraph.SetDefault(AudioGraphNode node)
+    {
+        SetDefault((EndpointNode)node);
+    }
 
     /// <summary>Stops hearing from Windows and releases every device and session. Call on the UI thread.</summary>
     public void Dispose()
@@ -109,12 +118,14 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         {
             // Windows audio failed before the callback was registered.
         }
+
         foreach (var endpoint in _endpoints.Values)
         {
             foreach (var session in endpoint.Sessions)
                 session.Release();
             endpoint.Release();
         }
+
         CoreAudio.Release(_enumerator);
     }
 
@@ -162,6 +173,7 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
                 }
             }
         }
+
         foreach (var (id, node) in _endpoints.ToArray())
         {
             if (present.Contains(id))
@@ -183,10 +195,8 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         DefaultPlayback = playback;
         DefaultRecording = recording;
         foreach (var endpoint in _endpoints.Values)
-        {
-            foreach (var session in endpoint.Sessions.Where(s => s.IsSystem))
-                SetShown(session, endpoint == DefaultPlayback);
-        }
+        foreach (var session in endpoint.Sessions.Where(s => s.IsSystem))
+            SetShown(session, endpoint == DefaultPlayback);
         DefaultsChanged?.Invoke();
     }
 
@@ -204,7 +214,10 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
     /// Shows a session the endpoint started tracking. Windows keeps a System Sounds session on every playback
     /// device, though only the default one plays them, so only that one is shown, as one stream.
     /// </summary>
-    internal void AddSession(SessionNode session) => SetShown(session, !session.IsSystem || session.Endpoint == DefaultPlayback);
+    internal void AddSession(SessionNode session)
+    {
+        SetShown(session, !session.IsSystem || session.Endpoint == DefaultPlayback);
+    }
 
     internal void RemoveSession(SessionNode session)
     {
@@ -239,11 +252,20 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
     /// <summary>Hears about devices being added, removed, enabled or made the default.</summary>
     private sealed class DeviceNotifications(AudioGraph graph) : IMMNotificationClient
     {
-        public void OnDeviceStateChanged(string deviceId, uint newState) => graph.RequestSync();
+        public void OnDeviceStateChanged(string deviceId, uint newState)
+        {
+            graph.RequestSync();
+        }
 
-        public void OnDeviceAdded(string deviceId) => graph.RequestSync();
+        public void OnDeviceAdded(string deviceId)
+        {
+            graph.RequestSync();
+        }
 
-        public void OnDeviceRemoved(string deviceId) => graph.RequestSync();
+        public void OnDeviceRemoved(string deviceId)
+        {
+            graph.RequestSync();
+        }
 
         public void OnDefaultDeviceChanged(EDataFlow flow, ERole role, string? defaultDeviceId)
         {

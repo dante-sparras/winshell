@@ -7,7 +7,10 @@ namespace Winshell.Native;
 /// <summary>An icon this process made, destroyed when disposed.</summary>
 internal sealed class OwnedIcon : IDisposable
 {
-    private OwnedIcon(nint handle) => Handle = handle;
+    private OwnedIcon(nint handle)
+    {
+        Handle = handle;
+    }
 
     /// <summary>The icon handle, or 0 once disposed.</summary>
     internal nint Handle { get; private set; }
@@ -19,7 +22,8 @@ internal sealed class OwnedIcon : IDisposable
     /// </summary>
     internal static OwnedIcon? Load(string module, ushort id, string name, int size)
     {
-        var library = PInvoke.LoadLibraryEx(module, LOAD_LIBRARY_FLAGS.LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_FLAGS.LOAD_LIBRARY_AS_IMAGE_RESOURCE);
+        var library = PInvoke.LoadLibraryEx(module,
+            LOAD_LIBRARY_FLAGS.LOAD_LIBRARY_AS_DATAFILE | LOAD_LIBRARY_FLAGS.LOAD_LIBRARY_AS_IMAGE_RESOURCE);
         if (library == default)
             return null;
         try

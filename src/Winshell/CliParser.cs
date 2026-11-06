@@ -38,7 +38,8 @@ internal static class CliParser
                 if (positional.Length == 0)
                     throw new ArgumentException($"winshell {command} needs a command. Run winshell {command} --help.");
                 if (!Subcommands(command).Contains(positional[0]))
-                    throw new ArgumentException($"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
+                    throw new ArgumentException(
+                        $"Unknown {command} command \"{positional[0]}\". Run winshell {command} --help.");
                 if (Lacks(command, positional) is { } needs)
                     throw new ArgumentException($"winshell {command} {positional[0]} needs {needs}.");
                 break;
@@ -47,12 +48,13 @@ internal static class CliParser
                     throw Unexpected(positional[0]);
                 break;
         }
+
         return options with
         {
             Command = command,
             Arguments = [.. args],
             ShowVersion = VersionRequested(args),
-            ShellStartAllowed = OnlyShellStartOptions(args),
+            ShellStartAllowed = OnlyShellStartOptions(args)
         };
     }
 
@@ -73,53 +75,69 @@ internal static class CliParser
         ["inspect"] = Instance,
         ["dev"] = ["--path", "--config"],
         ["doctor"] = ["--path", "--config", "--json", "--no-color"],
-        ["help"] = [],
+        ["help"] = []
     }.ToFrozenDictionary();
 
-    private static bool Takes(string command, string option) =>
-        option is "--verbose" or "--help" or "--version" || Commands[command].Contains(option);
+    private static bool Takes(string command, string option)
+    {
+        return option is "--verbose" or "--help" or "--version" || Commands[command].Contains(option);
+    }
 
     /// <summary>The long name of an option winshell has, such as <c>--path</c> for <c>-p</c>; null for any other word.</summary>
-    private static string? LongName(string option) => option switch
+    private static string? LongName(string option)
     {
-        "-p" or "--path" => "--path",
-        "-c" or "--config" => "--config",
-        "-i" or "--id" => "--id",
-        "-d" or "--daemonize" => "--daemonize",
-        "-n" or "--no-duplicate" => "--no-duplicate",
-        "-v" or "--verbose" => "--verbose",
-        "-j" or "--json" => "--json",
-        "-f" or "--follow" => "--follow",
-        "-t" or "--tail" => "--tail",
-        "-V" or "--version" => "--version",
-        "-h" or "--help" => "--help",
-        "--pid" or "--force" or "--no-color" or "--no-build" => option,
-        _ => null,
-    };
+        return option switch
+        {
+            "-p" or "--path" => "--path",
+            "-c" or "--config" => "--config",
+            "-i" or "--id" => "--id",
+            "-d" or "--daemonize" => "--daemonize",
+            "-n" or "--no-duplicate" => "--no-duplicate",
+            "-v" or "--verbose" => "--verbose",
+            "-j" or "--json" => "--json",
+            "-f" or "--follow" => "--follow",
+            "-t" or "--tail" => "--tail",
+            "-V" or "--version" => "--version",
+            "-h" or "--help" => "--help",
+            "--pid" or "--force" or "--no-color" or "--no-build" => option,
+            _ => null
+        };
+    }
 
     /// <summary>The first words <see cref="Winshell.Commands.IpcCommand"/> and <see cref="Winshell.Commands.InspectCommand"/> take.</summary>
-    private static string[] Subcommands(string command) => command switch
+    private static string[] Subcommands(string command)
     {
-        "ipc" => ["show", "call", "prop", "wait", "listen"],
-        "inspect" => ["tree", "screenshot", "click", "hover"],
-        _ => [],
-    };
+        return command switch
+        {
+            "ipc" => ["show", "call", "prop", "wait", "listen"],
+            "inspect" => ["tree", "screenshot", "click", "hover"],
+            _ => []
+        };
+    }
 
     /// <summary>What an ipc or inspect command still needs, such as "a target and a function", or null when it has it.</summary>
-    private static string? Lacks(string command, ImmutableArray<string> words) => (command, words[0]) switch
+    private static string? Lacks(string command, ImmutableArray<string> words)
     {
-        ("ipc", "call") when words.Length < 3 => "a target and a function",
-        ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "\"get\", a target and a property",
-        ("ipc", "wait" or "listen") when words.Length < 3 => "a target and a signal",
-        ("inspect", "screenshot") when words.Length < 2 => "a file",
-        ("inspect", "click" or "hover") when words.Length < 2 => "a name",
-        _ => null,
-    };
+        return (command, words[0]) switch
+        {
+            ("ipc", "call") when words.Length < 3 => "a target and a function",
+            ("ipc", "prop") when words.Length < 4 || words[1] != "get" => "\"get\", a target and a property",
+            ("ipc", "wait" or "listen") when words.Length < 3 => "a target and a signal",
+            ("inspect", "screenshot") when words.Length < 2 => "a file",
+            ("inspect", "click" or "hover") when words.Length < 2 => "a name",
+            _ => null
+        };
+    }
 
-    private static ArgumentException UnknownCommand(string command) =>
-        new($"Unknown command \"{command}\". Run winshell --help.");
+    private static ArgumentException UnknownCommand(string command)
+    {
+        return new ArgumentException($"Unknown command \"{command}\". Run winshell --help.");
+    }
 
-    private static ArgumentException Unexpected(string argument) => new($"Unexpected argument \"{argument}\".");
+    private static ArgumentException Unexpected(string argument)
+    {
+        return new ArgumentException($"Unexpected argument \"{argument}\".");
+    }
 
     /// <summary>The first word that is not an option. Options may come before it, so <c>-c work kill</c> is kill.</summary>
     internal static string? FirstCommand(string[] args)
@@ -138,8 +156,10 @@ internal static class CliParser
                     i++;
                 continue;
             }
+
             return token;
         }
+
         return null;
     }
 
@@ -154,12 +174,17 @@ internal static class CliParser
                 skipped = true;
                 continue;
             }
+
             rest.Add(token);
         }
+
         return [.. rest];
     }
 
-    private static bool TakesValue(string option) => LongName(option) is "--path" or "--config" or "--id" or "--pid" or "--tail";
+    private static bool TakesValue(string option)
+    {
+        return LongName(option) is "--path" or "--config" or "--id" or "--pid" or "--tail";
+    }
 
     /// <summary>The Start tile and a sign-in entry pass these, and no command word.</summary>
     private static bool OnlyShellStartOptions(string[] args)
@@ -174,6 +199,7 @@ internal static class CliParser
             if (TakesValue(token))
                 i++;
         }
+
         return true;
     }
 
@@ -181,7 +207,8 @@ internal static class CliParser
     private static string ConfigName(string option, string name)
     {
         if (name.Length == 0 || name is "." or ".." || name.IndexOfAny(['/', '\\', ':']) >= 0)
-            throw new ArgumentException($"{option} needs the name of a config folder, not \"{name}\". Use -p for a path.");
+            throw new ArgumentException(
+                $"{option} needs the name of a config folder, not \"{name}\". Use -p for a path.");
         return name;
     }
 
@@ -203,6 +230,7 @@ internal static class CliParser
                 positional.Add(args[i]);
                 continue;
             }
+
             if (args[i] == "--")
             {
                 if (command is null or "run")
@@ -210,10 +238,16 @@ internal static class CliParser
                     rest.AddRange(args.Skip(i));
                     break;
                 }
+
                 raw = true;
                 continue;
             }
-            string Next() => i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value.");
+
+            string Next()
+            {
+                return i + 1 < args.Length ? args[++i] : throw new ArgumentException($"{args[i]} needs a value.");
+            }
+
             var name = LongName(args[i]);
             if (name is not null && command is not null && !Takes(command, name))
                 throw new ArgumentException($"winshell {command} does not take \"{args[i]}\".");
@@ -269,6 +303,7 @@ internal static class CliParser
                     break;
             }
         }
+
         return options with { Positional = [.. positional], Rest = [.. rest] };
     }
 
@@ -276,27 +311,33 @@ internal static class CliParser
     /// True when <paramref name="positional"/> already holds the function name. Later words belong to the call.
     /// The positionals are what follows <paramref name="command"/>.
     /// </summary>
-    private static bool IpcCallArguments(string? command, List<string> positional) =>
-        command == "ipc" && positional.Count >= 3 && positional[0] == "call";
+    private static bool IpcCallArguments(string? command, List<string> positional)
+    {
+        return command == "ipc" && positional.Count >= 3 && positional[0] == "call";
+    }
 
     private static readonly string[] HelpFlags = ["-h", "--help", "/?"];
 
     private static readonly string[] VersionFlags = ["-V", "--version"];
 
     /// <summary>True when help was asked for as an option, before <c>--</c> and before ipc call arguments.</summary>
-    internal static bool HelpRequested(string[] args) => OptionBeforeEnd(args, HelpFlags);
+    internal static bool HelpRequested(string[] args)
+    {
+        return OptionBeforeEnd(args, HelpFlags);
+    }
 
     /// <summary>True when <c>-V</c> or <c>--version</c> is an option. After <c>--</c> it is an argument.</summary>
-    internal static bool VersionRequested(string[] args) => OptionBeforeEnd(args, VersionFlags);
+    internal static bool VersionRequested(string[] args)
+    {
+        return OptionBeforeEnd(args, VersionFlags);
+    }
 
     private static bool OptionBeforeEnd(string[] args, string[] names)
     {
         var end = OptionRegionLength(args);
         for (var i = 0; i < end; i++)
-        {
             if (Array.IndexOf(names, args[i]) >= 0)
                 return true;
-        }
         return false;
     }
 
@@ -318,11 +359,13 @@ internal static class CliParser
                     i++;
                 continue;
             }
+
             if (command is null)
                 command = token;
             else
                 positional.Add(token);
         }
+
         return args.Length;
     }
 

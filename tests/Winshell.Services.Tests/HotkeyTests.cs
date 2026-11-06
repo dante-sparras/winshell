@@ -10,7 +10,12 @@ public sealed class HotkeyTests
     private readonly List<string> _warnings = [];
     private readonly HashSet<int> _held = [];
 
-    private Hotkey Create() => new(_loop, new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") }, _fake, _held.Contains);
+    private Hotkey Create()
+    {
+        return new Hotkey(_loop, new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") },
+            _fake,
+            _held.Contains);
+    }
 
     [Fact]
     public void A_sequence_claims_at_once_and_a_new_one_replaces_it()
@@ -177,6 +182,9 @@ public sealed class HotkeyTests
             return HotkeyClaim.Active;
         }
 
-        public void Release(IHotkeyListener listener) => Claims.RemoveAll(claim => claim.Listener == listener);
+        public void Release(IHotkeyListener listener)
+        {
+            Claims.RemoveAll(claim => claim.Listener == listener);
+        }
     }
 }

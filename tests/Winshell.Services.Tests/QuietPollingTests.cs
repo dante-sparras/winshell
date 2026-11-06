@@ -15,6 +15,7 @@ public sealed class QuietPollingTests
             waits.Add(poll.TotalSeconds);
             poll = WinlandBackend.NextPoll(poll);
         }
+
         Assert.Equal(new double[] { 3, 6, 12, 24, 30, 30 }, waits);
     }
 }

@@ -31,10 +31,8 @@ internal static class NativeMenu
         var threads = new HashSet<uint>();
         nint menu = 0;
         while ((menu = Win32.FindWindowExW(0, menu, "#32768", null)) != 0)
-        {
             if (Win32.IsWindowVisible(menu))
                 threads.Add(Win32.GetWindowThreadProcessId(menu, out _));
-        }
         return threads;
     }
 }

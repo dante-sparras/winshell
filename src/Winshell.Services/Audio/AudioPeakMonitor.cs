@@ -24,7 +24,10 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
 
     /// <summary>Creates an enabled monitor with no node. Pass the shell's loop, <c>Shell.Current.Loop</c>.</summary>
     /// <param name="loop">The loop the meter is read on.</param>
-    public AudioPeakMonitor(IEventLoop loop) => _loop = loop;
+    public AudioPeakMonitor(IEventLoop loop)
+    {
+        _loop = loop;
+    }
 
     /// <summary>
     /// The device or session to meter. Null meters nothing. When the node leaves Windows, <see cref="Peak"/> goes to 0
@@ -73,6 +76,7 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
             Clear();
             return;
         }
+
         _keepRunning = _node!.Node.KeepRunning();
         Tick();
     }
@@ -92,6 +96,7 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
         {
             // The device went away; the node is removed shortly.
         }
+
         // A handler of the change above can have stopped or restarted the monitor.
         if (ReferenceEquals(_meter, meter) && _timer is null)
             _timer = _loop.Schedule(Interval, Tick);
@@ -105,9 +110,12 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
             _peaks = peaks;
             Changed(nameof(Peaks));
         }
+
         Set(ref _peak, values.Length == 0 ? 0 : values.Max(), nameof(Peak));
         var node = _node!.Node;
-        var channels = node.Channels.Length == values.Length ? node.Channels : ChannelLayout.FromFormat(null, values.Length);
+        var channels = node.Channels.Length == values.Length
+            ? node.Channels
+            : ChannelLayout.FromFormat(null, values.Length);
         if (!channels.SequenceEqual(_channels))
         {
             _channels = channels;
@@ -122,11 +130,13 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
             _peaks = [];
             Changed(nameof(Peaks));
         }
+
         if (_channels.Length > 0)
         {
             _channels = [];
             Changed(nameof(Channels));
         }
+
         Set(ref _peak, 0, nameof(Peak));
     }
 

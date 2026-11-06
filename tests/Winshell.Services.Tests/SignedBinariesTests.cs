@@ -29,14 +29,16 @@ public sealed partial class SignedBinariesTests
         var script = File.ReadAllText(Path.Combine(Repo.Root, "scripts", "package.ps1"));
         var own = OwnBinaries().Match(script);
         Assert.True(own.Success, "scripts/package.ps1 no longer sets $ownBinaries.");
-        Assert.Equal(signed, Quoted().Matches(own.Groups[1].Value).Select(name => name.Groups[1].Value).Order(StringComparer.Ordinal));
+        Assert.Equal(signed,
+            Quoted().Matches(own.Groups[1].Value).Select(name => name.Groups[1].Value).Order(StringComparer.Ordinal));
     }
 
     [Fact]
     public void Every_assembly_built_from_src_is_signed()
     {
         // The package project only packs the others; it builds nothing that ships.
-        var assemblies = Directory.EnumerateFiles(Path.Combine(Repo.Root, "src"), "*.csproj", SearchOption.AllDirectories)
+        var assemblies = Directory
+            .EnumerateFiles(Path.Combine(Repo.Root, "src"), "*.csproj", SearchOption.AllDirectories)
             .Select(project => (Path: project, Text: File.ReadAllText(project)))
             .Where(project => !project.Text.Contains("<IsPackable>true</IsPackable>", StringComparison.Ordinal))
             .Select(project => (AssemblyName().Match(project.Text) is { Success: true } name

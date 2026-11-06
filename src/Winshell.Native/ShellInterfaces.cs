@@ -23,21 +23,21 @@ internal interface IShellItem
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IShellLinkW
 {
-    void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, nint findData, uint flags);
+    void GetPath([Out] [MarshalAs(UnmanagedType.LPWStr)] StringBuilder file, int max, nint findData, uint flags);
 
     void GetIDList(out nint idList);
 
     void SetIDList(nint idList);
 
-    void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
+    void GetDescription([Out] [MarshalAs(UnmanagedType.LPWStr)] StringBuilder name, int max);
 
     void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string name);
 
-    void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
+    void GetWorkingDirectory([Out] [MarshalAs(UnmanagedType.LPWStr)] StringBuilder dir, int max);
 
     void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string dir);
 
-    void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
+    void GetArguments([Out] [MarshalAs(UnmanagedType.LPWStr)] StringBuilder args, int max);
 
     void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string args);
 
@@ -49,7 +49,7 @@ internal interface IShellLinkW
 
     void SetShowCmd(int showCmd);
 
-    void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int max, out int icon);
+    void GetIconLocation([Out] [MarshalAs(UnmanagedType.LPWStr)] StringBuilder iconPath, int max, out int icon);
 
     void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string iconPath, int icon);
 

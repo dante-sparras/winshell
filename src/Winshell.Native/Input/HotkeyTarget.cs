@@ -36,7 +36,8 @@ internal sealed unsafe class HotkeyTarget : IDisposable
         if (!ClassRegistered && !RegisterClass())
             return null;
         ClassRegistered = true;
-        var hwnd = Win32.CreateWindowExW(0, ClassName, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, Win32.GetModuleHandleW(null), 0);
+        var hwnd = Win32.CreateWindowExW(0, ClassName, "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0,
+            Win32.GetModuleHandleW(null), 0);
         if (hwnd == 0)
             return null;
         var target = new HotkeyTarget(hwnd, onHotkey);
@@ -53,7 +54,10 @@ internal sealed unsafe class HotkeyTarget : IDisposable
         return registered;
     }
 
-    internal void Unregister(int id) => Win32.UnregisterHotKey(Handle, id);
+    internal void Unregister(int id)
+    {
+        Win32.UnregisterHotKey(Handle, id);
+    }
 
     public void Dispose()
     {
@@ -73,7 +77,7 @@ internal sealed unsafe class HotkeyTarget : IDisposable
                 cbSize = (uint)sizeof(WNDCLASSEXW),
                 lpfnWndProc = &Proc,
                 hInstance = Win32.GetModuleHandleW(null),
-                lpszClassName = name,
+                lpszClassName = name
             };
             if (Win32.RegisterClassExW(wc) != 0)
                 return true;
@@ -85,19 +89,19 @@ internal sealed unsafe class HotkeyTarget : IDisposable
     private static nint Proc(nint hwnd, uint msg, nint wParam, nint lParam)
     {
         if (msg == Win32.WM_HOTKEY)
-        {
             try
             {
                 var data = Win32.GetWindowLongPtr(hwnd, Win32.GWLP_USERDATA);
                 if (data != 0 && GCHandle.FromIntPtr(data).Target is HotkeyTarget target)
                     target._onHotkey((int)wParam);
             }
-#pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
+#pragma warning disable CA1031
+            // Windows called in; nothing above this frame can catch it.
             catch (Exception)
 #pragma warning restore CA1031
             {
             }
-        }
+
         return Win32.DefWindowProcW(hwnd, msg, wParam, lParam);
     }
 }

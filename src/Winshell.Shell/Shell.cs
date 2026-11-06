@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using WinRT;
 using Winshell.Native;
 using Winshell.Updates;
 
@@ -65,7 +66,8 @@ public sealed partial class Shell : IDisposable
         _arguments = arguments;
         Ipc = new ShellIpc(log);
         Platform = new ShellPlatform(loop, log);
-        Platform.TaskbarMayHaveChanged += () => NativeCallback.Guard(log, "explorer-taskbar", () => _explorerTaskbarSession?.Rehide());
+        Platform.TaskbarMayHaveChanged += () =>
+            NativeCallback.Guard(log, "explorer-taskbar", () => _explorerTaskbarSession?.Rehide());
     }
 
     /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>
@@ -75,7 +77,8 @@ public sealed partial class Shell : IDisposable
     internal static Shell? Running => _current;
 
     /// <summary>The shell of this process. Reading it before <see cref="Run{T}"/> has started it throws.</summary>
-    public static Shell Current => _current ?? throw new InvalidOperationException("The shell has not started. Call Shell.Run first.");
+    public static Shell Current =>
+        _current ?? throw new InvalidOperationException("The shell has not started. Call Shell.Run first.");
 
     /// <summary>The shell's thread. Post work from other threads to it before touching windows or services.</summary>
     public IEventLoop Loop { get; }
@@ -139,16 +142,28 @@ public sealed partial class Shell : IDisposable
     public string SystemAccent => Platform.SystemAccent;
 
     /// <summary>A path in <see cref="ConfigDir"/>.</summary>
-    public string ConfigPath(string path) => Path.Combine(ConfigDir, path);
+    public string ConfigPath(string path)
+    {
+        return Path.Combine(ConfigDir, path);
+    }
 
     /// <summary>A path in <see cref="DataDir"/>.</summary>
-    public string DataPath(string path) => Path.Combine(DataDir, path);
+    public string DataPath(string path)
+    {
+        return Path.Combine(DataDir, path);
+    }
 
     /// <summary>A path in <see cref="StateDir"/>.</summary>
-    public string StatePath(string path) => Path.Combine(StateDir, path);
+    public string StatePath(string path)
+    {
+        return Path.Combine(StateDir, path);
+    }
 
     /// <summary>A path in <see cref="CacheDir"/>.</summary>
-    public string CachePath(string path) => Path.Combine(CacheDir, path);
+    public string CachePath(string path)
+    {
+        return Path.Combine(CacheDir, path);
+    }
 
     private static string Ensure(string dir)
     {
@@ -165,8 +180,10 @@ public sealed partial class Shell : IDisposable
     /// parameterless constructor.
     /// </summary>
     public static void Run<T>(ShellOptions? options = null)
-        where T : ShellConfiguration, new() =>
+        where T : ShellConfiguration, new()
+    {
         Run(new T(), options ?? new ShellOptions());
+    }
 
     private static void Run(ShellConfiguration configuration, ShellOptions options)
     {
@@ -186,15 +203,19 @@ public sealed partial class Shell : IDisposable
                 StartupError.Report($"Could not start \"{program}\": {e.Message}", null);
                 Environment.ExitCode = 1;
             }
+
             return;
         }
+
         // A reload: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
         if (arguments.After is { } previous)
             Instances.WaitForExit(previous);
-        var identity = ShellIdentity.Resolve(program, ConfigPaths.Root(), options.ShellId, options.DataDir, options.StateDir, options.CacheDir);
+        var identity = ShellIdentity.Resolve(program, ConfigPaths.Root(), options.ShellId, options.DataDir,
+            options.StateDir, options.CacheDir);
         // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
         using var duplicate = arguments.NoDuplicate
-            ? DuplicateHold.TryClaim(DuplicateHold.ShellMutexName(identity.ShellId), i => string.Equals(i.ShellId, identity.ShellId, StringComparison.OrdinalIgnoreCase))
+            ? DuplicateHold.TryClaim(DuplicateHold.ShellMutexName(identity.ShellId),
+                i => string.Equals(i.ShellId, identity.ShellId, StringComparison.OrdinalIgnoreCase))
             : default;
         if (arguments.NoDuplicate && !duplicate.Acquired)
             return;
@@ -203,7 +224,8 @@ public sealed partial class Shell : IDisposable
         var instance = ShellInstance.Open(program, log, arguments.Verbose);
         instance.Crashes.ShellId = identity.ShellId;
         instance.Crashing = () => _current?.ReleaseForCrash();
-        log.Info("shell", $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{program}\"");
+        log.Info("shell",
+            $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{program}\"");
         log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
         log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
         if (!instance.TryOpenPipe())
@@ -217,7 +239,7 @@ public sealed partial class Shell : IDisposable
         Exception? failed = null;
         try
         {
-            WinRT.ComWrappersSupport.InitializeComWrappers();
+            ComWrappersSupport.InitializeComWrappers();
             Application.Start(_ =>
             {
                 var queue = DispatcherQueue.GetForCurrentThread();
@@ -228,7 +250,8 @@ public sealed partial class Shell : IDisposable
                     try
                     {
                         var loop = new DispatcherLoop(queue, log);
-                        loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, subject: "Winshell", recovery: "Something in Winshell failed. It is still running."));
+                        loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, "Winshell",
+                            "Something in Winshell failed. It is still running."));
                         var shell = new Shell(loop, log, options, identity, arguments);
                         shell.LogPath = instance.LogPath;
                         shell.Updater = options.Updater;
@@ -257,7 +280,8 @@ public sealed partial class Shell : IDisposable
                             loop.Post(shell.Quit);
                         };
                         configuration.Start(shell);
-                        ShellInstance.Quietly(() => notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
+                        ShellInstance.Quietly(() =>
+                            notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
                     }
                     catch (Exception e) when (e is not OutOfMemoryException)
                     {
@@ -288,6 +312,7 @@ public sealed partial class Shell : IDisposable
             instance.MarkCleanExit();
             instance.Close();
         }
+
         if (failed is not null)
         {
             StartupError.Report(failed.Message, null);
@@ -386,15 +411,29 @@ public sealed partial class Shell : IDisposable
     {
         public ShellIpc Ipc => shell.Ipc;
 
-        public string? Reload(string? program) => shell.StartNext(program);
+        public string? Reload(string? program)
+        {
+            return shell.StartNext(program);
+        }
 
-        public void Reloaded() => shell.Quit();
+        public void Reloaded()
+        {
+            shell.Quit();
+        }
 
-        public void Quit() => shell.Quit();
+        public void Quit()
+        {
+            shell.Quit();
+        }
 
-        public void ShowBuildError(string error, string projectFile) =>
+        public void ShowBuildError(string error, string projectFile)
+        {
             shell.Notices?.ShowBuildError(error, projectFile);
+        }
 
-        public Task<string> Inspect(string command, IReadOnlyList<string> args) => Inspector.Run(shell, command, args);
+        public Task<string> Inspect(string command, IReadOnlyList<string> args)
+        {
+            return Inspector.Run(shell, command, args);
+        }
     }
 }

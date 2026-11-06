@@ -38,7 +38,8 @@ internal static unsafe class LowLevelKeyboard
             var info = (KBDLLHOOKSTRUCT*)lParam;
             try
             {
-                if (handler(new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0, (nint)info->dwExtraInfo)))
+                if (handler(new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0,
+                        (nint)info->dwExtraInfo)))
                     return 1;
             }
 #pragma warning disable CA1031 // Windows called in; nothing above this frame can catch it.
@@ -47,6 +48,7 @@ internal static unsafe class LowLevelKeyboard
             {
             }
         }
+
         return Win32.CallNextHookEx(0, code, wParam, lParam);
     }
 }

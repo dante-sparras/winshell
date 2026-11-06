@@ -24,7 +24,10 @@ internal sealed class FakeAudioGraph : IAudioGraph
 
     public event Action? DefaultsChanged;
 
-    public void SetDefault(AudioGraphNode node) => DefaultsAsked.Add(node);
+    public void SetDefault(AudioGraphNode node)
+    {
+        DefaultsAsked.Add(node);
+    }
 
     public FakeAudioNode Add(FakeAudioNode node)
     {
@@ -51,7 +54,8 @@ internal sealed class FakeAudioNode : AudioGraphNode
 {
     private static int _nextId;
 
-    public FakeAudioNode(AudioNodeType type, string description = "Node", AudioChannel[]? channels = null, FakeAudioNode? device = null)
+    public FakeAudioNode(AudioNodeType type, string description = "Node", AudioChannel[]? channels = null,
+        FakeAudioNode? device = null)
         : base(Interlocked.Increment(ref _nextId))
     {
         Type = type;
@@ -72,9 +76,15 @@ internal sealed class FakeAudioNode : AudioGraphNode
 
     public override IAudioMeterInformation? Meter => FakeMeter;
 
-    public void SetAudio(float[] volumes, bool muted) => ApplyAudio(volumes, muted);
+    public void SetAudio(float[] volumes, bool muted)
+    {
+        ApplyAudio(volumes, muted);
+    }
 
-    public void SetActive(bool active) => ApplyActive(active);
+    public void SetActive(bool active)
+    {
+        ApplyActive(active);
+    }
 
     public void Rename(string description)
     {

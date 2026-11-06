@@ -16,7 +16,7 @@ public sealed class PanelEdgeTests
             {
                 Anchors = Edges.Top | Edges.Left | Edges.Right,
                 Height = 8,
-                ReservedSize = 8,
+                ReservedSize = 8
             };
             panel.Visible = true;
             var host = panel.Host!;
@@ -36,7 +36,8 @@ public sealed class PanelEdgeTests
     {
         var classes = await ShellFixture.On(_ =>
         {
-            using var panel = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
+            using var panel = new PanelWindow
+                { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
             panel.Visible = true;
             return DoctorProbe.EdgeWindows().Select(window => window.ClassName).ToList();
         });
@@ -52,7 +53,8 @@ public sealed class PanelEdgeTests
             using var app = new FloatingWindow { Width = 300, Height = 200, Content = new Grid() };
             app.Visible = true;
             // A corner panel reserves nothing, so Explorer sends it no notice about a fullscreen app.
-            using var panel = new PanelWindow { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
+            using var panel = new PanelWindow
+                { Anchors = Edges.Top | Edges.Left, Width = 320, Height = 60, Content = new Grid() };
             panel.Visible = true;
             var host = panel.Host!;
             var appHost = app.Host!;
@@ -61,14 +63,17 @@ public sealed class PanelEdgeTests
             {
                 app.Fullscreen = true;
                 Win32.SetForegroundWindow(appHost.Handle);
-                await Wait.UntilAsync(() => InFront(appHost.Handle, host.Handle), "the panel to go behind the fullscreen app");
+                await Wait.UntilAsync(() => InFront(appHost.Handle, host.Handle),
+                    "the panel to go behind the fullscreen app");
                 app.Fullscreen = false;
-                await Wait.UntilAsync(() => InFront(host.Handle, appHost.Handle), "the panel to come back when the app leaves");
+                await Wait.UntilAsync(() => InFront(host.Handle, appHost.Handle),
+                    "the panel to come back when the app leaves");
             }
             finally
             {
                 app.Fullscreen = false;
             }
+
             return 0;
         });
     }
@@ -77,10 +82,8 @@ public sealed class PanelEdgeTests
     {
         const uint next = 2;
         for (var at = window; at != 0; at = Win32.GetWindow(at, next))
-        {
             if (at == other)
                 return true;
-        }
         return false;
     }
 }

@@ -6,5 +6,8 @@ namespace Winshell.Tests;
 /// </summary>
 public sealed class ProbeBuild
 {
-    public ProbeBuild() => ProbeShell.Ensure();
+    public ProbeBuild()
+    {
+        ProbeShell.Ensure();
+    }
 }

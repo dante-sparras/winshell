@@ -49,7 +49,10 @@ public sealed class PopupWindow : ShellWindow
     /// <summary>A click outside the popup and its open flyouts, or Esc, dismissed it. It is hidden.</summary>
     public event Action? Dismissed;
 
-    private protected override void ApplyPlacement() => Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect, _grabFocus));
+    private protected override void ApplyPlacement()
+    {
+        Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect, _grabFocus));
+    }
 
     private protected override void OnDismissed()
     {

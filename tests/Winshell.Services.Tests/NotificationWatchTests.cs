@@ -9,7 +9,7 @@ public sealed class NotificationWatchTests
     public async Task A_toast_change_refreshes_without_waiting_for_the_poll_and_dispose_stops_the_watch()
     {
         var backend = new WatchingBackend();
-        var listener = new NotificationListener(new ManualEventLoop(), Log.Default, backend, monitor: true);
+        var listener = new NotificationListener(new ManualEventLoop(), Log.Default, backend, true);
         try
         {
             await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -48,11 +48,17 @@ public sealed class NotificationWatchTests
         public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
         {
             (Interlocked.Increment(ref _reads) == 1 ? FirstRead : SecondRead).TrySetResult();
-            return Task.FromResult(new NotificationSnapshot(NotificationAccessStatus.Allowed, [], NotificationState.Off, NotificationMode.Unrestricted));
+            return Task.FromResult(new NotificationSnapshot(NotificationAccessStatus.Allowed, [], NotificationState.Off,
+                NotificationMode.Unrestricted));
         }
 
-        public Task<NotificationAccessStatus> RequestAccessAsync() => Task.FromResult(NotificationAccessStatus.Allowed);
+        public Task<NotificationAccessStatus> RequestAccessAsync()
+        {
+            return Task.FromResult(NotificationAccessStatus.Allowed);
+        }
 
-        public void Dismiss(uint id) { }
+        public void Dismiss(uint id)
+        {
+        }
     }
 }

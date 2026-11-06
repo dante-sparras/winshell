@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 
 namespace Winshell.Tests;
@@ -26,7 +25,7 @@ public sealed class LogSelectorTests : IDisposable
             ["pipe"] = "winshell-" + StoppedId,
             ["log"] = log,
             ["processStart"] = 1,
-            ["exitedAt"] = DateTime.Now.AddMinutes(-30),
+            ["exitedAt"] = DateTime.Now.AddMinutes(-30)
         }));
     }
 
@@ -81,7 +80,7 @@ public sealed class LogSelectorTests : IDisposable
             ["pipe"] = "winshell-besideabc",
             ["log"] = log,
             ["processStart"] = 1,
-            ["exitedAt"] = DateTime.Now.AddMinutes(-1),
+            ["exitedAt"] = DateTime.Now.AddMinutes(-1)
         }));
 
         var result = Run(["log", "-p", project]);
@@ -94,13 +93,15 @@ public sealed class LogSelectorTests : IDisposable
     {
         try
         {
-            Directory.Delete(_root, recursive: true);
+            Directory.Delete(_root, true);
         }
         catch (IOException)
         {
         }
     }
 
-    private ChildProcess Run(string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", _root));
+    private ChildProcess Run(string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", _root));
+    }
 }

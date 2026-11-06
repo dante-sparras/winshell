@@ -23,7 +23,13 @@ pwsh -NoProfile -Command "Install-Module Pester -RequiredVersion 5.6.1 -Scope Cu
 pwsh scripts/check.ps1
 ```
 
-The first build of `winshell.slnx` sets `core.hooksPath` to `.githooks`, unless the clone already sets a hooks path. The `pre-commit` hook then runs `dotnet format` over the staged C# files, so a commit fails on the formatting, code style and analyzer errors that would fail CI. It reads the files as they are in the working tree, and takes about 20 seconds. `git commit --no-verify` skips it, and `dotnet format winshell.slnx` fixes most of what it finds.
+The first build of `winshell.slnx` sets `core.hooksPath` to `.githooks`, unless the clone already sets a hooks path. The `pre-commit` hook checks staged C# and XAML paths with ReSharper, reading their current working-tree contents. It builds and cleans an isolated copy, leaving working files and the index unchanged. Compiler warnings and Roslyn analyzers still fail the build. `git commit --no-verify` skips the hook; `pwsh -NoProfile scripts/resharper.ps1 -Mode Cleanup` applies cleanup.
+
+ReSharper's version is pinned in `.config/dotnet-tools.json`; the command restores it automatically. The `Winshell` profile in `winshell.slnx.DotSettings` applies formatting, C# syntax style and import cleanup. Explicit EditorConfig rules override defaults; personal IDE settings are ignored. XAML cleanup is limited to formatting, empty-tag normalization and unused namespace aliases. Generated sources and standalone C# scripts are excluded; `scripts/generate-reference.cs` is included because a solution project compiles it.
+
+Cleanup repeats until the selected files stop changing, failing if the profile does not stabilize within five passes. A syntax rewrite can expose another style change, so one CLI pass is not always sufficient. `-Include` accepts one path on the `pwsh -File` command line, or a PowerShell array when calling the script from an existing PowerShell session.
+
+Template sources are analyzed in a temporary solution against the current source libraries. The original template project keeps its package reference and version placeholder. Packed-template and live UI validation remain separate checks. Inspection reports suggestions, warnings and errors; it exits 1 when any remain and does not hide existing findings behind a baseline. Inspection is a local command, not a CI gate.
 
 ## Build from source
 
@@ -107,6 +113,7 @@ CI uses `scripts/ci-changes.ps1` to make the same selection for PRs and pushes t
 | --- | --- |
 | `pwsh scripts/pr-rules.ps1 -Title <title> -Body <body> -Path <file>` | What the `pr-rules` job runs, given a file of changed paths. It prints each problem and exits 1. |
 | `pwsh scripts/pr-screenshot.ps1 <png>` | Publishes a `winshell inspect` screenshot on the `pr-screenshots` branch, which never merges, and prints the Markdown to paste into a PR. |
+| `pwsh -NoProfile scripts/resharper.ps1 -Mode Cleanup\|Check\|Inspect [-Include <paths>] [-Staged] [-Output <folder>]` | Uses the pinned ReSharper CLI. Cleanup edits handwritten solution and template C#/XAML; Check verifies an isolated copy; Inspect writes `solution.sarif` and `template.sarif` under `artifacts/resharper/` by default and fails on suggestions and above. `-Include` selects explicit source paths; `-Staged` selects staged paths, reading their working-tree contents. These selectors are mutually exclusive. Build and tool errors fail the command. Requires Git, .NET and PowerShell 7; first use restores the pinned tool. |
 | `pwsh scripts/check.ps1 [-Tier Fast\|Slow\|All] [-Seed <seed>] [-NoBuild]` | Builds with warnings as errors, verifies formatting and runs fast .NET tests plus every PowerShell 7 suite in `tests/Scripts/`. Fast is the default and opens no windows. `-Tier Slow` runs only the tests that open windows, without formatting or Pester; `All` runs both tiers and Pester. `-Seed` replays the randomized .NET test order. `-NoBuild` uses an existing build. Missing Pester 5.6.1 fails with an installation command; it is never silently skipped or downloaded. The packed shell tests (`Category=Package`) are separate. |
 | `pwsh -NoProfile scripts/check.ps1 -Lint` | Runs the existing offline Markdown link/fragment check, actionlint and offline zizmor, stopping on the first failure. Run immediately after Markdown or workflow edits. Needs the [pinned lint tools](#local-lint-setup) on PATH; does not build, run tests, require Pester, or download tools. |
 | `pwsh scripts/ci-changes.ps1 -Files <json> [-MaxFiles <limit>] [-Draft]` | Classifies GitHub changed-file JSON from the checkout root and prints the flags used by `ci.yml`. PR file lists have a 3000-file limit; push comparisons have a 300-file limit. CI fetches this input; local contributors normally choose the checks above directly. |
@@ -328,6 +335,7 @@ Real mixed-DPI movement, Acrylic composition, Narrator speech, native toast plac
 ```text
 .
 ├── .githooks/                       # The pre-commit hook; building the solution points Git at it
+├── .config/                         # Pinned local .NET tools, including ReSharper
 ├── .github/                         # CI, issue and PR templates, Dependabot
 ├── docs/
 │   ├── agents/                      # How the engineering skills use this repo

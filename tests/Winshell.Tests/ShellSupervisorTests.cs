@@ -45,6 +45,7 @@ public sealed class ShellSupervisorTests
             Assert.Equal(i + 1, _shells.Count);
             _time.Advance(Tick);
         }
+
         (await _shells.Started(6)).Exit(AccessViolation);
 
         Assert.Equal(AccessViolation, await run);
@@ -231,7 +232,10 @@ public sealed class ShellSupervisorTests
         }
 
         /// <summary>Completes once the supervisor has handled an exit and waits to start the next shell.</summary>
-        public Task Waiting() => _waits.WaitAsync(TestContext.Current.CancellationToken);
+        public Task Waiting()
+        {
+            return _waits.WaitAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>What the supervisor started, stopped and restored, in order.</summary>
@@ -251,7 +255,9 @@ public sealed class ShellSupervisorTests
             get
             {
                 lock (_gate)
+                {
                     return [.. _events];
+                }
             }
         }
 
@@ -260,7 +266,9 @@ public sealed class ShellSupervisorTests
             get
             {
                 lock (_gate)
+                {
                     return _children.Count;
+                }
             }
         }
 
@@ -271,12 +279,18 @@ public sealed class ShellSupervisorTests
                 return null;
             var child = new Child(this);
             lock (_gate)
+            {
                 _children.Add(child);
+            }
+
             _started.Release();
             return child;
         }
 
-        public void Restore() => Add("restore");
+        public void Restore()
+        {
+            Add("restore");
+        }
 
         /// <summary>The <paramref name="number"/>th shell, once it has started.</summary>
         public async Task<Child> Started(int number)
@@ -284,13 +298,17 @@ public sealed class ShellSupervisorTests
             while (Count < number)
                 await _started.WaitAsync(TestContext.Current.CancellationToken);
             lock (_gate)
+            {
                 return _children[number - 1];
+            }
         }
 
         public void Add(string what)
         {
             lock (_gate)
+            {
                 _events.Add(what);
+            }
         }
     }
 

@@ -23,7 +23,7 @@ public sealed class ShellInstanceTests
 
         public string? BuildProject { get; private set; }
 
-        public ShellIpc Ipc { get; } = new ShellIpc(new Log());
+        public ShellIpc Ipc { get; } = new(new Log());
 
         public string? Reload(string? program)
         {
@@ -31,9 +31,15 @@ public sealed class ShellInstanceTests
             return ReloadError;
         }
 
-        public void Reloaded() => Answered++;
+        public void Reloaded()
+        {
+            Answered++;
+        }
 
-        public void Quit() => Quits++;
+        public void Quit()
+        {
+            Quits++;
+        }
 
         public void ShowBuildError(string error, string projectFile)
         {
@@ -42,8 +48,10 @@ public sealed class ShellInstanceTests
         }
     }
 
-    private static List<(InstanceInfo Info, bool Alive)> Rows(ShellInstance instance) =>
-        Instances.List(true).Where(i => i.Info.Id == instance.Id).ToList();
+    private static List<(InstanceInfo Info, bool Alive)> Rows(ShellInstance instance)
+    {
+        return Instances.List(true).Where(i => i.Info.Id == instance.Id).ToList();
+    }
 
     private static async Task<IpcResponse> Ask(string pipe, IpcRequest request)
     {
@@ -109,7 +117,8 @@ public sealed class ShellInstanceTests
 
         instance.Publish("mine");
 
-        using var reader = new StreamReader(new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete));
+        using var reader = new StreamReader(new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete));
         Assert.Contains("Shell ID: \"mine\"", reader.ReadToEnd(), StringComparison.Ordinal);
         instance.Close();
     }
@@ -148,9 +157,13 @@ public sealed class ShellInstanceTests
         var instance = ShellInstance.Open(Program, log);
         log.Warn("shell", "sync --password SENTINEL-PASSWORD");
         string text;
-        using (var stream = new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var stream = new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read,
+                   FileShare.ReadWrite | FileShare.Delete))
         using (var reader = new StreamReader(stream))
+        {
             text = reader.ReadToEnd();
+        }
+
         instance.Abandon();
 
         Assert.Contains("sync --password [redacted]", text, StringComparison.Ordinal);
@@ -169,7 +182,8 @@ public sealed class ShellInstanceTests
         instance.MarkCleanExit();
         instance.Close();
 
-        var reports = Directory.GetFiles(ShellLocations.CrashRoot).Select(File.ReadAllText).Where(r => r.Contains("SENTINEL crash", StringComparison.Ordinal)).ToList();
+        var reports = Directory.GetFiles(ShellLocations.CrashRoot).Select(File.ReadAllText)
+            .Where(r => r.Contains("SENTINEL crash", StringComparison.Ordinal)).ToList();
         Assert.Contains("Winshell closed: yes", Assert.Single(reports), StringComparison.Ordinal);
         Assert.Equal(before, File.Exists(ShellInstance.ExitState) ? File.ReadAllText(ShellInstance.ExitState) : null);
     }
@@ -222,11 +236,13 @@ public sealed class ShellInstanceTests
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
-        var response = await Pumping(loop, () => Ask(pipe, IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj")));
+        var response = await Pumping(loop,
+            () => Ask(pipe, IpcRequest.ForBuild("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj")));
         var refused = await Pumping(loop, () => Ask(pipe, new IpcRequest(IpcOps.Build, Args: ["only one"])));
 
         Assert.True(response.Ok);
-        Assert.Equal(("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"), (control.BuildError, control.BuildProject));
+        Assert.Equal(("Bar.cs(1,1): error CS1002: ; expected", @"C:\mine\Bar.csproj"),
+            (control.BuildError, control.BuildProject));
         Assert.Equal((false, "build takes the error and the project file."), (refused.Ok, refused.Error));
         Assert.Equal(0, control.Quits);
     }
@@ -322,7 +338,9 @@ public sealed class ShellInstanceTests
 
         // Kill must reach a shell of any release, so the line is pinned in full: an older shell has to read every field of it.
         var version = JsonSerializer.Serialize(ProductVersion.Current.Text);
-        Assert.Equal($$"""{"op":"kill","target":null,"name":null,"args":null,"protocol":{{IpcProtocol.Current}},"winshell":{{version}}}""", await answering);
+        Assert.Equal(
+            $$"""{"op":"kill","target":null,"name":null,"args":null,"protocol":{{IpcProtocol.Current}},"winshell":{{version}}}""",
+            await answering);
     }
 
     [Fact]

@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Tests;
 
 /// <summary>An option Winshell does not have, and a spare word, exit 2 before a shell starts.</summary>
@@ -36,8 +34,10 @@ public class UnknownOptionTests
         Assert.Equal(error + Environment.NewLine, result.Error);
     }
 
-    private static ChildProcess Run(string[] args) =>
-        WinshellCli.Run(
+    private static ChildProcess Run(string[] args)
+    {
+        return WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-unknown-option-absent")));
+    }
 }

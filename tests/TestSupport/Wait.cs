@@ -14,7 +14,10 @@ internal static class Wait
     /// <param name="done">What to wait for.</param>
     /// <param name="what">What the test was waiting for, in its failure message.</param>
     /// <param name="between">Runs between checks, usually to pump a loop.</param>
-    internal static void Until(Func<bool> done, string what, Action? between = null) => Until(done, what, Patience, between);
+    internal static void Until(Func<bool> done, string what, Action? between = null)
+    {
+        Until(done, what, Patience, between);
+    }
 
     /// <summary><see cref="Until"/> for what takes longer than a test should, such as a first build.</summary>
     internal static void Until(Func<bool> done, string what, TimeSpan patience, Action? between = null)
@@ -33,12 +36,14 @@ internal static class Wait
     }
 
     /// <summary><see cref="Until"/> for a test that must not block its thread, so what it awaits can run.</summary>
-    internal static Task UntilAsync(Func<bool> done, string what, Action? between = null) =>
-        UntilAsync(done, what, () =>
+    internal static Task UntilAsync(Func<bool> done, string what, Action? between = null)
+    {
+        return UntilAsync(done, what, () =>
         {
             between?.Invoke();
             return Task.CompletedTask;
         });
+    }
 
     /// <summary><see cref="Until"/> with something to await between checks.</summary>
     internal static async Task UntilAsync(Func<bool> done, string what, Func<Task> between)
@@ -68,5 +73,8 @@ internal static class Wait
         token.ThrowIfCancellationRequested();
     }
 
-    private static TimeSpan Next(TimeSpan pause) => pause * 2 < LongestPause ? pause * 2 : LongestPause;
+    private static TimeSpan Next(TimeSpan pause)
+    {
+        return pause * 2 < LongestPause ? pause * 2 : LongestPause;
+    }
 }

@@ -10,7 +10,10 @@ internal sealed class PowerRequest : IDisposable
 
     private nint _handle;
 
-    private PowerRequest(nint handle) => _handle = handle;
+    private PowerRequest(nint handle)
+    {
+        _handle = handle;
+    }
 
     /// <summary>
     /// Keeps the screen on and the PC awake for <paramref name="reason"/>. Null when Windows refuses:
@@ -24,17 +27,20 @@ internal sealed class PowerRequest : IDisposable
             var context = new REASON_CONTEXT { Version = 0, Flags = 1, SimpleReasonString = (nint)text };
             handle = Win32.PowerCreateRequest(ref context);
         }
+
         if (handle == -1 || handle == 0)
         {
             (failedStep, error) = ("create", Marshal.GetLastPInvokeError());
             return null;
         }
+
         if (!Win32.PowerSetRequest(handle, DisplayRequired) || !Win32.PowerSetRequest(handle, SystemRequired))
         {
             (failedStep, error) = ("set", Marshal.GetLastPInvokeError());
             Win32.CloseHandle(handle);
             return null;
         }
+
         (failedStep, error) = ("", 0);
         return new PowerRequest(handle);
     }

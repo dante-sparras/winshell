@@ -25,10 +25,16 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
 
     public event Action? Switched;
 
-    public bool StartWatching() => true;
+    public bool StartWatching()
+    {
+        return true;
+    }
 
     /// <summary>Reports a switch the way Windows does, without changing <see cref="Current"/>.</summary>
-    public void Switch() => Switched?.Invoke();
+    public void Switch()
+    {
+        Switched?.Invoke();
+    }
 
     public string ListStamp => string.Join(",", Items.Select(item => item.Id));
 
@@ -42,6 +48,7 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
             error = "failed: boom";
             return false;
         }
+
         desktops = Items.ToArray();
         current = Current;
         error = "";

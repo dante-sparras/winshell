@@ -8,24 +8,24 @@ namespace Winshell.Services.Tests;
 public sealed class WinlandServiceTests
 {
     private const string Monitors = """
-        [{"id":1,"name":"\\\\.\\DISPLAY2","description":"Left","x":-1920,"y":0,"width":1920,"height":1080,"scale":1.5,"focused":false,
-          "activeWorkspace":{"id":3,"name":"3"}},
-         {"id":0,"name":"\\\\.\\DISPLAY1","description":"Main","x":0,"y":0,"width":2560,"height":1440,"scale":1,"focused":true,
-          "activeWorkspace":{"id":1,"name":"1"}}]
-        """;
+                                    [{"id":1,"name":"\\\\.\\DISPLAY2","description":"Left","x":-1920,"y":0,"width":1920,"height":1080,"scale":1.5,"focused":false,
+                                      "activeWorkspace":{"id":3,"name":"3"}},
+                                     {"id":0,"name":"\\\\.\\DISPLAY1","description":"Main","x":0,"y":0,"width":2560,"height":1440,"scale":1,"focused":true,
+                                      "activeWorkspace":{"id":1,"name":"1"}}]
+                                    """;
 
     private const string Workspaces = """
-        [{"id":3,"name":"3","monitor":"\\\\.\\DISPLAY1","monitorID":0,"hasfullscreen":false},
-         {"id":1,"name":"1","monitor":"\\\\.\\DISPLAY1","monitorID":0,"hasfullscreen":true},
-         {"id":3,"name":"3","monitor":"\\\\.\\DISPLAY2","monitorID":1,"hasfullscreen":false},
-         {"name":"notes","monitor":"\\\\.\\DISPLAY1","monitorID":0},
-         {"name":"special:special"}]
-        """;
+                                      [{"id":3,"name":"3","monitor":"\\\\.\\DISPLAY1","monitorID":0,"hasfullscreen":false},
+                                       {"id":1,"name":"1","monitor":"\\\\.\\DISPLAY1","monitorID":0,"hasfullscreen":true},
+                                       {"id":3,"name":"3","monitor":"\\\\.\\DISPLAY2","monitorID":1,"hasfullscreen":false},
+                                       {"name":"notes","monitor":"\\\\.\\DISPLAY1","monitorID":0},
+                                       {"name":"special:special"}]
+                                      """;
 
     private const string Clients = """
-        [{"address":"0x10","title":"Editor","workspace":{"id":1,"name":"1","monitor":"\\\\.\\DISPLAY1"}},
-         {"address":"0x20","title":"Browser","workspace":{"id":3,"name":"3","monitor":"\\\\.\\DISPLAY2"}}]
-        """;
+                                   [{"address":"0x10","title":"Editor","workspace":{"id":1,"name":"1","monitor":"\\\\.\\DISPLAY1"}},
+                                    {"address":"0x20","title":"Browser","workspace":{"id":3,"name":"3","monitor":"\\\\.\\DISPLAY2"}}]
+                                   """;
 
     private readonly ManualEventLoop _loop = new();
     private readonly FakeBackend _backend = new();
@@ -155,8 +155,10 @@ public sealed class WinlandServiceTests
         service.Attach(list);
         _loop.Process();
 
-        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10), service.Windows.Single(window => window.Address == "10").Window);
-        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20), service.Windows.Single(window => window.Address == "20").Window);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x10),
+            service.Windows.Single(window => window.Address == "10").Window);
+        Assert.Same(list.Windows.Single(window => window.Hwnd == 0x20),
+            service.Windows.Single(window => window.Address == "20").Window);
     }
 
     [Fact]
@@ -390,7 +392,7 @@ public sealed class WinlandServiceTests
         [
             "[[BATCH]]dispatch focusmonitor 1;dispatch workspace 3",
             "dispatch workspace 3",
-            "dispatch workspace special:special",
+            "dispatch workspace special:special"
         ], _backend.Sent);
     }
 
@@ -479,7 +481,8 @@ public sealed class WinlandServiceTests
 
         public List<Log> Stopped { get; } = [];
 
-        public int Listeners => (ConnectionChanged?.GetInvocationList().Length ?? 0) + (EventReceived?.GetInvocationList().Length ?? 0);
+        public int Listeners => (ConnectionChanged?.GetInvocationList().Length ?? 0) +
+                                (EventReceived?.GetInvocationList().Length ?? 0);
 
         public bool IsConnected => Connected;
 
@@ -501,7 +504,10 @@ public sealed class WinlandServiceTests
             return Pending?.Task ?? Task.FromResult(Replies.GetValueOrDefault(command));
         }
 
-        public void Raise(string line) => EventReceived?.Invoke(line);
+        public void Raise(string line)
+        {
+            EventReceived?.Invoke(line);
+        }
 
         public void RaiseConnection(bool connected)
         {
@@ -509,6 +515,9 @@ public sealed class WinlandServiceTests
             ConnectionChanged?.Invoke(connected);
         }
 
-        public void Stop(Log log) => Stopped.Add(log);
+        public void Stop(Log log)
+        {
+            Stopped.Add(log);
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using Winshell.Media;
 
 namespace Winshell.Services.Tests;
@@ -34,7 +35,7 @@ public class ArtCacheTests
         {
             if (Directory.Exists(link))
                 Directory.Delete(link);
-            Directory.Delete(directory, recursive: true);
+            Directory.Delete(directory, true);
         }
     }
 
@@ -57,7 +58,7 @@ public class ArtCacheTests
         }
         finally
         {
-            Directory.Delete(directory, recursive: true);
+            Directory.Delete(directory, true);
         }
     }
 
@@ -68,7 +69,8 @@ public class ArtCacheTests
         var url = ArtCache.Store(art, "image/png");
         var path = new Uri(url).LocalPath;
         // Another instance deleting its copy of the same art must not take this one's.
-        Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), Path.GetFileName(Path.GetDirectoryName(path)));
+        Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            Path.GetFileName(Path.GetDirectoryName(path)));
         Assert.Equal(url, ArtCache.Store(art, "image/png"));
 
         ArtCache.Release(url);
@@ -90,7 +92,8 @@ public class ArtCacheTests
     [Fact]
     public async Task Svg_art_is_dropped_without_a_file()
     {
-        var art = System.Text.Encoding.UTF8.GetBytes("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
+        var art = Encoding.UTF8.GetBytes(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
 
         Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/png"));
         Assert.Null(await ArtCache.StoreAsync(new MemoryStream(art), "image/svg+xml"));
@@ -118,7 +121,8 @@ public class ArtCacheTests
 
     private static bool Stored(byte[] art)
     {
-        var folder = Path.Combine(Path.GetTempPath(), "winshell", "media-art", Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        var folder = Path.Combine(Path.GetTempPath(), "winshell", "media-art",
+            Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
         var name = Convert.ToHexString(SHA256.HashData(art))[..32].ToLowerInvariant();
         return Directory.Exists(folder) && Directory.EnumerateFiles(folder, name + ".*").Any();
     }

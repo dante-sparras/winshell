@@ -26,7 +26,8 @@ public class WinlandProtocolTests
     [Fact]
     public void The_last_argument_keeps_its_commas()
     {
-        Assert.Equal(["708ba", "1", "\\\\.\\DISPLAY1", "Chrome_WidgetWin_1", "a, b, c"], WinlandProtocol.ParseArgs("708ba,1,\\\\.\\DISPLAY1,Chrome_WidgetWin_1,a, b, c", 5));
+        Assert.Equal(["708ba", "1", "\\\\.\\DISPLAY1", "Chrome_WidgetWin_1", "a, b, c"],
+            WinlandProtocol.ParseArgs("708ba,1,\\\\.\\DISPLAY1,Chrome_WidgetWin_1,a, b, c", 5));
     }
 
     [Fact]
@@ -50,7 +51,8 @@ public class WinlandProtocolTests
     [Fact]
     public void Unnumbered_workspaces_get_the_ids_Winland_gives_them_in_events()
     {
-        var ids = WinlandProtocol.UnnumberedIds(["1", "special:special", "special:b", "special:a", "zeta", "alpha", "2"]);
+        var ids = WinlandProtocol.UnnumberedIds(
+            ["1", "special:special", "special:b", "special:a", "zeta", "alpha", "2"]);
         Assert.Equal(-99, ids["special:special"]);
         Assert.Equal(-98, ids["special:a"]);
         Assert.Equal(-97, ids["special:b"]);
@@ -98,10 +100,10 @@ public class WinlandProtocolTests
     {
         // A monitors entry as Winland 0.3 writes it.
         using var doc = JsonDocument.Parse("""
-            {"id":0,"name":"\\\\.\\DISPLAY2","scale":1.25,"focused":true,"reserved":[0,0,0,48],
-             "activeWorkspace":{"address":"1","id":1,"type":"normal","name":"1","monitor":"\\\\.\\DISPLAY2"},
-             "specialWorkspace":{"address":"","type":"","name":"","monitor":""},"solitaryBlockedBy":null}
-            """);
+                                           {"id":0,"name":"\\\\.\\DISPLAY2","scale":1.25,"focused":true,"reserved":[0,0,0,48],
+                                            "activeWorkspace":{"address":"1","id":1,"type":"normal","name":"1","monitor":"\\\\.\\DISPLAY2"},
+                                            "specialWorkspace":{"address":"","type":"","name":"","monitor":""},"solitaryBlockedBy":null}
+                                           """);
         var map = Assert.IsType<Dictionary<string, object?>>(WinlandProtocol.ToObject(doc.RootElement));
         Assert.Equal(0, map["id"]);
         Assert.Equal(@"\\.\DISPLAY2", map["name"]);
@@ -113,5 +115,8 @@ public class WinlandProtocolTests
         Assert.Null(WinlandProtocol.Int(doc.RootElement.GetProperty("specialWorkspace"), "id"));
     }
 
-    private static MemoryStream Stream(string text) => new(Encoding.UTF8.GetBytes(text));
+    private static MemoryStream Stream(string text)
+    {
+        return new MemoryStream(Encoding.UTF8.GetBytes(text));
+    }
 }

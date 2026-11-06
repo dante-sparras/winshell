@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace Winshell.Tests;
 
 /// <summary><c>--help</c> after a command prints that command's usage and does not run it.</summary>
@@ -37,8 +35,10 @@ public class CliHelpTests
         Assert.Contains("2 the command line was wrong", result.Output, StringComparison.Ordinal);
     }
 
-    private static ChildProcess Run(string[] args) =>
-        WinshellCli.Run(
+    private static ChildProcess Run(string[] args)
+    {
+        return WinshellCli.Run(
             args,
             ("WINSHELL_CONFIG_DIR", Path.Combine(Path.GetTempPath(), "winshell-cli-help-absent")));
+    }
 }

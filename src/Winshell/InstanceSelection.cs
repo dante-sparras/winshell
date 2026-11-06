@@ -14,8 +14,11 @@ internal static class InstanceSelection
         if (options.Pid is { } pid)
         {
             var match = instances.FirstOrDefault(i => i.Pid == pid);
-            return match is null ? InstanceChoice.Miss($"No instance with process id {pid}.") : InstanceChoice.Found(match);
+            return match is null
+                ? InstanceChoice.Miss($"No instance with process id {pid}.")
+                : InstanceChoice.Found(match);
         }
+
         if (options.Id is { } id)
         {
             var matches = instances.Where(i => i.Id.StartsWith(id, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -23,9 +26,10 @@ internal static class InstanceSelection
             {
                 1 => InstanceChoice.Found(matches[0]),
                 0 => InstanceChoice.Miss($"No instance with id {id}."),
-                _ => InstanceChoice.Miss($"Several instances start with {id}."),
+                _ => InstanceChoice.Miss($"Several instances start with {id}.")
             };
         }
+
         if (options.Path is not null || options.Config is not null)
         {
             var project = ConfigurationSelection.FindProject(options, out var error);
@@ -33,8 +37,11 @@ internal static class InstanceSelection
                 return InstanceChoice.Miss(error);
             // With -c or -p a project is always found, or the error above says why not.
             var match = instances.FirstOrDefault(i => RunsProject(i, project!));
-            return match is null ? InstanceChoice.Miss($"No running instance of {project!.Program}.") : InstanceChoice.Found(match);
+            return match is null
+                ? InstanceChoice.Miss($"No running instance of {project!.Program}.")
+                : InstanceChoice.Found(match);
         }
+
         return ChooseUnselected(instances);
     }
 
@@ -49,19 +56,32 @@ internal static class InstanceSelection
             var listed = string.Join(", ", instances.Select(i => $"{i.Id} ({i.ConfigPath})"));
             return InstanceChoice.Wrong($"Several instances are running; pick one with -i: {listed}.");
         }
+
         return instances.Count == 1 ? InstanceChoice.Found(instances[0]) : InstanceChoice.Miss(NoneRunning);
     }
 
     /// <summary>Whether <paramref name="info"/> runs <paramref name="project"/>, from <c>bin\shell</c> or from <c>bin\shell.next</c>.</summary>
-    internal static bool RunsProject(InstanceInfo info, ConfigurationProject project) =>
-        string.Equals(ConfigurationProject.ForProgram(info.ConfigPath)?.ProjectFile, project.ProjectFile, StringComparison.OrdinalIgnoreCase);
+    internal static bool RunsProject(InstanceInfo info, ConfigurationProject project)
+    {
+        return string.Equals(ConfigurationProject.ForProgram(info.ConfigPath)?.ProjectFile, project.ProjectFile,
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     internal readonly record struct InstanceChoice(InstanceInfo? Info, string? Error, int Code)
     {
-        public static InstanceChoice Found(InstanceInfo info) => new(info, null, 0);
+        public static InstanceChoice Found(InstanceInfo info)
+        {
+            return new InstanceChoice(info, null, 0);
+        }
 
-        public static InstanceChoice Miss(string? error) => new(null, error, 1);
+        public static InstanceChoice Miss(string? error)
+        {
+            return new InstanceChoice(null, error, 1);
+        }
 
-        public static InstanceChoice Wrong(string error) => new(null, error, 2);
+        public static InstanceChoice Wrong(string error)
+        {
+            return new InstanceChoice(null, error, 2);
+        }
     }
 }

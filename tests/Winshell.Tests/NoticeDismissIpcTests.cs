@@ -37,8 +37,11 @@ public sealed class NoticeDismissIpcTests : IDisposable, IClassFixture<ProbeBuil
         Assert.False(process.HasExited);
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+            ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    }
 
     public void Dispose()
     {
@@ -49,8 +52,10 @@ public sealed class NoticeDismissIpcTests : IDisposable, IClassFixture<ProbeBuil
                 process.Kill();
                 process.WaitForExit();
             }
+
             process.Dispose();
         }
+
         try
         {
             Directory.Delete(_dir, true);

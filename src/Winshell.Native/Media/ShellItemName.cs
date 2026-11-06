@@ -10,7 +10,8 @@ internal static class ShellItemName
     /// </summary>
     internal static string? Find(string parsingName)
     {
-        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItem).GUID, out var pointer) < 0 || pointer == 0)
+        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItem).GUID, out var pointer) < 0 ||
+            pointer == 0)
             return null;
         IShellItem? item = null;
         try

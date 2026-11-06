@@ -9,18 +9,13 @@ internal static class DoctorCommand
     {
         var root = ConfigPaths.Root();
         var project = ConfigurationSelection.FindProject(options, out var problem);
-        string? search = project?.Folder;
+        var search = project?.Folder;
         // The folder the Folders check writes to is the -p folder as given, never its parent: that could be a drive, the
         // profile or another project.
         if (search is null && options.Path is { } path)
-        {
-            search = System.IO.Path.GetFullPath(path);
-        }
-        else if (search is null && options.Config is { } name)
-        {
-            search = System.IO.Path.Combine(root, name);
-        }
-        var checks = Diagnostics.Doctor.Run(new DoctorContext(
+            search = Path.GetFullPath(path);
+        else if (search is null && options.Config is { } name) search = Path.Combine(root, name);
+        var checks = Doctor.Run(new DoctorContext(
             Environment.ProcessPath!, // The CLI runs from its apphost.
             root,
             project?.ProjectFile,
@@ -31,13 +26,15 @@ internal static class DoctorCommand
             search));
         if (options.Json)
         {
-            Console.WriteLine(Diagnostics.DoctorReport.ToJson(checks, CliMetadata.Version));
+            Console.WriteLine(DoctorReport.ToJson(checks, CliMetadata.Version));
         }
         else
         {
-            var color = !options.NoColor && !Console.IsOutputRedirected && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
-            Console.Write(Diagnostics.DoctorReport.Format(checks, CliMetadata.Version, color));
+            var color = !options.NoColor && !Console.IsOutputRedirected &&
+                        string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
+            Console.Write(DoctorReport.Format(checks, CliMetadata.Version, color));
         }
+
         return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;
     }
 
@@ -46,7 +43,8 @@ internal static class DoctorCommand
     {
         try
         {
-            return Instances.List(false).Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
+            return Instances.List(false)
+                .Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

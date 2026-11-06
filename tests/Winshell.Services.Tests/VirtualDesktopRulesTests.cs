@@ -29,7 +29,8 @@ public sealed class VirtualDesktopRulesTests
         Assert.Equal("Desktop 2", VirtualDesktopRules.DisplayName(null, 1));
         Assert.Equal("Work", VirtualDesktopRules.DisplayName("  Work  ", 3));
         Assert.Equal("", VirtualDesktopRules.FormatId(Guid.Empty));
-        Assert.Equal("00112233-4455-6677-8899-aabbccddeeff", VirtualDesktopRules.FormatId(new Guid("00112233-4455-6677-8899-aabbccddeeff")));
+        Assert.Equal("00112233-4455-6677-8899-aabbccddeeff",
+            VirtualDesktopRules.FormatId(new Guid("00112233-4455-6677-8899-aabbccddeeff")));
     }
 
     [Fact]

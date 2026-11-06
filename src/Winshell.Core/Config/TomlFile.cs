@@ -70,10 +70,13 @@ public abstract class TomlFile : ObservableObject, IDisposable
         _loop = loop;
         _log = log ?? Log.Default;
         _check = check;
-        _keys = [.. GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.SetMethod is { IsPublic: true } && p.GetIndexParameters().Length == 0)
-            .OrderBy(p => p.MetadataToken)
-            .Select(p => new Key(p))];
+        _keys =
+        [
+            .. GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.SetMethod is { IsPublic: true } && p.GetIndexParameters().Length == 0)
+                .OrderBy(p => p.MetadataToken)
+                .Select(p => new Key(p))
+        ];
         PropertyChanged += OnPropertyChanged;
         // Watching first, so a save between the two is not missed.
         _watch = new FileWatch(_path, loop, Follow);
@@ -105,7 +108,10 @@ public abstract class TomlFile : ObservableObject, IDisposable
     internal Action? BeforeReplace { get; set; }
 
     /// <summary>Writes the file now, adding the keys it does not have, or making it and its folder when there is none.</summary>
-    public void Save() => Write();
+    public void Save()
+    {
+        Write();
+    }
 
     private void OnPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -143,12 +149,14 @@ public abstract class TomlFile : ObservableObject, IDisposable
                 _log.Debug("io", $"TomlFile: failed to read {_path}: {problem}");
                 return;
             }
+
             _text = null;
             Error = $"{_path}: {problem}";
             Loaded = false;
             Warn($"failed to read {Error}");
             return;
         }
+
         if (text is null)
         {
             _text = null;
@@ -156,6 +164,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
             Loaded = false;
             return;
         }
+
         if (text == _text)
             return;
         _text = text;
@@ -166,8 +175,9 @@ public abstract class TomlFile : ObservableObject, IDisposable
             Warn($"failed to parse {error}");
             return;
         }
+
         Error = "";
-        Apply(document, text, keepAssigned: false);
+        Apply(document, text, false);
         _assigned.Clear();
         Loaded = true;
     }
@@ -187,10 +197,11 @@ public abstract class TomlFile : ObservableObject, IDisposable
             Warn($"failed to parse {error}; the file was left unchanged");
             return;
         }
+
         Error = "";
         // A file that has not changed was applied already, and its refused values reported.
         if (text != _text)
-            Apply(document, text ?? "", keepAssigned: true);
+            Apply(document, text ?? "", true);
         var read = document.Values;
         foreach (var key in _keys)
         {
@@ -198,6 +209,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
             if (_assigned.Contains(key) || (value is not null && !read.ContainsKey(key.Name)))
                 document.Set(key.Name, value, key.Comment);
         }
+
         var next = document.ToString();
         if (next != text && !Put(next, text, bom))
             return;
@@ -240,13 +252,16 @@ public abstract class TomlFile : ObservableObject, IDisposable
     private void Apply(TomlDocument document, string text, bool keepAssigned)
     {
         DocumentSyntax? syntax = null;
-        string Where(string name) => TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name);
+
+        string Where(string name)
+        {
+            return TomlSyntax.KeyAt(_path, syntax ??= SyntaxParser.Parse(text), name);
+        }
+
         // A key like none of these may be another reader's: a configuration can share preferences.toml.
         foreach (var name in document.Values.Keys)
-        {
             if (!_keys.Exists(key => key.Name == name) && Nearest(name) is { } near)
                 Warn($"{Where(name)}: {name} was ignored; did you mean {near}?");
-        }
         _loading = true;
         try
         {
@@ -255,7 +270,8 @@ public abstract class TomlFile : ObservableObject, IDisposable
                 if ((keepAssigned && _assigned.Contains(key)) || !document.Values.TryGetValue(key.Name, out var value))
                     continue;
                 if (!TryConvert(value!, key.Property.PropertyType, out var converted))
-                    Leave(Where(key.Name), key, $"should be {Expected(key.Property.PropertyType)}, not {Shown(value!)}");
+                    Leave(Where(key.Name), key,
+                        $"should be {Expected(key.Property.PropertyType)}, not {Shown(value!)}");
                 else if (_check?.Invoke(key.Name, converted) is { Length: > 0 } reason)
                     Leave(Where(key.Name), key, reason);
                 else if (!TomlDocument.Same(TomlDocument.Plain(key.Property.GetValue(this)), value))
@@ -278,6 +294,7 @@ public abstract class TomlFile : ObservableObject, IDisposable
             if (distance < best.Distance && (distance == 0 || distance < Math.Max(name.Length, key.Name.Length) / 2))
                 best = (key.Name, distance);
         }
+
         return best.Name;
     }
 
@@ -290,15 +307,23 @@ public abstract class TomlFile : ObservableObject, IDisposable
             var current = new int[b.Length + 1];
             current[0] = i;
             for (var j = 1; j <= b.Length; j++)
-                current[j] = Math.Min(Math.Min(current[j - 1], previous[j]) + 1, previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+                current[j] = Math.Min(Math.Min(current[j - 1], previous[j]) + 1,
+                    previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
             previous = current;
         }
+
         return previous[b.Length];
     }
 
-    private void Leave(string where, Key key, string reason) => Warn($"{where}: {key.Name} {reason}, so it was left unchanged");
+    private void Leave(string where, Key key, string reason)
+    {
+        Warn($"{where}: {key.Name} {reason}, so it was left unchanged");
+    }
 
-    private void Warn(string message) => _log.Warn("io", "TomlFile: " + message);
+    private void Warn(string message)
+    {
+        _log.Warn("io", "TomlFile: " + message);
+    }
 
     /// <summary>What a property of <paramref name="type"/> takes, for a warning about a value it does not.</summary>
     private static string Expected(Type type)
@@ -330,7 +355,9 @@ public abstract class TomlFile : ObservableObject, IDisposable
             return "numbers";
         if (target == typeof(string))
             return "strings";
-        return target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>) ? "lists" : "tables";
+        return target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>)
+            ? "lists"
+            : "tables";
     }
 
     /// <summary>A value read from the file, as TOML, cut short past 100 characters.</summary>
@@ -347,19 +374,28 @@ public abstract class TomlFile : ObservableObject, IDisposable
         var target = Nullable.GetUnderlyingType(type) ?? type;
         converted = null;
         if (target.IsInstanceOfType(value))
+        {
             converted = value;
+        }
         else if (target == typeof(bool))
+        {
             converted = value switch
             {
                 long number => number != 0,
                 double number => number != 0 && !double.IsNaN(number),
-                _ => null,
+                _ => null
             };
+        }
         else if (target == typeof(int) && value is long and >= int.MinValue and <= int.MaxValue)
+        {
             converted = (int)(long)value;
+        }
         else if (target == typeof(double) && value is long whole)
+        {
             converted = (double)whole;
-        else if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>) && value is IReadOnlyList<object?> items)
+        }
+        else if (target.IsGenericType && target.GetGenericTypeDefinition() == typeof(IReadOnlyList<>) &&
+                 value is IReadOnlyList<object?> items)
         {
             var element = target.GetGenericArguments()[0];
             var list = Array.CreateInstance(element, items.Count);
@@ -369,8 +405,10 @@ public abstract class TomlFile : ObservableObject, IDisposable
                     return false;
                 list.SetValue(item, i);
             }
+
             converted = list;
         }
+
         return converted is not null;
     }
 
@@ -380,14 +418,15 @@ public abstract class TomlFile : ObservableObject, IDisposable
         try
         {
             // Share the file so a save can replace it while this read is open.
-            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
             // The length is known before the bytes are. A file past the limit is not copied into a string.
             if (DataLimits.FileBytes(stream.Length, DataLimits.MaxTextBytes) is { } why)
                 return (null, false, why);
             Span<byte> start = stackalloc byte[3];
             var bom = stream.Read(start) == 3 && start[0] == 0xEF && start[1] == 0xBB && start[2] == 0xBF;
             stream.Position = 0;
-            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            using var reader = new StreamReader(stream, Encoding.UTF8, true);
             return (reader.ReadToEnd(), bom, "");
         }
         catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)

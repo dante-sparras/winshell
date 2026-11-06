@@ -12,7 +12,10 @@ internal sealed class WindowPeek(Func<bool> turnedOn, Func<bool, nint, nint, boo
     private nint _window;
     private nint _above;
 
-    public static WindowPeek ForSystem() => new(SettingIsOn, DwmLivePreview.Set);
+    public static WindowPeek ForSystem()
+    {
+        return new WindowPeek(SettingIsOn, DwmLivePreview.Set);
+    }
 
     /// <summary>Peeks at a window, or at nothing when it is 0, leaving the window <paramref name="above"/> in front.</summary>
     public void Show(nint window, nint above)

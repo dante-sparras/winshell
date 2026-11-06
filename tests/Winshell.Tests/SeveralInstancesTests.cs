@@ -31,7 +31,7 @@ public class SeveralInstancesTests
     {
         var choice = InstanceSelection.ChooseUnselected([
             Instance("aaa", @"C:\a\MyShell.exe"),
-            Instance("bbb", @"C:\b\MyShell.exe"),
+            Instance("bbb", @"C:\b\MyShell.exe")
         ]);
 
         Assert.Equal(2, choice.Code);
@@ -41,6 +41,8 @@ public class SeveralInstancesTests
             choice.Error);
     }
 
-    private static InstanceInfo Instance(string id, string config) =>
-        new(id, 1, "shell", config, DateTime.UnixEpoch, "pipe-" + id, "log-" + id);
+    private static InstanceInfo Instance(string id, string config)
+    {
+        return new InstanceInfo(id, 1, "shell", config, DateTime.UnixEpoch, "pipe-" + id, "log-" + id);
+    }
 }

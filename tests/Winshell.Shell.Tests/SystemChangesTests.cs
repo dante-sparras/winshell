@@ -35,8 +35,10 @@ public class SystemChangesTests
     public void Each_message_asks_for_what_it_did_before()
     {
         Assert.Equal(SystemChange.Screens, SystemChanges.From(Win32.WM_DISPLAYCHANGE, 0));
-        Assert.Equal(SystemChange.Text | SystemChange.Screens | SystemChange.Theme, SystemChanges.From(Win32.WM_SETTINGCHANGE, 0));
-        Assert.Equal(SystemChange.Text | SystemChange.WorkArea | SystemChange.Theme, SystemChanges.From(Win32.WM_SETTINGCHANGE, Win32.SPI_SETWORKAREA));
+        Assert.Equal(SystemChange.Text | SystemChange.Screens | SystemChange.Theme,
+            SystemChanges.From(Win32.WM_SETTINGCHANGE, 0));
+        Assert.Equal(SystemChange.Text | SystemChange.WorkArea | SystemChange.Theme,
+            SystemChanges.From(Win32.WM_SETTINGCHANGE, Win32.SPI_SETWORKAREA));
         Assert.Equal(SystemChange.Theme, SystemChanges.From(Win32.WM_THEMECHANGED, 0));
     }
 

@@ -41,7 +41,7 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
         var config = Path.Combine(_dir, "config");
         Directory.CreateDirectory(config);
         File.WriteAllText(Path.Combine(config, ProbeShell.HangMarker), "");
-        var process = ProbeShell.Start(config, Path.Combine(_dir, "local"), shellId: "hung");
+        var process = ProbeShell.Start(config, Path.Combine(_dir, "local"), "hung");
         _started.Add(process);
         var pidFile = Path.Combine(config, "child.pid");
         Wait.Until(() => File.Exists(pidFile), "the shell's program to start");
@@ -68,8 +68,11 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
         return process;
     }
 
-    private ChildProcess Run(params string[] args) =>
-        WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")), ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    private ChildProcess Run(params string[] args)
+    {
+        return WinshellCli.Run(args, ("WINSHELL_LOCAL_DIR", Path.Combine(_dir, "local")),
+            ("WINSHELL_CONFIG_DIR", Path.Combine(_dir, "config")));
+    }
 
     public void Dispose()
     {
@@ -79,15 +82,18 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
             {
                 try
                 {
-                    process.Kill(entireProcessTree: true);
+                    process.Kill(true);
                 }
                 catch (Exception)
                 {
                 }
+
                 process.WaitForExit(5000);
             }
+
             process.Dispose();
         }
+
         try
         {
             Directory.Delete(_dir, true);

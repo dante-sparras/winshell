@@ -26,6 +26,7 @@ internal static unsafe class WindowTree
         {
             handle.Free();
         }
+
         return windows;
     }
 

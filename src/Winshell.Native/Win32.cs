@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
@@ -464,7 +466,8 @@ internal static partial class Win32
     public static partial uint GetSysColor(int index);
 
     [LibraryImport("user32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    public static partial nint CreateWindowExW(uint exStyle, string className, string windowName, uint style, int x, int y, int width, int height, nint parent, nint menu, nint instance, nint param);
+    public static partial nint CreateWindowExW(uint exStyle, string className, string windowName, uint style, int x,
+        int y, int width, int height, nint parent, nint menu, nint instance, nint param);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -563,7 +566,8 @@ internal static partial class Win32
     public static partial nint DispatchMessageW(in MSG msg);
 
     [LibraryImport("user32.dll")]
-    public static partial uint MsgWaitForMultipleObjectsEx(uint count, nint[] handles, uint milliseconds, uint wakeMask, uint flags);
+    public static partial uint MsgWaitForMultipleObjectsEx(uint count, nint[] handles, uint milliseconds, uint wakeMask,
+        uint flags);
 
     [LibraryImport("user32.dll")]
     public static partial void PostQuitMessage(int code);
@@ -579,7 +583,8 @@ internal static partial class Win32
     public const uint SMTO_ABORTIFHUNG = 0x2;
 
     [LibraryImport("user32.dll")]
-    public static partial nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
+    public static partial nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags,
+        uint timeout, out nint result);
 
     /// <summary>The message was delivered with SendMessage, not posted or broadcast as a notification.</summary>
     public const uint ISMEX_SEND = 0x00000001;
@@ -626,7 +631,8 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool attach);
+    public static partial bool AttachThreadInput(uint idAttach, uint idAttachTo,
+        [MarshalAs(UnmanagedType.Bool)] bool attach);
 
     [LibraryImport("kernel32.dll")]
     public static partial uint GetCurrentThreadId();
@@ -673,7 +679,8 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static unsafe partial bool EnumDisplayMonitors(nint hdc, nint clip, delegate* unmanaged<nint, nint, RECT*, nint, int> callback, nint data);
+    public static unsafe partial bool EnumDisplayMonitors(nint hdc, nint clip,
+        delegate* unmanaged<nint, nint, RECT*, nint, int> callback, nint data);
 
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -688,7 +695,8 @@ internal static partial class Win32
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool AdjustWindowRectExForDpi(ref RECT rect, uint style, [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
+    public static partial bool AdjustWindowRectExForDpi(ref RECT rect, uint style,
+        [MarshalAs(UnmanagedType.Bool)] bool menu, uint exStyle, uint dpi);
 
     [LibraryImport("shcore.dll")]
     public static partial int GetDpiForMonitor(nint monitor, int type, out uint dpiX, out uint dpiY);
@@ -750,13 +758,17 @@ internal static partial class Win32
     public static partial nint GetModuleHandleW(string? name);
 
     [LibraryImport("kernel32.dll")]
-    public static partial nint CreateEventW(nint attributes, [MarshalAs(UnmanagedType.Bool)] bool manualReset, [MarshalAs(UnmanagedType.Bool)] bool initialState, nint name);
+    public static partial nint CreateEventW(nint attributes, [MarshalAs(UnmanagedType.Bool)] bool manualReset,
+        [MarshalAs(UnmanagedType.Bool)] bool initialState, nint name);
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetEvent(nint handle);
 
-    public static bool CloseHandle(nint handle) => global::Windows.Win32.PInvoke.CloseHandle(new global::Windows.Win32.Foundation.HANDLE(handle));
+    public static bool CloseHandle(nint handle)
+    {
+        return PInvoke.CloseHandle(new HANDLE(handle));
+    }
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
@@ -767,7 +779,8 @@ internal static partial class Win32
 
     [LibraryImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static unsafe partial bool GetTokenInformation(nint token, int infoClass, void* info, int length, out int returned);
+    public static unsafe partial bool GetTokenInformation(nint token, int infoClass, void* info, int length,
+        out int returned);
 
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint CommandLineToArgvW(string commandLine, out int count);
@@ -776,7 +789,8 @@ internal static partial class Win32
     public static partial nint LocalFree(nint memory);
 
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
-    public static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security, uint creation, uint flags, nint template);
+    public static partial SafeFileHandle CreateFileW(string fileName, uint access, uint share, nint security,
+        uint creation, uint flags, nint template);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -811,14 +825,17 @@ internal static partial class Win32
     public static partial bool GetLastInputInfo(ref LASTINPUTINFO info);
 
     [LibraryImport("user32.dll")]
-    public static unsafe partial nint SetWindowsHookExW(int hook, delegate* unmanaged<int, nint, nint, nint> proc, nint module, uint thread);
+    public static unsafe partial nint SetWindowsHookExW(int hook, delegate* unmanaged<int, nint, nint, nint> proc,
+        nint module, uint thread);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool UnhookWindowsHookEx(nint hook);
 
     [LibraryImport("user32.dll")]
-    public static unsafe partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module, delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId, uint flags);
+    public static unsafe partial nint SetWinEventHook(uint eventMin, uint eventMax, nint module,
+        delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void> callback, uint processId, uint threadId,
+        uint flags);
 
     [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -885,7 +902,13 @@ internal static partial class Win32
     [LibraryImport("user32.dll")]
     public static partial uint GetCaretBlinkTime();
 
-    public static int LowWord(nint value) => (short)((long)value & 0xFFFF);
+    public static int LowWord(nint value)
+    {
+        return (short)((long)value & 0xFFFF);
+    }
 
-    public static int HighWord(nint value) => (short)(((long)value >> 16) & 0xFFFF);
+    public static int HighWord(nint value)
+    {
+        return (short)(((long)value >> 16) & 0xFFFF);
+    }
 }

@@ -12,7 +12,8 @@ public class InstanceCallTests
     private readonly string _pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
 
     private InstanceInfo Instance =>
-        new("abc123", Environment.ProcessId, "shell", @"C:\cfg\MyShell.exe", new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), _pipe, "log.txt");
+        new("abc123", Environment.ProcessId, "shell", @"C:\cfg\MyShell.exe",
+            new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc), _pipe, "log.txt");
 
     // Whether the close lands before or after the call starts reading varies, so the call is made several times.
     [Fact]
@@ -23,9 +24,11 @@ public class InstanceCallTests
             await using var shell = IpcServer.OpenFirst(_pipe);
             var closing = ReadThen(shell, shell.Dispose);
 
-            var answer = await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false), TestContext.Current.CancellationToken);
+            var answer = await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false),
+                TestContext.Current.CancellationToken);
 
-            Assert.Equal(new InstanceCall.Answer(null, "Instance abc123 closed the control pipe without answering."), answer);
+            Assert.Equal(new InstanceCall.Answer(null, "Instance abc123 closed the control pipe without answering."),
+                answer);
             await closing;
         }
     }
@@ -41,10 +44,12 @@ public class InstanceCallTests
             writer.WriteLine($$"""{"ok":true,"winshell":"{{other}}"}""");
         });
 
-        var answer = await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false), TestContext.Current.CancellationToken);
+        var answer =
+            await InstanceCall.AskAsync(Instance, IpcRequest.ForShow(false), TestContext.Current.CancellationToken);
 
         Assert.Equal(
-            new InstanceCall.Answer(null, $"Could not reach instance abc123: {IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text)}"),
+            new InstanceCall.Answer(null,
+                $"Could not reach instance abc123: {IpcProtocol.ReleaseRefusal(other, ProductVersion.Current.Text)}"),
             answer);
         await answering;
     }

@@ -2,9 +2,13 @@ namespace Winshell.Core.Tests;
 
 public sealed class DirectoryWatchTests : IDisposable
 {
-    private readonly string _directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _directory =
+        Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public DirectoryWatchTests() => Directory.CreateDirectory(_directory);
+    public DirectoryWatchTests()
+    {
+        Directory.CreateDirectory(_directory);
+    }
 
     [Fact]
     public void A_file_made_right_after_start_is_reported()
@@ -19,7 +23,8 @@ public sealed class DirectoryWatchTests : IDisposable
 
         File.WriteAllText(Path.Combine(_directory, "made.txt"), "");
 
-        Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
+        Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken),
+            "The new file was not reported.");
     }
 
     [Fact]
@@ -40,7 +45,8 @@ public sealed class DirectoryWatchTests : IDisposable
 
             File.WriteAllText(Path.Combine(_directory, "made.txt"), "");
 
-            Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The new file was not reported.");
+            Assert.True(seen.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken),
+                "The new file was not reported.");
         }
     }
 
@@ -53,13 +59,15 @@ public sealed class DirectoryWatchTests : IDisposable
 
         Directory.Delete(_directory, true);
 
-        Assert.True(lost.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken), "The watch did not report that it ended.");
+        Assert.True(lost.Wait(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken),
+            "The watch did not report that it ended.");
     }
 
     [Fact]
     public void A_missing_folder_is_not_watched()
     {
-        Assert.Null(DirectoryWatch.Start(Path.Combine(_directory, "missing"), DirectoryWatch.FileChanges, _ => { }, () => { }));
+        Assert.Null(DirectoryWatch.Start(Path.Combine(_directory, "missing"), DirectoryWatch.FileChanges, _ => { },
+            () => { }));
     }
 
     [Fact]

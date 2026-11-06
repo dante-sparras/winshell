@@ -22,7 +22,10 @@ internal static class CoreAudio
     public static readonly PROPERTYKEY EngineDeviceFormat = new(new Guid("F19F064D-082C-4E27-BC73-6882A1BB8E4C"), 0);
 
     /// <summary>The device enumerator. Throws <see cref="COMException"/> when Windows audio is not available.</summary>
-    public static IMMDeviceEnumerator CreateEnumerator() => Create<IMMDeviceEnumerator>(typeof(MMDeviceEnumerator).GUID);
+    public static IMMDeviceEnumerator CreateEnumerator()
+    {
+        return Create<IMMDeviceEnumerator>(typeof(MMDeviceEnumerator).GUID);
+    }
 
     /// <summary>
     /// Makes a device the Windows default for the console and multimedia roles. Throws <see cref="COMException"/>
@@ -59,18 +62,18 @@ internal static class CoreAudio
     {
         var client = Activate<IAudioClient>(device);
         if (client.GetMixFormat(out var format) == 0)
-        {
             try
             {
                 // A 100 ms buffer. Nothing reads it; overruns are harmless.
-                if (client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, 0, 1_000_000, 0, format, 0) == 0 && client.Start() == 0)
+                if (client.Initialize(AUDCLNT_SHAREMODE.AUDCLNT_SHAREMODE_SHARED, 0, 1_000_000, 0, format, 0) == 0 &&
+                    client.Start() == 0)
                     return client;
             }
             finally
             {
                 Marshal.FreeCoTaskMem(format);
             }
-        }
+
         Release(client);
         return null;
     }
@@ -131,7 +134,8 @@ internal interface IMMDeviceCollection
 [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IMMDevice
 {
-    void Activate(ref Guid iid, CLSCTX clsCtx, nint activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object instance);
+    void Activate(ref Guid iid, CLSCTX clsCtx, nint activationParams,
+        [MarshalAs(UnmanagedType.IUnknown)] out object instance);
 
     void OpenPropertyStore(uint access, out IPropertyStore properties);
 
@@ -209,7 +213,7 @@ internal interface IAudioMeterInformation
     int GetMeteringChannelCount(out uint count);
 
     [PreserveSig]
-    int GetChannelsPeakValues(uint count, [Out, MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] float[] peaks);
+    int GetChannelsPeakValues(uint count, [Out] [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 0)] float[] peaks);
 }
 
 [ComImport]
@@ -218,7 +222,8 @@ internal interface IAudioMeterInformation
 internal interface IAudioClient
 {
     [PreserveSig]
-    int Initialize(AUDCLNT_SHAREMODE shareMode, uint streamFlags, long bufferDuration, long periodicity, nint format, nint sessionGuid);
+    int Initialize(AUDCLNT_SHAREMODE shareMode, uint streamFlags, long bufferDuration, long periodicity, nint format,
+        nint sessionGuid);
 
     [PreserveSig]
     int GetBufferSize(out uint frames);

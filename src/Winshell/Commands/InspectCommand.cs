@@ -12,19 +12,23 @@ internal static class InspectCommand
             Console.Error.WriteLine(choice.Error);
             return choice.Code;
         }
+
         // The shell writes the file, so a relative path must mean what it means here.
-        var rest = args.Skip(1).Select((arg, i) => args[0] == "screenshot" && i == 0 ? Path.GetFullPath(arg) : arg).ToList();
+        var rest = args.Skip(1).Select((arg, i) => args[0] == "screenshot" && i == 0 ? Path.GetFullPath(arg) : arg)
+            .ToList();
         var answer = await InstanceCall.AskAsync(info, IpcRequest.ForInspect(args[0], rest));
         if (answer.Response is not { } response)
         {
             Console.Error.WriteLine(answer.Failure);
             return 1;
         }
+
         if (!response.Ok)
         {
             Console.Error.WriteLine(response.Error);
             return 1;
         }
+
         Console.WriteLine(response.Value);
         return 0;
     }

@@ -11,11 +11,16 @@ internal static class OpenToRead
     /// it with. Any other file opens with its edit verb, since opening a script runs it. A file no app opens that way is
     /// shown selected in File Explorer.
     /// </summary>
-    public static void Open(string path, Log log) => _ = Task.Run(() => OpenNow(path, log));
+    public static void Open(string path, Log log)
+    {
+        _ = Task.Run(() => OpenNow(path, log));
+    }
 
     /// <summary>The verb a file is opened with: null for the default, which only a report gets.</summary>
-    internal static string? VerbFor(string path) =>
-        Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase) ? null : "edit";
+    internal static string? VerbFor(string path)
+    {
+        return Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase) ? null : "edit";
+    }
 
     private static void OpenNow(string path, Log log)
     {
@@ -32,8 +37,10 @@ internal static class OpenToRead
             {
                 // Explorer by its full path, not the search path. It reads its own command line: the path is quoted
                 // after the comma, not the whole argument.
-                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
-                Process.Start(new ProcessStartInfo(explorer, $"/select,\"{path}\"") { UseShellExecute = false })?.Dispose();
+                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+                    "explorer.exe");
+                Process.Start(new ProcessStartInfo(explorer, $"/select,\"{path}\"") { UseShellExecute = false })
+                    ?.Dispose();
             }
             catch (Exception e) when (e is Win32Exception or InvalidOperationException)
             {

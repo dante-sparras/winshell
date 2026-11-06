@@ -50,7 +50,10 @@ internal abstract class AudioGraphNode(int id)
     public abstract IAudioMeterInformation? Meter { get; }
 
     /// <summary>Keeps the node's audio running while peaks are read, for devices that only meter while in use.</summary>
-    public virtual IDisposable? KeepRunning() => null;
+    public virtual IDisposable? KeepRunning()
+    {
+        return null;
+    }
 
     protected void ApplyAudio(float[] volumes, bool muted)
     {
@@ -61,7 +64,10 @@ internal abstract class AudioGraphNode(int id)
         AudioChanged?.Invoke();
     }
 
-    protected void ApplyProperties() => PropertiesChanged?.Invoke();
+    protected void ApplyProperties()
+    {
+        PropertiesChanged?.Invoke();
+    }
 
     protected void ApplyActive(bool active)
     {

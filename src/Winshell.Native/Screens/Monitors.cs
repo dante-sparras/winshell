@@ -10,8 +10,7 @@ internal readonly record struct MonitorInfo(string Device, RECT Bounds, RECT Wor
 /// <summary>Reads the connected monitors from Windows.</summary>
 internal static unsafe class Monitors
 {
-    [ThreadStatic]
-    private static List<nint>? _found;
+    [ThreadStatic] private static List<nint>? _found;
 
     /// <summary>The handle of every connected monitor, in the order Windows lists them.</summary>
     internal static List<nint> List()
@@ -26,6 +25,7 @@ internal static unsafe class Monitors
         {
             _found = null;
         }
+
         return found;
     }
 
@@ -45,7 +45,9 @@ internal static unsafe class Monitors
             info = default;
             return false;
         }
-        info = new MonitorInfo(Text(mi.szDevice, 32), mi.rcMonitor, mi.rcWork, (mi.dwFlags & Win32.MONITORINFOF_PRIMARY) != 0);
+
+        info = new MonitorInfo(Text(mi.szDevice, 32), mi.rcMonitor, mi.rcWork,
+            (mi.dwFlags & Win32.MONITORINFOF_PRIMARY) != 0);
         return true;
     }
 
@@ -53,7 +55,9 @@ internal static unsafe class Monitors
     internal static uint? RefreshRate(string device)
     {
         var mode = new DEVMODEW { dmSize = (ushort)sizeof(DEVMODEW) };
-        return PInvoke.EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref mode) ? mode.dmDisplayFrequency : null;
+        return PInvoke.EnumDisplaySettings(device, ENUM_DISPLAY_SETTINGS_MODE.ENUM_CURRENT_SETTINGS, ref mode)
+            ? mode.dmDisplayFrequency
+            : null;
     }
 
     /// <summary>A fixed character buffer up to its first null, never past its capacity.</summary>

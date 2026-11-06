@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
-using System.Text;
 using Winshell.Apps;
 using Winshell.Native;
 
@@ -12,7 +11,8 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class AppIndexTests
 {
-    private static readonly long Now = DateTimeOffset.Parse("2026-06-15T12:00:00Z", CultureInfo.InvariantCulture).ToUnixTimeMilliseconds();
+    private static readonly long Now = DateTimeOffset.Parse("2026-06-15T12:00:00Z", CultureInfo.InvariantCulture)
+        .ToUnixTimeMilliseconds();
 
     [Fact]
     public void Shortcuts_keep_the_user_folder_and_hide_what_start_hides()
@@ -74,7 +74,8 @@ public sealed class AppIndexTests
         Assert.Null(AppIndex.Packaged("id", "ms-resource:Name", ""));
         Assert.Null(AppIndex.Packaged("id", "  ", ""));
 
-        var packaged = AppIndex.Packaged("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", " Calculator ", " A calculator ");
+        var packaged = AppIndex.Packaged("Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", " Calculator ",
+            " A calculator ");
         Assert.NotNull(packaged);
         Assert.True(packaged.Packaged);
         Assert.Equal(packaged.Id, packaged.AppId);
@@ -136,9 +137,10 @@ public sealed class AppIndexTests
 
         var used = new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Notepad"] = new AppUsage(50, Now - 1_000),
+            ["Notepad"] = new(50, Now - 1_000)
         };
-        Assert.Equal(["Notepad", "Notes", "OneNote"], Names("note", apps, app => used.TryGetValue(app.Id, out var usage) ? usage : default));
+        Assert.Equal(["Notepad", "Notes", "OneNote"],
+            Names("note", apps, app => used.TryGetValue(app.Id, out var usage) ? usage : default));
 
         var heavy = new AppUsage(100, Now);
         Assert.True(AppRank.Score("note", notepad, default, Now) > AppRank.Score("draw", paint, heavy, Now));
@@ -159,12 +161,16 @@ public sealed class AppIndexTests
         var apps = new List<AppRecord> { alpha, beta, gamma, hidden };
         var usage = new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Alpha"] = new AppUsage(2, 2_000),
-            ["Beta"] = new AppUsage(5, 1_000),
-            ["Gamma"] = new AppUsage(0, 0),
-            ["Hidden"] = new AppUsage(9, 3_000),
+            ["Alpha"] = new(2, 2_000),
+            ["Beta"] = new(5, 1_000),
+            ["Gamma"] = new(0, 0),
+            ["Hidden"] = new(9, 3_000)
         };
-        AppUsage Use(AppRecord app) => usage.TryGetValue(app.Id, out var found) ? found : default;
+
+        AppUsage Use(AppRecord app)
+        {
+            return usage.TryGetValue(app.Id, out var found) ? found : default;
+        }
 
         Assert.Equal(["Alpha", "Beta"], AppIndex.Recent(apps, Use).Select(app => app.Name).ToArray());
         Assert.Equal(["Beta", "Alpha"], AppIndex.Frequent(apps, Use).Select(app => app.Name).ToArray());
@@ -189,7 +195,8 @@ public sealed class AppIndexTests
 
         var path = @"C:\Windows\System32\notepad.exe";
         var folder = AppUsageReader.ExpandKnownFolder(@" {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe".Trim());
-        Assert.Equal(Path.Combine(Environment.SystemDirectory, "notepad.exe"), folder, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(Path.Combine(Environment.SystemDirectory, "notepad.exe"), folder,
+            StringComparer.OrdinalIgnoreCase);
 
         var usage = AppUsageReader.From(
             [new KeyValuePair<string, int>(path, 3)],
@@ -197,7 +204,7 @@ public sealed class AppIndexTests
             [
                 (AppUsageReader.Rot13(path), data),
                 (AppUsageReader.Rot13(@" {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe".Trim()), data),
-                (AppUsageReader.Rot13("UEME_CTLCUACount:ctor"), data),
+                (AppUsageReader.Rot13("UEME_CTLCUACount:ctor"), data)
             ]);
 
         Assert.Equal(14, usage[path].RunCount);
@@ -214,12 +221,10 @@ public sealed class AppIndexTests
         {
             Assert.InRange(row.RunCount, 0, 1_000_000);
             if (row.LastUsedUnixMilliseconds != 0)
-            {
                 Assert.InRange(
                     row.LastUsedUnixMilliseconds,
                     DateTimeOffset.Parse("2000-01-01T00:00:00Z", CultureInfo.InvariantCulture).ToUnixTimeMilliseconds(),
                     DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds());
-            }
         });
     }
 
@@ -229,7 +234,9 @@ public sealed class AppIndexTests
         var root = Temp();
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
-        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200), false);
+        using var catalog = new AppCatalog([folder], () => [],
+            () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200),
+            false);
         try
         {
             catalog.Start();
@@ -253,7 +260,9 @@ public sealed class AppIndexTests
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
         WriteLink(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
-        using var catalog = new AppCatalog([folder], () => [], () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500), false);
+        using var catalog = new AppCatalog([folder], () => [],
+            () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500),
+            false);
         try
         {
             catalog.Start();
@@ -261,9 +270,11 @@ public sealed class AppIndexTests
             Assert.Contains(catalog.Snapshot.Entries, app => app.Id == "First");
             Directory.Delete(folder, true);
             Directory.CreateDirectory(folder);
-            Wait.Until(() => catalog.Snapshot.Entries.All(app => app.Id != "First"), "the shortcut in the recreated folder to go");
+            Wait.Until(() => catalog.Snapshot.Entries.All(app => app.Id != "First"),
+                "the shortcut in the recreated folder to go");
             WriteLink(Path.Combine(folder, "Second.lnk"), Cmd(), "", "", "second");
-            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Second"), "the shortcut in the recreated folder");
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Second"),
+                "the shortcut in the recreated folder");
         }
         finally
         {
@@ -271,14 +282,19 @@ public sealed class AppIndexTests
         }
     }
 
-    private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps, Func<AppRecord, AppUsage>? usage = null) =>
-    AppIndex.Search(apps, query, usage ?? (_ => default), Now).Select(app => app.Name).ToList();
+    private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps,
+        Func<AppRecord, AppUsage>? usage = null)
+    {
+        return AppIndex.Search(apps, query, usage ?? (_ => default), Now).Select(app => app.Name).ToList();
+    }
 
-    private static AppRecord Entry(string name, string? id = null, string appId = "", string description = "", string target = "", string folders = "", bool hidden = false, bool packaged = false)
+    private static AppRecord Entry(string name, string? id = null, string appId = "", string description = "",
+        string target = "", string folders = "", bool hidden = false, bool packaged = false)
     {
         var identifier = id ?? name;
         IReadOnlyList<string> folderList = folders.Length == 0 ? [] : folders.Split('/');
-        return new AppRecord(identifier, name, description, target, target, "", target, "", appId, folderList, hidden, packaged, target);
+        return new AppRecord(identifier, name, description, target, target, "", target, "", appId, folderList, hidden,
+            packaged, target);
     }
 
     private static byte[] Assist(int count, DateTimeOffset when)
@@ -289,7 +305,8 @@ public sealed class AppIndexTests
         return data;
     }
 
-    private static void WriteLink(string path, string target, string arguments, string workingDirectory, string description)
+    private static void WriteLink(string path, string target, string arguments, string workingDirectory,
+        string description)
     {
         object? link = null;
         try
@@ -311,7 +328,10 @@ public sealed class AppIndexTests
         }
     }
 
-    private static string Cmd() => Path.Combine(Environment.SystemDirectory, "cmd.exe");
+    private static string Cmd()
+    {
+        return Path.Combine(Environment.SystemDirectory, "cmd.exe");
+    }
 
     private static string Temp()
     {
@@ -320,7 +340,10 @@ public sealed class AppIndexTests
         return path;
     }
 
-    private static void Delete(string path) => Wait.Until(() => Deleted(path), $"{path} to be deleted");
+    private static void Delete(string path)
+    {
+        Wait.Until(() => Deleted(path), $"{path} to be deleted");
+    }
 
     private static bool Deleted(string path)
     {

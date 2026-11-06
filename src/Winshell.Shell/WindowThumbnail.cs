@@ -1,8 +1,9 @@
+using System.ComponentModel;
+using Windows.Foundation;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Media;
-using Windows.Foundation;
 using Winshell.Native;
 using Winshell.Windows;
 
@@ -20,7 +21,9 @@ public sealed class WindowThumbnail : FrameworkElement
         nameof(Window),
         typeof(AppWindow),
         typeof(WindowThumbnail),
-        new PropertyMetadata(null, (sender, args) => ((WindowThumbnail)sender).OnWindowChanged((AppWindow?)args.OldValue, (AppWindow?)args.NewValue)));
+        new PropertyMetadata(null,
+            (sender, args) =>
+                ((WindowThumbnail)sender).OnWindowChanged((AppWindow?)args.OldValue, (AppWindow?)args.NewValue)));
 
     /// <summary>
     /// While true, Windows shows <see cref="Window"/> at full size and hides the others. It stays off when the user
@@ -101,6 +104,7 @@ public sealed class WindowThumbnail : FrameworkElement
             WatchClosed(previous, false);
             WatchClosed(next, true);
         }
+
         _insets = default;
         ReleaseThumbnail();
         UpdateThumbnail();
@@ -117,7 +121,10 @@ public sealed class WindowThumbnail : FrameworkElement
             window.Closed -= OnClosed;
     }
 
-    private void OnClosed(object? sender, EventArgs e) => Window = null;
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        Window = null;
+    }
 
     private void AttachShell()
     {
@@ -138,11 +145,12 @@ public sealed class WindowThumbnail : FrameworkElement
         _shell = null;
     }
 
-    private void OnShellChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
         // The destination rect is relative to the shell window, and a move or a scale change puts this element
         // somewhere else in that window.
-        if (e.PropertyName is nameof(ShellWindow.Origin) or nameof(ShellWindow.Scale) or nameof(ShellWindow.ActualWidth) or nameof(ShellWindow.ActualHeight))
+        if (e.PropertyName is nameof(ShellWindow.Origin) or nameof(ShellWindow.Scale) or nameof(ShellWindow.ActualWidth)
+            or nameof(ShellWindow.ActualHeight))
             UpdateThumbnail();
     }
 
@@ -162,12 +170,14 @@ public sealed class WindowThumbnail : FrameworkElement
             ReleaseThumbnail();
             return;
         }
+
         var destination = _shell?.Host?.Handle ?? 0;
         if (destination == 0 || !TryBox(out var box))
         {
             HideThumbnail();
             return;
         }
+
         if (_thumbnail != 0 && _destination != destination)
             ReleaseThumbnail();
         if (_thumbnail == 0)
@@ -179,6 +189,7 @@ public sealed class WindowThumbnail : FrameworkElement
             _destination = destination;
             _applied = default;
         }
+
         if (!DwmThumbnails.TrySourceSize(_thumbnail, out var width, out var height) || width <= 0 || height <= 0)
             return;
         var source = SourceRect(window.Hwnd, width, height);
@@ -186,7 +197,7 @@ public sealed class WindowThumbnail : FrameworkElement
             WindowRules.FitPreview(box, source.Width, source.Height),
             source,
             OpacityOf(),
-            Visible: true);
+            true);
         if (paint == _applied)
             return;
         if (Apply(paint))
@@ -197,11 +208,12 @@ public sealed class WindowThumbnail : FrameworkElement
     private RECT SourceRect(nint hwnd, int width, int height)
     {
         if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var window)
-            && TopLevelWindows.TryFrameBounds(hwnd, out var frame))
+                                  && TopLevelWindows.TryFrameBounds(hwnd, out var frame))
         {
             var visible = WindowRules.PreviewSource(window, frame);
             _insets = new RECT(visible.Left, visible.Top, window.Width - visible.Right, window.Height - visible.Bottom);
         }
+
         var inset = new RECT(_insets.Left, _insets.Top, width - _insets.Right, height - _insets.Bottom);
         return inset.Width > 0 && inset.Height > 0 ? inset : new RECT(0, 0, width, height);
     }
@@ -209,7 +221,8 @@ public sealed class WindowThumbnail : FrameworkElement
     private bool TryBox(out RECT box)
     {
         box = default;
-        if (Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0 || XamlRoot?.Content is not UIElement root)
+        if (Visibility != Visibility.Visible || ActualWidth <= 0 || ActualHeight <= 0 ||
+            XamlRoot?.Content is not UIElement root)
             return false;
         GeneralTransform transform;
         try
@@ -220,6 +233,7 @@ public sealed class WindowThumbnail : FrameworkElement
         {
             return false;
         }
+
         var scale = XamlRoot.RasterizationScale;
         if (scale <= 0)
             scale = 1;
@@ -244,6 +258,7 @@ public sealed class WindowThumbnail : FrameworkElement
                 return 0;
             opacity *= element.Opacity;
         }
+
         return (byte)Math.Round(Math.Clamp(opacity, 0, 1) * 255);
     }
 
@@ -256,8 +271,10 @@ public sealed class WindowThumbnail : FrameworkElement
             _applied = hidden;
     }
 
-    private bool Apply(ThumbnailPaint paint) =>
-        DwmThumbnails.Update(_thumbnail, paint.Destination, paint.Source, paint.Opacity, paint.Visible);
+    private bool Apply(ThumbnailPaint paint)
+    {
+        return DwmThumbnails.Update(_thumbnail, paint.Destination, paint.Source, paint.Opacity, paint.Visible);
+    }
 
     private void ReleaseThumbnail()
     {

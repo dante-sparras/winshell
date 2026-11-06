@@ -1,12 +1,15 @@
 using System.Runtime.InteropServices;
-using Vortice.Direct3D;
-using Vortice.Direct3D11;
-using Vortice.DXGI;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
+using SharpGen.Runtime;
+using Vortice.Direct3D11;
+using Vortice.Direct3D;
+using Vortice.DXGI;
+using Vortice.Mathematics;
 using Winshell.Native;
+using MapFlags = Vortice.Direct3D11.MapFlags;
 
 namespace Winshell.Capture;
 
@@ -49,7 +52,8 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 DeviceCreationFlags.BgraSupport, levels, out _device, out _context).CheckError();
         using var dxgi = _device!.QueryInterface<IDXGIDevice>();
         _winrtDevice = CaptureInterop.CreateDevice(dxgi.NativePointer);
-        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, _size);
+        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized,
+            2, _size);
         _session = _pool.CreateCaptureSession(_item);
         // Leave the system's capture border enabled. No borderless capability or consent bypass.
         _session.IsCursorCaptureEnabled = includeCursor;
@@ -57,7 +61,10 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         _session.StartCapture();
     }
 
-    private void OnClosed(GraphicsCaptureItem sender, object args) => Volatile.Read(ref _closed)?.Invoke();
+    private void OnClosed(GraphicsCaptureItem sender, object args)
+    {
+        Volatile.Read(ref _closed)?.Invoke();
+    }
 
     public PixelImage? ReadLatest()
     {
@@ -82,12 +89,14 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 latest?.Dispose();
                 latest = frame;
             }
+
             if (generation != Volatile.Read(ref _poolGeneration))
             {
                 latest?.Dispose();
                 latest = null;
                 return ready;
             }
+
             if (latest is null)
                 return ready;
             var size = latest.ContentSize;
@@ -107,7 +116,9 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 RecreatePool(size, cursor);
                 return ready;
             }
-            using var texture = new ID3D11Texture2D(CaptureInterop.GetDxgiInterface(latest.Surface, typeof(ID3D11Texture2D).GUID));
+
+            using var texture =
+                new ID3D11Texture2D(CaptureInterop.GetDxgiInterface(latest.Surface, typeof(ID3D11Texture2D).GUID));
             var desc = texture.Description;
             if (desc.Width < size.Width || desc.Height < size.Height)
                 return ready;
@@ -123,8 +134,9 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 desc.MipLevels = 1;
                 _staging = _device!.CreateTexture2D(desc);
             }
+
             _context!.CopySubresourceRegion(_staging, 0, 0, 0, 0, texture, 0,
-                new Vortice.Mathematics.Box(0, 0, 0, size.Width, size.Height, 1));
+                new Box(0, 0, 0, size.Width, size.Height, 1));
             _readbackPending = true;
             _context.Flush();
             return ready ?? Readback();
@@ -137,7 +149,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
 
     private PixelImage? Readback()
     {
-        var result = _context!.Map(_staging!, 0, MapMode.Read, Vortice.Direct3D11.MapFlags.DoNotWait, out var mapped);
+        var result = _context!.Map(_staging!, 0, MapMode.Read, MapFlags.DoNotWait, out var mapped);
         if (result.Code == unchecked((int)0x887a000a)) // DXGI_ERROR_WAS_STILL_DRAWING
             return null;
         result.CheckError();
@@ -145,10 +157,14 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         try
         {
             var pixels = new byte[checked(_size.Width * _size.Height * 4)];
-            CaptureInterop.CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), pixels, _size.Width * 4, _size.Width, _size.Height);
-            return new PixelImage(_size.Width, _size.Height, pixels, premultiplied: true);
+            CaptureInterop.CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), pixels, _size.Width * 4,
+                _size.Width, _size.Height);
+            return new PixelImage(_size.Width, _size.Height, pixels, true);
         }
-        finally { _context.Unmap(_staging!, 0); }
+        finally
+        {
+            _context.Unmap(_staging!, 0);
+        }
     }
 
     private void RecreatePool(SizeInt32 size, bool cursor)
@@ -159,7 +175,8 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         _pool = null;
         Interlocked.Increment(ref _poolGeneration);
         ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
-        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized, 2, size);
+        _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized,
+            2, size);
         _session = _pool.CreateCaptureSession(_item!);
         _session.IsCursorCaptureEnabled = cursor;
         _session.StartCapture();
@@ -181,8 +198,8 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             {
                 Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
             }
+
             if (nextFrame is not null)
-            {
                 for (var i = 0; i < 2; i++)
                 {
                     var frame = nextFrame();
@@ -190,7 +207,6 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                         break;
                     frame.Dispose();
                 }
-            }
         }
         finally
         {
@@ -205,7 +221,10 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         }
     }
 
-    private static bool IsTeardown(Exception e) => e is COMException or SharpGen.Runtime.SharpGenException;
+    private static bool IsTeardown(Exception e)
+    {
+        return e is COMException or SharpGenException;
+    }
 
     public void Dispose()
     {
@@ -233,13 +252,14 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             // A lost device must not prevent the rest of the session's resources from being released.
             ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
             foreach (var resource in resources)
-            {
-                try { resource?.Dispose(); }
+                try
+                {
+                    resource?.Dispose();
+                }
                 catch (Exception e) when (IsTeardown(e))
                 {
                     Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
                 }
-            }
         }
     }
 }

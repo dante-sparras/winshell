@@ -42,7 +42,8 @@ internal sealed class ShellProcess : IShellChild
     public async Task StopAsync()
     {
         var info = Instances.List(false).Select(i => i.Info).FirstOrDefault(i => i.Pid == _process.Id);
-        _ = await ShellExit.QuitAsync(_process, info, ExitIntent.None, ShellExit.Patience.Closing, ShellExit.Ending.Always);
+        _ = await ShellExit.QuitAsync(_process, info, ExitIntent.None, ShellExit.Patience.Closing,
+            ShellExit.Ending.Always);
     }
 
     public void Dispose()

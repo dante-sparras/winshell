@@ -80,10 +80,16 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     public bool RequestingAccess => _requesting;
 
     /// <summary>Reads the adapters, profiles, radios and connectivity again soon.</summary>
-    public void Refresh() => _backend.Refresh();
+    public void Refresh()
+    {
+        _backend.Refresh();
+    }
 
     /// <summary>Asks Windows for Wi-Fi access, which may show consent UI. Call it from a user action.</summary>
-    public void RequestAccess() => _ = RequestAccessAsync();
+    public void RequestAccess()
+    {
+        _ = RequestAccessAsync();
+    }
 
     internal async Task RequestAccessAsync()
     {
@@ -167,12 +173,17 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         Changed(old.Connectivity != snapshot.Connectivity, nameof(Connectivity));
         Changed(old.Access != snapshot.Access, nameof(AccessStatus));
         Changed(old.AirplaneMode != snapshot.AirplaneMode, nameof(AirplaneMode));
-        Devices.Sync(snapshot.Devices, d => d.NativeId, i => i.Id, CreateDevice, (d, i) => d.Update(i), d => d.Remove());
+        Devices.Sync(snapshot.Devices, d => d.NativeId, i => i.Id, CreateDevice, (d, i) => d.Update(i),
+            d => d.Remove());
         Profiles.Sync(snapshot.Profiles ?? [], p => p.Id, i => i.Id, i => new NetworkProfile(i), (p, i) => p.Update(i));
     }
 
-    private NetworkDevice CreateDevice(NetworkDeviceInfo info) =>
-        info.Type == DeviceType.Wifi ? new WifiDevice(info, _loop, _backend) : new WiredDevice(info, _loop, _backend);
+    private NetworkDevice CreateDevice(NetworkDeviceInfo info)
+    {
+        return info.Type == DeviceType.Wifi
+            ? new WifiDevice(info, _loop, _backend)
+            : new WiredDevice(info, _loop, _backend);
+    }
 
     /// <summary>Stops following network changes. Its devices, networks and profiles then ignore actions.</summary>
     public void Dispose()

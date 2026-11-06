@@ -40,16 +40,18 @@ public sealed class FileWatch : IDisposable
             name = Path.GetFileName(dir);
             dir = Path.GetDirectoryName(dir);
         }
+
         if (dir is null)
             return;
         var generation = ++_generation;
         // Read on the loop, after the event. Reading here would hold the file during a replace.
         Action arrived = parent ? () => Rewatch(generation) : Report;
-        _watch = DirectoryWatch.Start(dir, parent ? DirectoryWatch.NameChanges : DirectoryWatch.FileChanges, changedName =>
-        {
-            if (changedName.Equals(name, StringComparison.OrdinalIgnoreCase))
-                _loop.Post(arrived);
-        }, () => _loop.Post(() => Rewatch(generation)));
+        _watch = DirectoryWatch.Start(dir, parent ? DirectoryWatch.NameChanges : DirectoryWatch.FileChanges,
+            changedName =>
+            {
+                if (changedName.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    _loop.Post(arrived);
+            }, () => _loop.Post(() => Rewatch(generation)));
         // A folder made after the check above and before the watch started will not be reported.
         if (_watch is not null && parent && Directory.Exists(Path.Combine(dir, name)))
             _loop.Post(arrived);

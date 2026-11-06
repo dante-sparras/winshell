@@ -16,7 +16,7 @@ public sealed class AudioRulesTests
 
         device.GetId(out var id);
         using var graph = new AudioGraph(new ManualEventLoop(), new Log());
-        var node = new EndpointNode(graph, device, id, render: true);
+        var node = new EndpointNode(graph, device, id, true);
         var meter = node.Meter;
         Assert.NotNull(meter);
 

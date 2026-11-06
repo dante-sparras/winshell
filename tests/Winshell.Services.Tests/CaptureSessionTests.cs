@@ -77,12 +77,12 @@ public sealed class CaptureSessionTests
         var loop = new ManualEventLoop();
         var backends = new List<FakeCapture>();
         using var session = new CaptureSession(loop, () =>
-        {
-            var backend = new FakeCapture();
-            backends.Add(backend);
-            return backend;
-        })
-        { Target = Screen };
+            {
+                var backend = new FakeCapture();
+                backends.Add(backend);
+                return backend;
+            })
+            { Target = Screen };
         Assert.True(session.Start());
         var stale = backends[0].Closed!;
 
@@ -109,12 +109,12 @@ public sealed class CaptureSessionTests
         var second = list.Windows.Single(window => window.Hwnd == 20);
         var backends = new List<FakeCapture>();
         using var session = new CaptureSession(loop, () =>
-        {
-            var backend = new FakeCapture();
-            backends.Add(backend);
-            return backend;
-        })
-        { Target = first };
+            {
+                var backend = new FakeCapture();
+                backends.Add(backend);
+                return backend;
+            })
+            { Target = first };
 
         Assert.Same(first, session.Target!.Source);
         Assert.Equal(new CaptureTarget(10, ""), new CaptureTarget(session.Target.Window, session.Target.MonitorId));
@@ -178,7 +178,8 @@ public sealed class CaptureSessionTests
     [Fact]
     public void A_session_with_no_target_does_not_make_a_backend()
     {
-        using var session = new CaptureSession(new ManualEventLoop(), () => throw new InvalidOperationException("Must not create"));
+        using var session = new CaptureSession(new ManualEventLoop(),
+            () => throw new InvalidOperationException("Must not create"));
 
         Assert.False(session.Start());
 
@@ -258,7 +259,7 @@ public sealed class CaptureSessionTests
         {
             try
             {
-                Directory.Delete(directory, recursive: true);
+                Directory.Delete(directory, true);
             }
             catch (IOException)
             {
@@ -276,12 +277,12 @@ public sealed class CaptureSessionTests
         var copied = new List<(PixelImage Image, nint Owner)>();
         Exception? refuse = null;
         using var session = new CaptureSession(loop, () => backend, (image, owner) =>
-        {
-            if (refuse is not null)
-                throw refuse;
-            copied.Add((image, owner));
-        })
-        { Target = Screen };
+            {
+                if (refuse is not null)
+                    throw refuse;
+                copied.Add((image, owner));
+            })
+            { Target = Screen };
 
         Assert.False(session.CopyToClipboard(7));
         Assert.True(session.Start());
@@ -301,7 +302,7 @@ public sealed class CaptureSessionTests
     [Fact]
     public void The_clipboard_gets_a_top_down_header_and_straight_alpha()
     {
-        var dib = CaptureClipboard.EncodeDib(new PixelImage(2, 1, [64, 32, 16, 128, 0, 0, 255, 255], premultiplied: true));
+        var dib = CaptureClipboard.EncodeDib(new PixelImage(2, 1, [64, 32, 16, 128, 0, 0, 255, 255], true));
 
         Assert.Equal(132, dib.Length);
         Assert.Equal(124, BitConverter.ToInt32(dib, 0));
@@ -321,8 +322,10 @@ public sealed class CaptureSessionTests
     [InlineData("https://example.com/a.png", null)]
     [InlineData("data:image/png;base64,AAAA", null)]
     [InlineData(" ", null)]
-    public void Only_a_local_path_is_a_place_to_save(string path, string? local) =>
+    public void Only_a_local_path_is_a_place_to_save(string path, string? local)
+    {
         Assert.Equal(local, CaptureSession.LocalPath(path));
+    }
 
     [Fact]
     public void Readback_respects_both_row_pitches()

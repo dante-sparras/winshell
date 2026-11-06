@@ -11,12 +11,16 @@ public sealed class DoctorCommandTests : IDisposable
     private static readonly string[] Ids =
     [
         "windows", "dotnet", "project", "downloaded", "built", "build",
-        "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes",
+        "folders", "appBars", "dpi", "signIn", "notifications", "instances", "crashes"
     ];
 
-    private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-doctor-tests", Guid.NewGuid().ToString("N"));
+    private readonly string _root =
+        Path.Combine(Path.GetTempPath(), "winshell-doctor-tests", Guid.NewGuid().ToString("N"));
 
-    public DoctorCommandTests() => Directory.CreateDirectory(_root);
+    public DoctorCommandTests()
+    {
+        Directory.CreateDirectory(_root);
+    }
 
     [Fact]
     public void Json_lists_every_check_and_an_unbuilt_project_fails()
@@ -97,7 +101,8 @@ public sealed class DoctorCommandTests : IDisposable
         var (_, output, _) = RunIn(empty, "doctor", "--json");
 
         using var json = JsonDocument.Parse(output);
-        var project = json.RootElement.GetProperty("checks").EnumerateArray().Single(c => c.GetProperty("id").GetString() == "project");
+        var project = json.RootElement.GetProperty("checks").EnumerateArray()
+            .Single(c => c.GetProperty("id").GetString() == "project");
         Assert.Equal("warn", project.GetProperty("status").GetString());
         Assert.Contains("starts nothing", project.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
@@ -108,7 +113,8 @@ public sealed class DoctorCommandTests : IDisposable
     {
         var unreadable = Path.Combine(_root, "unreadable");
         Directory.CreateDirectory(unreadable);
-        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory, AccessControlType.Deny);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory,
+            AccessControlType.Deny);
         var folder = new DirectoryInfo(unreadable);
         var acl = folder.GetAccessControl();
         acl.AddAccessRule(deny);
@@ -131,14 +137,20 @@ public sealed class DoctorCommandTests : IDisposable
         Assert.Equal(Ids.Length, checks.Count);
         var project = checks.Single(c => c.GetProperty("id").GetString() == "project");
         Assert.Equal("fail", project.GetProperty("status").GetString());
-        Assert.StartsWith("Winshell cannot read the config folder", project.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.StartsWith("Winshell cannot read the config folder", project.GetProperty("message").GetString(),
+            StringComparison.Ordinal);
     }
 
-    private ChildProcess Run(params string[] args) => RunIn(_root, args);
+    private ChildProcess Run(params string[] args)
+    {
+        return RunIn(_root, args);
+    }
 
     /// <summary>Runs winshell.exe with the config folder overridden to a folder of this class's.</summary>
-    private static ChildProcess RunIn(string configRoot, params string[] args) =>
-        WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configRoot));
+    private static ChildProcess RunIn(string configRoot, params string[] args)
+    {
+        return WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configRoot));
+    }
 
     public void Dispose()
     {
