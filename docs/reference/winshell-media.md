@@ -52,7 +52,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `CanPlay` | bool, read-only | Whether the app accepts Play. |
 | `CanSeek` | bool, read-only | Whether the app accepts a new Position and Seek. |
 | `CanStop` | bool, read-only | Whether the app accepts Stop. |
-| `CanSwitchTo` | bool, read-only | True when Windows can bring the app's window forward. It is worked out on each read. |
+| `CanSwitchTo` | bool, read-only | True when SwitchTo knows how to find the app: a Store app, or a program whose AppId is its file name. |
 | `CanTogglePlaying` | bool, read-only | Whether TogglePlaying can work: CanPause while playing, CanPlay otherwise. |
 | `IsPlaying` | bool | True while playing. Setting it plays or pauses. |
 | `Length` | double, read-only | The track's length in seconds. When the app does not report one, it is the same as Position. |
@@ -83,5 +83,5 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `RefreshPosition()` | void | Raises a change of Position, so a binding reads where playback has got to. |
 | `Seek(double offset)` | void | Windows has no relative seek, so this sets the position to the current one plus the offset. |
 | `Stop()` | void | Asks the app to stop. Logs a warning when CanStop is false. |
-| `SwitchTo()` | void | Brings the app's window forward. |
+| `SwitchTo()` | void | Brings the app's window forward. A program's window is looked for off the UI thread, so it comes forward a moment later, and a warning is logged when the program has none. |
 | `TogglePlaying()` | void | Calls Pause while playing, and Play otherwise. |

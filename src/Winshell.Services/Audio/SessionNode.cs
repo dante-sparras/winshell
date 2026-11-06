@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Windows.Win32.Media.Audio;
+using Winshell.Apps;
 using Winshell.Native;
 
 namespace Winshell.Audio;
@@ -144,7 +145,7 @@ internal sealed class SessionNode : AudioGraphNode
         var programName = path is null ? "" : Path.GetFileNameWithoutExtension(path);
         var appName = system ? "System Sounds"
             : displayName.Length > 0 ? displayName
-            : FileDescription(path) is { Length: > 0 } description ? description
+            : path is not null && AppIdentity.ProgramDescription(path) is { } description ? description
             : programName;
         Name = system ? "system-sounds" : programName.Length > 0 ? programName : $"session-{Id}";
         Description = appName;
@@ -161,20 +162,6 @@ internal sealed class SessionNode : AudioGraphNode
         };
         if (path is null && !system)
             Properties.Remove("icon");
-    }
-
-    private static string? FileDescription(string? path)
-    {
-        if (path is null)
-            return null;
-        try
-        {
-            return FileVersionInfo.GetVersionInfo(path).FileDescription?.Trim();
-        }
-        catch (FileNotFoundException)
-        {
-            return null;
-        }
     }
 
     private void OnState(AudioSessionState state)

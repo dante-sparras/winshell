@@ -21,6 +21,7 @@ public sealed class MediaServiceTests
 
     private readonly List<string> _warnings = [];
     private readonly Log _log;
+    private readonly ManualEventLoop _loop = new();
     private readonly RecordingLink _link = new();
     private readonly SmtcSession _native;
 
@@ -100,7 +101,7 @@ public sealed class MediaServiceTests
 
     private MediaSession Session()
     {
-        return new MediaSession(_native, _log);
+        return new MediaSession(_native, _loop, _log);
     }
 
     private void Track(string title, string artist = "", string album = "", string albumArtist = "", int number = 0,
@@ -431,7 +432,7 @@ public sealed class MediaServiceTests
         native.ApplyPlayback(new SmtcPlayback(Playing));
         native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(10), time.GetUtcNow(),
             time.GetUtcNow());
-        var session = new MediaSession(native, _log);
+        var session = new MediaSession(native, _loop, _log);
         Assert.Equal(10, session.Position);
 
         time.Advance(TimeSpan.FromSeconds(5));
@@ -508,10 +509,21 @@ public sealed class MediaServiceTests
     }
 
     [Fact]
-    public void A_session_of_a_store_app_can_be_switched_to_and_one_with_no_window_cannot()
+    public void A_session_of_a_store_app_or_a_program_can_be_switched_to_and_another_cannot()
     {
-        Assert.True(new MediaSession(Native(new RecordingLink(), "Publisher.App_abc!App"), _log).CanSwitchTo);
+        Assert.True(new MediaSession(Native(new RecordingLink(), "Publisher.App_abc!App"), _loop, _log).CanSwitchTo);
+        Assert.True(new MediaSession(Native(new RecordingLink(), "Spotify.exe"), _loop, _log).CanSwitchTo);
         Assert.False(Session().CanSwitchTo);
-        Assert.False(new MediaSession(Native(new RecordingLink(), "no-such-program.exe"), _log).CanSwitchTo);
+    }
+
+    [Fact]
+    public void Switching_to_a_program_with_no_window_warns()
+    {
+        var session = new MediaSession(Native(new RecordingLink(), "no-such-program.exe"), _loop, _log);
+
+        session.SwitchTo();
+        Wait.Until(() => _warnings.Count > 0, "the switch warning", _loop.Process);
+
+        Assert.Contains("has no window", _warnings[0], StringComparison.Ordinal);
     }
 }

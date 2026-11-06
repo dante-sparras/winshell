@@ -1,3 +1,5 @@
+using Winshell.Apps;
+
 namespace Winshell.Media;
 
 /// <summary>
@@ -6,37 +8,38 @@ namespace Winshell.Media;
 /// </summary>
 internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> describe, Action named)
 {
-    private readonly Dictionary<string, string?> _names = [];
+    private readonly Dictionary<string, string> _names = [];
 
     /// <summary>
-    /// The app's name, or null while it is looked up. When the lookup ends, <c>named</c> runs on the loop.
+    /// The app's name. Until a lookup finds a better one, and when the lookup fails, it is
+    /// <see cref="AppIdentity.FallbackName"/>. When a lookup finds a name, <c>named</c> runs on the loop.
     /// </summary>
-    public string? Get(string appId)
+    public string Get(string appId)
     {
         if (_names.TryGetValue(appId, out var name))
             return name;
-        _names[appId] = null;
+        name = _names[appId] = AppIdentity.FallbackName(appId);
         LookUp(appId);
-        return null;
+        return name;
     }
 
     private void LookUp(string appId)
     {
-        // Not the thread pool. A lookup that had already failed still waited for a pool thread to publish
-        // the id, and a busy pool left the session unnamed.
+        // Not the thread pool: a busy pool held the name back.
         var thread = new Thread(() =>
         {
-            var name = appId;
+            string name;
             try
             {
                 name = describe(appId);
             }
-#pragma warning disable CA1031 // A failed lookup still names the app, by its id.
+#pragma warning disable CA1031 // A failed lookup keeps the fallback name.
             catch (Exception e)
 #pragma warning restore CA1031
             {
                 var message = e.Message;
                 loop.Post(() => log.Warn("media", $"Cannot name {appId}: {message}"));
+                return;
             }
 
             loop.Post(() =>

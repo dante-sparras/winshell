@@ -1,3 +1,4 @@
+using Winshell.Apps;
 using Winshell.Native;
 
 namespace Winshell.Windows;
@@ -25,12 +26,12 @@ internal static class WindowRules
     }
 
     /// <summary>
-    /// A path the icon provider draws. A packaged app's id contains <c>!</c>, and its icon is the one Start shows
-    /// for that id. Every other window uses its program's icon.
+    /// A path the icon provider draws. A packaged app's icon is the one Start shows for its id. Every other window
+    /// uses its program's icon.
     /// </summary>
     public static string IconPath(string appUserModelId, string executable)
     {
-        return appUserModelId.Contains('!') ? @"shell:AppsFolder\" + appUserModelId : executable;
+        return AppIdentity.IsPackaged(appUserModelId) ? AppIdentity.AppsFolderPath(appUserModelId) : executable;
     }
 
     /// <summary>
