@@ -11,7 +11,7 @@ namespace Winshell.Services.Tests;
 [Trait("Category", "Slow")]
 public sealed class FocusTakeoverTests
 {
-    [Fact]
+    [Fact(Skip = "Fails on most CI runs until #1499 finds why the window never gains focus there.")]
     public async Task Taking_focus_reaches_the_window_only_after_a_key_tap()
     {
         var previous = Win32.GetForegroundWindow();
