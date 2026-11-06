@@ -47,18 +47,26 @@ internal static class CrashFollowUp
     /// <summary>Records an exit that was not a crash.</summary>
     public static void MarkClean(string stateFile, DateTimeOffset when)
     {
-        var state = Read(stateFile);
-        Write(stateFile, when, state.Shown);
+        for (;;)
+        {
+            var state = Read(stateFile);
+            if (Put(stateFile, when, state.Shown, state.Text))
+                return;
+        }
     }
 
     /// <summary>Records that <paramref name="reportPath"/> was shown, so the next start does not show it again.</summary>
     public static void MarkShown(string stateFile, string reportPath)
     {
-        var state = Read(stateFile);
-        Write(stateFile, state.Clean, reportPath);
+        for (;;)
+        {
+            var state = Read(stateFile);
+            if (Put(stateFile, state.Clean, reportPath, state.Text))
+                return;
+        }
     }
 
-    private readonly record struct State(DateTimeOffset? Clean, string? Shown);
+    private readonly record struct State(DateTimeOffset? Clean, string? Shown, string? Text);
 
     private static Pending? ReadClosed(string path)
     {
@@ -83,13 +91,14 @@ internal static class CrashFollowUp
 
     private static State Read(string stateFile)
     {
-        if (!File.Exists(stateFile))
+        var text = ReadText(stateFile);
+        if (text is null)
             return default;
         DateTimeOffset? clean = null;
         string? shown = null;
-        foreach (var raw in File.ReadAllLines(stateFile))
+        foreach (var raw in text.Split('\n'))
         {
-            var line = raw.Trim();
+            var line = raw.TrimEnd('\r').Trim();
             if (line.StartsWith("clean = ", StringComparison.Ordinal) && Unquote(line[8..]) is { } cleanText
                                                                       && DateTimeOffset.TryParse(cleanText,
                                                                           CultureInfo.InvariantCulture,
@@ -99,20 +108,35 @@ internal static class CrashFollowUp
                 shown = Unquote(line[8..]);
         }
 
-        return new State(clean, shown);
+        return new State(clean, shown, text);
     }
 
-    private static void Write(string stateFile, DateTimeOffset? clean, string? shown)
+    /// <summary>Writes the record, or returns false when a hand save landed and the file was left as it is.</summary>
+    private static bool Put(string stateFile, DateTimeOffset? clean, string? shown, string? expected)
     {
-        var dir = Path.GetDirectoryName(stateFile);
-        if (!string.IsNullOrEmpty(dir))
-            Directory.CreateDirectory(dir);
         var text = new StringBuilder();
         if (clean is { } when)
             text.Append("clean = ").Append(Quote(when.ToString("o", CultureInfo.InvariantCulture))).Append('\n');
         if (shown is { Length: > 0 })
             text.Append("shown = ").Append(Quote(shown)).Append('\n');
-        File.WriteAllText(stateFile, text.ToString());
+        // File.WriteAllText writes UTF-8 without a byte order mark. Keep that.
+        return AtomicFile.Save(stateFile, text.ToString(), false, expected) == AtomicSave.Saved;
+    }
+
+    /// <summary>The file as UTF-8 text with a byte order mark stripped, or null when it is missing.</summary>
+    private static string? ReadText(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream, Encoding.UTF8, true);
+            return reader.ReadToEnd();
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
     }
 
     private static string Quote(string text)

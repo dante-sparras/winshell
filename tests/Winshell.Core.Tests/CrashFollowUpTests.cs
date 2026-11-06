@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace Winshell.Core.Tests;
 
 /// <summary>The next start shows a fatal crash report once, and skips one older than the last clean exit.</summary>
@@ -84,5 +86,15 @@ public sealed class CrashFollowUpTests : IDisposable
 
         Assert.Null(CrashFollowUp.Find(folder, state));
         Assert.Null(CrashFollowUp.Find(Path.Combine(_dir, "missing"), state));
+    }
+
+    [Fact]
+    public void The_state_file_is_written_without_a_byte_order_mark()
+    {
+        var state = Path.Combine(_dir, "mark.toml");
+        CrashFollowUp.MarkClean(state, DateTimeOffset.UnixEpoch);
+
+        var text = File.ReadAllText(state);
+        Assert.Equal(Encoding.UTF8.GetByteCount(text), File.ReadAllBytes(state).Length);
     }
 }
