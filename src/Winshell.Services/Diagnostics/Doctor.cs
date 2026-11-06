@@ -163,7 +163,7 @@ public static class Doctor
                 // A sign-in command with no -p and no -c starts whichever configuration winshell run would, and that
                 // is a different verdict from a configuration the user, or this process, picked.
                 var project = chosen.SignInFolder;
-                var supervisor = SignInEntry.ProjectFolder(process) is null
+                var supervisor = ConfigurationProject.FolderOf(process) is null
                     ? null
                     : ProcessImage.SupervisingWinshell();
                 return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),

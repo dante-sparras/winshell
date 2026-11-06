@@ -12,6 +12,16 @@ internal sealed record CommandResult(int ExitCode, string Output);
 /// <summary>Runs a program in a folder and waits for it. Tests replace this, so most of them build nothing.</summary>
 internal delegate CommandResult RunProcess(string file, IReadOnlyList<string> arguments, string folder);
 
+/// <summary>Which of a configuration's programs an instance runs.</summary>
+internal enum ConfigurationBuild
+{
+    /// <summary>What <c>winshell run</c> and <c>reload</c> build: <see cref="ConfigurationProject.Program"/>.</summary>
+    Run,
+
+    /// <summary>Any other program under the project's folder: what <c>winshell dev</c>'s <c>dotnet watch</c> builds.</summary>
+    Dev
+}
+
 /// <summary>
 /// A configuration on disk: the .NET project that defines a shell, and the program it builds into. Nothing here runs
 /// MSBuild outside a build, so <c>doctor</c> and a start with <c>--no-build</c> read the project as data. Building runs
@@ -39,54 +49,94 @@ internal sealed partial class ConfigurationProject
     public string Name { get; }
 
     /// <summary>Where a build puts the program. It is fixed, so a start with no SDK finds it without asking MSBuild.</summary>
-    public string OutputFolder => Path.Combine(Folder, "bin", "shell");
+    public string OutputFolder => Path.Combine(Folder, "bin", Output);
+
+    /// <summary>Where a reload builds when a program still running holds <see cref="OutputFolder"/> open.</summary>
+    private string BesideFolder => Path.Combine(Folder, "bin", OutputBeside);
+
+    private const string Output = "shell";
+    private const string OutputBeside = "shell.next";
 
     /// <summary>
-    /// The project whose built program is <paramref name="program"/>. The file is <c>&lt;project&gt;\bin\shell\Name.exe</c>,
-    /// or <c>bin\shell.next\Name.exe</c> when a reload had to build beside a program that still had its folder open.
-    /// Anything else, including <c>winshell.exe</c>, is null.
+    /// The project folder of a program at <c>&lt;project&gt;\bin\shell\Name.exe</c>, or <c>bin\shell.next\Name.exe</c>
+    /// when a reload had to build beside a program that still had its folder open. Nothing is read from disk, so a
+    /// sign-in command can name a project that is not there. Anything else, including <c>winshell.exe</c>, is null.
     /// </summary>
+    public static string? FolderOf(string program)
+    {
+        if (Full(program) is not { } full
+            || Path.GetDirectoryName(full) is not { } output
+            || Path.GetDirectoryName(output) is not { } bin
+            || Path.GetDirectoryName(bin) is not { } folder
+            || !Path.GetFileName(bin).Equals("bin", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var name = Path.GetFileName(output);
+        return name.Equals(Output, StringComparison.OrdinalIgnoreCase) ||
+               name.Equals(OutputBeside, StringComparison.OrdinalIgnoreCase)
+            ? folder
+            : null;
+    }
+
+    /// <summary>The project whose <see cref="ConfigurationBuild.Run"/> program is <paramref name="program"/>, or null.</summary>
     public static ConfigurationProject? ForProgram(string program)
     {
-        string full;
+        if (FolderOf(program) is not { } folder || In(folder, out _) is not { } project)
+            return null;
+        return project.IsProgram(Path.GetFullPath(program)) ? project : null;
+    }
+
+    /// <summary>
+    /// The instances in <paramref name="instances"/> that run <paramref name="build"/> of this project, in their order.
+    /// A program whose folder only shares a prefix with this project's is not one of them.
+    /// </summary>
+    public IEnumerable<InstanceInfo> InstancesOf(ConfigurationBuild build, IEnumerable<InstanceInfo> instances)
+    {
+        return instances.Where(instance => BuildOf(instance.ConfigPath) == build);
+    }
+
+    private ConfigurationBuild? BuildOf(string program)
+    {
+        if (Full(program) is not { } full || !full.StartsWith(Path.GetFullPath(Folder) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase))
+            return null;
+        return IsProgram(full) ? ConfigurationBuild.Run : ConfigurationBuild.Dev;
+    }
+
+    private bool IsProgram(string full)
+    {
+        var folder = Path.GetDirectoryName(full);
+        return (SameFolder(folder, OutputFolder) || SameFolder(folder, BesideFolder)) &&
+               Path.GetFileName(full).Equals(AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool SameFolder(string? full, string folder)
+    {
+        return full is not null && full.Equals(Path.GetFullPath(folder), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? Full(string path)
+    {
         try
         {
-            full = Path.GetFullPath(program);
+            return Path.GetFullPath(path);
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException
                                       or IOException)
         {
             return null;
         }
-
-        var shell = Path.GetDirectoryName(full);
-        var bin = shell is null ? null : Path.GetDirectoryName(shell);
-        var folder = bin is null ? null : Path.GetDirectoryName(bin);
-        var output = shell is null ? null : Path.GetFileName(shell);
-        if (folder is null
-            || output is null
-            || !Path.GetFileName(bin!).Equals("bin", StringComparison.OrdinalIgnoreCase)
-            || !(output.Equals("shell", StringComparison.OrdinalIgnoreCase) ||
-                 output.Equals("shell.next", StringComparison.OrdinalIgnoreCase)))
-            return null;
-        var project = In(folder, out _);
-        if (project is null)
-            return null;
-        return Path.GetFileName(full).Equals(project.AssemblyName() + ".exe", StringComparison.OrdinalIgnoreCase)
-            ? project
-            : null;
     }
 
     /// <summary>
-    /// The program to run: the one in <see cref="OutputFolder"/>, or the one in <c>bin\shell.next</c> when it was built
-    /// later. A build stamps what it wrote with the time, so the newer of the two is always the last build.
+    /// The program to run: the one in <see cref="OutputFolder"/>, or the one in <see cref="BesideFolder"/> when it was
+    /// built later. A build stamps what it wrote with the time, so the newer of the two is always the last build.
     /// </summary>
     public string Program
     {
         get
         {
             var program = ProgramIn(OutputFolder);
-            var beside = ProgramIn(OutputFolder + ".next");
+            var beside = ProgramIn(BesideFolder);
             return File.Exists(beside) && (!File.Exists(program) ||
                                            File.GetLastWriteTimeUtc(beside) > File.GetLastWriteTimeUtc(program))
                 ? beside
@@ -252,7 +302,7 @@ internal sealed partial class ConfigurationProject
         var parked = Park(destination);
         if (parked is null && Directory.Exists(destination))
         {
-            destination = OutputFolder + ".next";
+            destination = BesideFolder;
             parked = Park(destination);
             if (parked is null && Directory.Exists(destination))
                 return $"{Name} is running, and the build could not write a new program beside it.";

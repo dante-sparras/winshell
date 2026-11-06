@@ -144,6 +144,41 @@ public sealed class ConfigurationProjectTests : IDisposable
         Assert.Null(ConfigurationProject.ForProgram(Path.Combine(_root, "winshell.exe")));
     }
 
+    [Fact]
+    public void A_run_instance_runs_either_built_program_and_a_shared_prefix_does_not()
+    {
+        var folder = Path.GetDirectoryName(Project("MyProject\\Bar.csproj"))!;
+        var project = Found(folder);
+
+        var run = project.InstancesOf(ConfigurationBuild.Run, [
+            Instance("run", Path.Combine(folder, "bin", "shell", "Bar.exe")),
+            Instance("beside", Path.Combine(folder, "bin", "shell.next", "Bar.exe")),
+            Instance("extra", Path.Combine(folder, "bin", "shell.extra", "Bar.exe"))
+        ]);
+
+        Assert.Equal(["run", "beside"], run.Select(info => info.Id));
+    }
+
+    [Fact]
+    public void A_dev_instance_runs_another_program_under_the_project_folder_and_a_shared_prefix_does_not()
+    {
+        var folder = Path.GetDirectoryName(Project("MyProject\\Bar.csproj"))!;
+        var project = Found(folder);
+
+        var dev = project.InstancesOf(ConfigurationBuild.Dev, [
+            Instance("run", Path.Combine(folder, "bin", "shell", "Bar.exe")),
+            Instance("dev", Path.Combine(folder, "bin", "Debug", "net10.0-windows", "Bar.exe")),
+            Instance("other", Path.Combine(folder + "2", "bin", "Debug", "Bar.exe"))
+        ]);
+
+        Assert.Equal(["dev"], dev.Select(info => info.Id));
+    }
+
+    private static InstanceInfo Instance(string id, string program)
+    {
+        return new InstanceInfo(id, 1, "shell", program, DateTime.UnixEpoch, "pipe-" + id, "log-" + id);
+    }
+
     [Theory]
     [InlineData("<Project><PropertyGroup><AssemblyName>Mine</AssemblyName></PropertyGroup></Project>", "Mine.exe")]
     [InlineData("<Project><PropertyGroup><AssemblyName>$(Other)</AssemblyName></PropertyGroup></Project>", "Bar.exe")]

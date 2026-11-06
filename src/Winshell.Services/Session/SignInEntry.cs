@@ -155,7 +155,9 @@ internal static class SignInEntry
     /// </summary>
     internal static string InstallExe(string processPath, string? supervisor)
     {
-        return ProjectFolder(processPath) is not null && supervisor is not null ? supervisor : processPath;
+        return ConfigurationProject.FolderOf(processPath) is not null && supervisor is not null
+            ? supervisor
+            : processPath;
     }
 
     /// <summary>
@@ -195,28 +197,6 @@ internal static class SignInEntry
             return false;
         return SameInstall(seen.Program, wanted.Program, Resolve) &&
                RunsThis(seen, project, bareFolder, configRoot);
-    }
-
-    /// <summary>
-    /// The project folder of a program at <c>project\bin\shell\Name.exe</c>, or <c>bin\shell.next</c> when a reload
-    /// built beside a program that still had its folder open. Anything else, including <c>winshell.exe</c>, is null.
-    /// </summary>
-    internal static string? ProjectFolder(string program)
-    {
-        if (Full(program) is not { } full)
-            return null;
-        var shell = Path.GetDirectoryName(full);
-        var bin = shell is null ? null : Path.GetDirectoryName(shell);
-        var folder = bin is null ? null : Path.GetDirectoryName(bin);
-        if (folder is null || bin is null || shell is null)
-            return null;
-        if (!Path.GetFileName(bin).Equals("bin", StringComparison.OrdinalIgnoreCase))
-            return null;
-        var output = Path.GetFileName(shell);
-        return output.Equals("shell", StringComparison.OrdinalIgnoreCase) ||
-               output.Equals("shell.next", StringComparison.OrdinalIgnoreCase)
-            ? folder
-            : null;
     }
 
     /// <summary>Whether <paramref name="path"/> is <c>winshell.exe</c> or the windowed <c>winshellw.exe</c>.</summary>

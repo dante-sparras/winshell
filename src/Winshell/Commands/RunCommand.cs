@@ -22,7 +22,7 @@ internal static class RunCommand
             return 0;
         // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
         if (options.NoDuplicate &&
-            ConfigurationInstances.Of(Instances.List(false).Select(i => i.Info), project).Count > 0)
+            project.InstancesOf(ConfigurationBuild.Run, Instances.List(false).Select(i => i.Info)).Any())
             return 0;
         var reason = project.Prepare(options.NoBuild, ConfigurationProject.Run);
         if (reason is not null)
@@ -70,8 +70,8 @@ internal static class RunCommand
     {
         IShellChild? Start()
         {
-            // A reload builds beside a program that still runs, in bin\shell.next, so each start runs the last build. A
-            // dialog about a start that failed offers its folder.
+            // A reload can build beside a program that still runs, so each start asks for the last build. A dialog about
+            // a start that failed offers its folder.
             shell.FileName = project.Program;
             return ShellProcess.Start(shell, Path.GetDirectoryName(shell.FileName));
         }
