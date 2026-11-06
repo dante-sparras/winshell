@@ -5,7 +5,7 @@ using Winshell.Updates;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The binaries Winshell signs are named in three places: the update check, SignPath's artifact configuration and the
+/// The binaries Winshell signs are named in three places: the staged install, SignPath's artifact configuration and the
 /// package script. A signed install refuses an update that lacks one of them, so all three must agree, and every
 /// assembly built from <c>src/</c> must be among them.
 /// </summary>

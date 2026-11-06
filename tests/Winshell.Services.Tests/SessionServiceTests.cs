@@ -1,11 +1,10 @@
 using System.ComponentModel;
 using Winshell.ExplorerTaskbar;
 using Winshell.Session;
-using Winshell.Updates;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>Locking, sign-in, Explorer's taskbar and updates, each over a fake. Nothing here changes this PC.</summary>
+/// <summary>Locking, sign-in and Explorer's taskbar, each over a fake. Nothing here changes this PC.</summary>
 public sealed class SessionServiceTests
 {
     private readonly List<string> _warnings = [];
@@ -138,135 +137,6 @@ public sealed class SessionServiceTests
         service.Hidden = false;
         Assert.Equal(1, taskbar.Restores);
         Assert.Equal([nameof(ExplorerTaskbarService.Hidden), nameof(ExplorerTaskbarService.Hidden)], changes);
-    }
-
-    [Fact]
-    public void A_Winshell_that_does_not_update_itself_says_so()
-    {
-        using var updates = new UpdatesService(new ManualEventLoop(), _log, null);
-
-        updates.Automatic = true;
-        updates.Check();
-        updates.Restart();
-
-        Assert.False(updates.Available);
-        Assert.False(updates.Automatic);
-        Assert.Equal(UpdateStatus.Idle, updates.Status);
-        Assert.Equal(["updates: This Winshell does not update itself.", "updates: No update is ready."], _warnings);
-    }
-
-    [Fact]
-    public void A_change_of_the_updater_reaches_the_service_on_its_loop()
-    {
-        var loop = new ManualEventLoop();
-        using var updater = NewUpdater();
-        using var updates = new UpdatesService(loop, _log, updater);
-        var changes = Watch(updates);
-        Assert.True(updates.Available);
-
-        updater.ReportApplyFailure("1.2.3", "the file is locked");
-        Assert.Empty(changes);
-        loop.Process();
-
-        Assert.Equal([nameof(UpdatesService.Status), nameof(UpdatesService.Version), nameof(UpdatesService.Error)],
-            changes);
-        Assert.Equal(UpdateStatus.Failed, updates.Status);
-        Assert.Equal("1.2.3", updates.Version);
-        Assert.Contains("the file is locked", updates.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Changes_that_reach_the_loop_out_of_order_leave_the_updaters_latest_state()
-    {
-        var loop = new OutOfOrderLoop();
-        using var updater = NewUpdater();
-        using var updates = new UpdatesService(loop, _log, updater);
-
-        updater.ReportApplyFailure("1.2.3", "first");
-        updater.ReportApplyFailure("1.2.4", "second");
-        loop.RunNewestFirst();
-
-        Assert.Equal("1.2.4", updates.Version);
-        Assert.Contains("second", updates.Error, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Automatic_checks_follow_the_updater()
-    {
-        using var updater = NewUpdater();
-        using var updates = new UpdatesService(new ManualEventLoop(), _log, updater);
-        var changes = Watch(updates);
-
-        updates.Automatic = true;
-        updates.Automatic = true;
-        Assert.True(updater.Automatic);
-        updates.Automatic = false;
-
-        Assert.Equal([nameof(UpdatesService.Automatic), nameof(UpdatesService.Automatic)], changes);
-    }
-
-    [Fact]
-    public void Restart_without_a_ready_update_warns()
-    {
-        using var updater = NewUpdater();
-        var restarts = 0;
-        updater.Restart = () =>
-        {
-            restarts++;
-            return null;
-        };
-        using var updates = new UpdatesService(new ManualEventLoop(), _log, updater);
-
-        updates.Restart();
-
-        Assert.Equal(0, restarts);
-        Assert.Equal(["updates: No update is ready."], _warnings);
-    }
-
-    [Fact]
-    public void A_disposed_service_stops_following_the_updater()
-    {
-        var loop = new ManualEventLoop();
-        using var updater = NewUpdater();
-        var updates = new UpdatesService(loop, _log, updater);
-
-        updater.ReportApplyFailure("1.2.3", "before");
-        updates.Dispose();
-        updater.ReportApplyFailure("1.2.4", "after");
-        loop.Process();
-
-        Assert.Equal(UpdateStatus.Idle, updates.Status);
-    }
-
-    private Updater NewUpdater()
-    {
-        var folder = Path.Combine(Path.GetTempPath(), "winshell-updates-service-tests", Guid.NewGuid().ToString("N"));
-        return new Updater("enpaze/winshell", folder, folder, "0.5.0", "win-x64", _log);
-    }
-
-    /// <summary>A loop that holds what is posted until the test runs it, last post first.</summary>
-    private sealed class OutOfOrderLoop : IEventLoop
-    {
-        private readonly List<Action> _posted = [];
-
-        public TimeSpan Now => TimeSpan.Zero;
-
-        public void Post(Action action)
-        {
-            _posted.Add(action);
-        }
-
-        public void RunNewestFirst()
-        {
-            foreach (var action in Enumerable.Reverse(_posted))
-                action();
-            _posted.Clear();
-        }
-
-        public IDisposable Schedule(TimeSpan delay, Action action)
-        {
-            throw new NotSupportedException();
-        }
     }
 
     private sealed class FakeSessionBackend(bool accepts) : ISessionBackend

@@ -5,7 +5,6 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using WinRT;
 using Winshell.Native;
-using Winshell.Updates;
 
 namespace Winshell;
 
@@ -29,12 +28,6 @@ public sealed record ShellOptions
 
     /// <summary>Another folder for <see cref="Shell.CacheDir"/>, read as <see cref="DataDir"/> is.</summary>
     public string? CacheDir { get; init; }
-
-    /// <summary>
-    /// The updater <see cref="Shell.Updates"/> follows. A configuration's own program leaves this null. Restart starts
-    /// this program again with <c>--after</c>.
-    /// </summary>
-    internal Updater? Updater { get; init; }
 }
 
 /// <summary>A configuration: the program that defines a shell. <see cref="Start"/> makes its windows.</summary>
@@ -254,9 +247,6 @@ public sealed partial class Shell : IDisposable
                             "Something in Winshell failed. It is still running."));
                         var shell = new Shell(loop, log, options, identity, arguments);
                         shell.LogPath = instance.LogPath;
-                        shell.Updater = options.Updater;
-                        if (options.Updater is { } updater)
-                            updater.Restart = shell.RestartForUpdate;
                         _current = shell;
                         var notices = new ShellNotices(
                             loop,
@@ -330,22 +320,6 @@ public sealed partial class Shell : IDisposable
             return false;
         Quit();
         return true;
-    }
-
-    /// <summary>
-    /// Starts this program again with <c>--after</c>, as <see cref="Reload"/> does, once no other Winshell is running.
-    /// The start is posted, so a caller on the shell's thread is not torn down while it is still running.
-    /// </summary>
-    private string? RestartForUpdate()
-    {
-        if (Instances.List(false).Any(i => i.Info.Pid != Environment.ProcessId))
-            return "Another Winshell is running. Close it, then restart this one.";
-        Loop.Post(() =>
-        {
-            if (StartNext() is null)
-                Quit();
-        });
-        return null;
     }
 
     /// <summary>

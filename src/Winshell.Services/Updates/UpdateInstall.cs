@@ -5,7 +5,7 @@ using Winshell.Native;
 namespace Winshell.Updates;
 
 /// <summary>
-/// Puts a downloaded update in place. Only a <c>winshell.exe</c> that has just started does this, before it runs a
+/// Puts a staged update in place. Only a <c>winshell.exe</c> that has just started does this, before it runs a
 /// shell, so no shell is using the files. A running file cannot be overwritten but can be moved, so each file the
 /// update replaces moves into a <c>.winshell-old</c> folder next to it first; another Winshell still running keeps
 /// running from there. A failure moves everything back. The next start deletes what it can of that folder.
@@ -199,12 +199,6 @@ internal static class UpdateInstall
     {
         TryDeleteDirectory(staged);
         UpdateTrust.Discard(updatesDir, version);
-    }
-
-    /// <summary>Deletes an update that is staged, with its saved zip and digest.</summary>
-    public static void Discard(string updatesDir, string staged)
-    {
-        DeleteStaged(updatesDir, staged, Path.GetFileName(staged));
     }
 
     /// <summary>Every file under <paramref name="root"/>. A link fails the copy instead of being followed.</summary>

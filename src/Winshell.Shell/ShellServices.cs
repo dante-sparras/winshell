@@ -9,7 +9,6 @@ using Winshell.Notifications;
 using Winshell.Power;
 using Winshell.Session;
 using Winshell.Tray;
-using Winshell.Updates;
 using Winshell.Windows;
 using Winshell.Winland;
 
@@ -36,7 +35,6 @@ public sealed partial class Shell
     private SessionService? _session;
     private StartupService? _startup;
     private SystemTray? _systemTray;
-    private UpdatesService? _updates;
     private VirtualDesktopsService? _virtualDesktops;
     private WindowListService? _windows;
     private WinlandService? _winland;
@@ -89,9 +87,6 @@ public sealed partial class Shell
     /// <summary>The notification area. Only one running instance in the Windows session owns it.</summary>
     public SystemTray SystemTray => Own(ref _systemTray, () => new SystemTray(Loop, Log));
 
-    /// <summary>Winshell's own updates. A configuration's own program does not update itself.</summary>
-    public UpdatesService Updates => Own(ref _updates, () => new UpdatesService(Loop, Log, Updater));
-
     /// <summary>The virtual desktops Task View shows.</summary>
     public VirtualDesktopsService VirtualDesktops =>
         Own(ref _virtualDesktops, () => new VirtualDesktopsService(Loop, Log));
@@ -114,9 +109,6 @@ public sealed partial class Shell
             service.Attach(_windows);
         return service;
     });
-
-    /// <summary>What <see cref="Updates"/> follows. <see cref="Run{T}"/> copies it from <see cref="ShellOptions.Updater"/>.</summary>
-    internal Updater? Updater { get; set; }
 
     /// <summary>Winshell's own notices. Set as the shell starts.</summary>
     internal ShellNotices? Notices { get; set; }

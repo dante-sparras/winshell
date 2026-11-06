@@ -23,7 +23,7 @@ internal static class RunCommand
         if (project is null)
             return 0;
         var originalArgs = options.Arguments.ToArray();
-        // A downloaded update goes in place before any shell runs, and then the new winshell.exe runs the shell.
+        // A staged update goes in place before any shell runs, and then the new winshell.exe runs the shell.
         // System.Diagnostics.Process is loaded first, from the files this one started with.
         // RunUpdated is the private static method below.
         RuntimeHelpers.PrepareMethod(
@@ -163,7 +163,7 @@ internal static class RunCommand
     }
 
     /// <summary>
-    /// Puts a downloaded update in place, unless another shell runs: it would keep loading files from this folder
+    /// Puts a staged update in place, unless another shell runs: it would keep loading files from this folder
     /// as it needs them and mix versions, so the update stays ready until a start finds none. A named mutex keeps
     /// two starts at the same moment, before either is listed, from installing over each other: the second skips.
     /// </summary>
