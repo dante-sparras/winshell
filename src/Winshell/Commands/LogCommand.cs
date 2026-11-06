@@ -7,32 +7,15 @@ internal static class LogCommand
         var path = options.Positional.FirstOrDefault();
         if (path is null)
         {
-            var choice = InstanceSelection.Select(options);
+            var choice = InstanceSelection.Select(options, InstanceSelection.Question.Log, Instances.RunDir);
             if (choice.Info is not { } info)
             {
-                // Several running instances is a command-line error, not a reason to show a stopped log.
-                if (choice.Code == 2)
-                {
-                    Console.Error.WriteLine(choice.Error);
-                    return 2;
-                }
-
-                // A selector can name an instance that stopped, but never gets a different one instead.
-                var selected = options.Pid is not null || options.Id is not null || options.Path is not null ||
-                               options.Config is not null;
-                var stopped = selected
-                    ? InstanceSelection.Select(options, true).Info
-                    : Instances.List(true).FirstOrDefault().Info;
-                if (stopped is null)
-                {
-                    Console.Error.WriteLine(choice.Error);
-                    return choice.Code;
-                }
-
-                info = stopped;
-                Console.Error.WriteLine($"Showing the log of stopped instance {info.Id}.");
+                Console.Error.WriteLine(choice.Error);
+                return choice.Code;
             }
 
+            if (choice.Notice is not null)
+                Console.Error.WriteLine(choice.Notice);
             path = info.Log;
         }
 

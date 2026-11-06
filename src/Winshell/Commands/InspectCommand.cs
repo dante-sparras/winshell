@@ -6,7 +6,7 @@ internal static class InspectCommand
     {
         // CliParser has checked that args is one of tree, screenshot, click and hover, with the words it needs.
         var args = options.Positional;
-        var choice = InstanceSelection.Select(options);
+        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Running, Instances.RunDir);
         if (choice.Info is not { } info)
         {
             Console.Error.WriteLine(choice.Error);
