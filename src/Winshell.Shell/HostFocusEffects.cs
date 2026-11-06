@@ -26,32 +26,13 @@ internal sealed class HostFocusEffects(HostWindow host, ShellPlatform platform) 
 
     public void TakeKeyboard()
     {
-        // A Windows-key chord arrives through a low-level hook, which does not grant foreground rights, so
-        // SetForegroundWindow can fail. Join the foreground thread long enough to take the keyboard, then leave it.
-        if (Win32.GetForegroundWindow() != host.Handle && !Win32.SetForegroundWindow(host.Handle))
-            JoinForegroundAndTakeIt();
+        // A Windows-key chord arrives through a low-level hook, which does not grant the right to take the keyboard.
+        Focus.Take(host.Handle);
         host.Presentation.FocusContent();
     }
 
     public void GrabOutsideClicks(bool on)
     {
         platform.OutsideClicks.Grab(host, on);
-    }
-
-    private void JoinForegroundAndTakeIt()
-    {
-        var foreground = Win32.GetForegroundWindow();
-        var other = foreground == 0 ? 0 : Win32.GetWindowThreadProcessId(foreground, out _);
-        var current = Win32.GetCurrentThreadId();
-        if (other == 0 || other == current || !Win32.AttachThreadInput(current, other, true))
-            return;
-        try
-        {
-            Win32.SetForegroundWindow(host.Handle);
-        }
-        finally
-        {
-            Win32.AttachThreadInput(current, other, false);
-        }
     }
 }

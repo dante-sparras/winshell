@@ -172,21 +172,9 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         // A click on a shell window is input this process just received, which lets it pass the right on.
         if (TrayApp.AllowForeground(processId))
             return;
-        // A click from IPC or a timer is not. Join the foreground thread long enough to hand the foreground over.
-        var foregroundThread = Win32.GetWindowThreadProcessId(Win32.GetForegroundWindow(), out _);
-        var thread = Win32.GetCurrentThreadId();
-        var attached = foregroundThread != 0 && foregroundThread != thread &&
-                       Win32.AttachThreadInput(foregroundThread, thread, true);
-        try
-        {
-            Win32.SetForegroundWindow(window);
-            TrayApp.AllowForeground(processId);
-        }
-        finally
-        {
-            if (attached)
-                Win32.AttachThreadInput(foregroundThread, thread, false);
-        }
+        // A click from IPC or a timer is not. Take the window, then pass the right on in case the app asks too.
+        Focus.Take(window);
+        TrayApp.AllowForeground(processId);
     }
 
     public void Notify(nint window, uint message, nint wParam, nint lParam)

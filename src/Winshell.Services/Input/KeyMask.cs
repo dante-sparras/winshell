@@ -9,14 +9,14 @@ namespace Winshell.Input;
 internal static class KeyMask
 {
     /// <summary>Unassigned virtual key. The same value AutoHotkey uses for its menu mask.</summary>
-    public const ushort VirtualKey = 0xE8;
+    public const ushort VirtualKey = KeyInput.Unassigned;
 
     /// <summary>Tag on <c>dwExtraInfo</c> so the low-level hook does not treat the mask as a user key.</summary>
-    public const nint ExtraInfo = 0x57154E4B;
+    public const nint ExtraInfo = KeyInput.Marker;
 
     public static void Tap()
     {
-        _ = KeyInput.Send(Stroke());
+        KeyInput.Tap();
     }
 
     internal static bool IsOurs(nint extraInfo)
@@ -26,11 +26,7 @@ internal static class KeyMask
 
     internal static KeyStroke[] Stroke()
     {
-        return
-        [
-            new KeyStroke(VirtualKey, false, ExtraInfo),
-            new KeyStroke(VirtualKey, true, ExtraInfo)
-        ];
+        return KeyInput.Stroke();
     }
 
     internal static int InputSize => KeyInput.Size;
