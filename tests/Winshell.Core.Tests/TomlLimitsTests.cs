@@ -157,22 +157,22 @@ public sealed class TomlLimitsTests
             File.WriteAllText(bad, "name =\n");
             var invalid = TomlDocument.Load(bad);
             Assert.Equal(TomlRead.Invalid, invalid.Kind);
-            Assert.Equal(1, invalid.Line);
-            Assert.True(invalid.Column > 0);
-            Assert.Contains($"{bad}[{invalid.Line}:{invalid.Column}]:", invalid.Describe(bad),
-                StringComparison.Ordinal);
+            Assert.Equal(
+                $"{bad}[1:7]: Unexpected token end-of-line found while expecting a value",
+                invalid.Describe(bad));
 
             File.WriteAllBytes(big, new byte[Megabyte + 1]);
             var tooLarge = TomlDocument.Load(big);
             Assert.Equal(TomlRead.TooLarge, tooLarge.Kind);
-            Assert.Contains("above the limit of 1048576", tooLarge.Message, StringComparison.Ordinal);
-            Assert.StartsWith($"{big}: file is ", tooLarge.Describe(big), StringComparison.Ordinal);
+            Assert.Equal($"{big}: file is 1048577 bytes, above the limit of 1048576", tooLarge.Describe(big));
 
             using (new FileStream(bad, FileMode.Open, FileAccess.Read, FileShare.None))
             {
                 var blocked = TomlDocument.Load(bad);
                 Assert.Equal(TomlRead.Unreadable, blocked.Kind);
-                Assert.True(blocked.Message.Length > 0);
+                Assert.Equal(
+                    $"The process cannot access the file '{bad}' because it is being used by another process.",
+                    blocked.Message);
             }
 
             var withMark = new byte[] { 0xEF, 0xBB, 0xBF };
