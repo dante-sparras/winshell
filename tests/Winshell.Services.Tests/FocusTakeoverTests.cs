@@ -5,90 +5,214 @@ using Winshell.Native;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// Another process holds the foreground and is the last one that sent input. Joining its thread then leaves focus
-/// where it was, and the key tap is what moves it.
+/// Another process holds the foreground and is the last one that sent input. What <see cref="Focus.Take"/> does
+/// before its key tap then leaves focus where it was, and the tap is what moves it. A foreground lock timeout of
+/// zero never produces that refusal: any process may take the foreground, so the test says so instead of waiting
+/// out its patience. The same when the holder sends input and never becomes the foreground.
 /// </summary>
 [Trait("Category", "Slow")]
 public sealed class FocusTakeoverTests
 {
-    [Fact(Skip = "Fails on most CI runs until #1499 finds why the window never gains focus there.")]
+    /// <summary>How often Windows may hand over the foreground with no key tap before that is the machine, not a race.</summary>
+    private const int GrantsThatMeanNoLock = 3;
+
+    private enum Refusal
+    {
+        /// <summary>The holder is not yet the foreground process that last sent input.</summary>
+        Waiting,
+
+        /// <summary><see cref="Focus.Take"/> without its key tap left the window unfocused.</summary>
+        Refused,
+
+        /// <summary>This process took the foreground without a key tap.</summary>
+        Granted
+    }
+
+    [Fact]
     public async Task Taking_focus_reaches_the_window_only_after_a_key_tap()
     {
         var previous = Win32.GetForegroundWindow();
         var suffix = Guid.NewGuid().ToString("N");
         var stopName = @"Local\WinshellFocusStop" + suffix;
         var steadyName = @"Local\WinshellFocusSteady" + suffix;
+        var tappedName = @"Local\WinshellFocusTapped" + suffix;
+        var blockedName = @"Local\WinshellFocusBlocked" + suffix;
+        var imposedName = @"Local\WinshellFocusImposed" + suffix;
         var errors = new StringBuilder();
         using var stop = new EventWaitHandle(false, EventResetMode.ManualReset, stopName);
         using var steady = new EventWaitHandle(false, EventResetMode.ManualReset, steadyName);
-        using var holder = StartHolder(stopName, steadyName, errors);
-        await using var window = await PumpedWindow.Open();
+        using var tapped = new EventWaitHandle(false, EventResetMode.ManualReset, tappedName);
+        using var blocked = new EventWaitHandle(false, EventResetMode.ManualReset, blockedName);
+        using var imposed = new EventWaitHandle(false, EventResetMode.ManualReset, imposedName);
+        using var holder = StartHolder(stopName, steadyName, tappedName, blockedName, imposedName, errors);
+        PumpedWindow? window = null;
+        var passed = false;
         try
         {
+            window = await PumpedWindow.Open();
             Assert.NotEqual(0, window.Handle);
-            Wait.Until(() => TookOnlyAfterTheTap(holder, steady, window.Handle, errors),
-                "the window to gain focus only after a key tap");
+            var grants = 0;
+            Wait.Until(() =>
+            {
+                // The holder gives up once its taps have not made it the foreground. That is the precondition
+                // failing, not a reason to sit out the rest of the patience.
+                if (blocked.WaitOne(0))
+                    Assert.Fail("Could not establish the precondition: the focus holder sent input and never " +
+                                "became the foreground. " + errors);
+                var refusal = Observe(holder, steady, tapped, window.Handle, errors);
+                if (refusal != Refusal.Granted)
+                    return refusal == Refusal.Refused;
+                // Each grant is Focus.Take without the key tap. If that keeps working, the tap is not what moved
+                // focus, and another wait will not make a refusal appear.
+                grants++;
+                if (grants == GrantsThatMeanNoLock)
+                    Assert.Fail("Could not establish the precondition: Windows gave this process the foreground " +
+                                "without a key tap. " + errors);
+                return false;
+            }, "could not establish the precondition: the focus holder never started");
+
+            // The holder stays put, so a foreground change that lands after SetForegroundWindow returns is visible.
+            // Take is the same steps as the refusal check, plus the key tap.
+            Focus.Take(window.Handle);
+            Wait.Until(() => Win32.GetForegroundWindow() == window.Handle,
+                "Focus.Take to give the window the keyboard after Windows had refused it",
+                TimeSpan.FromSeconds(5), () =>
+                {
+                    if (holder.HasExited)
+                        Assert.Fail("The focus holder exited early (" + holder.ExitCode + "). " + errors);
+                });
+            passed = true;
         }
         finally
         {
-            stop.Set();
-            try
-            {
-                Wait.Until(() => holder.HasExited, "the focus holder to exit");
-            }
-            finally
-            {
-                if (!holder.HasExited)
-                    holder.Kill(true);
-                if (previous != 0 && previous != window.Handle && Win32.IsWindow(previous))
-                    Focus.Take(previous);
-            }
+            await ReleaseHolder(stop, holder, imposed, previous, window, passed, errors);
         }
     }
 
     /// <summary>
-    /// Joining the foreground thread leaves <paramref name="window"/> unfocused, and taking focus then gives it the
-    /// keyboard. A miss starts the holder again: this process just sent input, so a retry means nothing until the
-    /// holder is the last one that did.
+    /// Stops the holder and puts the previous window back. This still runs when opening the test window throws,
+    /// and when the test deadline has already cancelled the wait: that wait would return at once and leave the
+    /// holder's session lock held. Killing the holder releases that lock and skips the timeout restore, so a
+    /// timeout this test imposed is put back here.
     /// </summary>
-    private static bool TookOnlyAfterTheTap(Process holder, EventWaitHandle steady, nint window, StringBuilder errors)
+    private static async Task ReleaseHolder(EventWaitHandle stop, Process holder, EventWaitHandle imposed,
+        nint previous, PumpedWindow? window, bool passed, StringBuilder errors)
     {
-        if (!Refused(holder, steady, window, errors))
+        stop.Set();
+        var killed = false;
+        var restoreFailed = false;
+        try
+        {
+            // Leaving the loop unlocks the session and restores the timeout. Kill is only for a holder that
+            // never notices stop; process exit still releases the foreground lock.
+            if (!holder.HasExited && !holder.WaitForExit(5000))
+            {
+                killed = true;
+                holder.Kill(true);
+                holder.WaitForExit(2000);
+            }
+        }
+        finally
+        {
+            // The timeout is session state. It survives the kill that releases the foreground lock.
+            if (imposed.WaitOne(0) && (killed || !holder.HasExited || holder.ExitCode != 0))
+                restoreFailed = !RestoreZeroTimeout(errors);
+            try
+            {
+                if (previous != 0 && (window == null || previous != window.Handle) && Win32.IsWindow(previous))
+                    Focus.Take(previous);
+            }
+            finally
+            {
+                if (window != null)
+                    await window.DisposeAsync();
+            }
+        }
+
+        if (restoreFailed)
+            Assert.Fail("The foreground lock timeout was left at 10 seconds. " + errors);
+        if (passed && holder.HasExited && holder.ExitCode != 0)
+            Assert.Fail("The focus holder did not restore the foreground lock (" + holder.ExitCode + "). " + errors);
+    }
+
+    /// <summary>Puts a timeout of zero back after the holder was killed or its own restore failed.</summary>
+    private static bool RestoreZeroTimeout(StringBuilder errors)
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(RestoreTimeoutProgram));
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = powershell,
+                Arguments = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+        process.OutputDataReceived += (_, e) => Append(errors, e.Data);
+        process.ErrorDataReceived += (_, e) => Append(errors, e.Data);
+        if (!process.Start())
             return false;
-        if (Focus.Take(window) && Win32.GetForegroundWindow() == window)
-            return true;
-        steady.Reset();
-        return false;
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        if (!process.WaitForExit(15000))
+        {
+            process.Kill(true);
+            return false;
+        }
+
+        return process.ExitCode == 0;
     }
 
     /// <summary>
-    /// The holder is foreground, and asking plus joining its thread still leaves <paramref name="window"/> without
-    /// the keyboard. That is the refusal the key tap is for.
+    /// The holder has sent input and is foreground, and <see cref="Focus.Take"/> without its key tap still leaves
+    /// <paramref name="window"/> without the keyboard. A late grant counts as <see cref="Refusal.Granted"/>: the
+    /// foreground switch is not always visible in the call that asked for it.
     /// </summary>
-    private static bool Refused(Process holder, EventWaitHandle steady, nint window, StringBuilder errors)
+    private static Refusal Observe(Process holder, EventWaitHandle steady, EventWaitHandle tapped, nint window,
+        StringBuilder errors)
     {
         if (holder.HasExited)
             Assert.Fail("The focus holder exited early (" + holder.ExitCode + "). " + errors);
-        if (ForegroundProcess() != (uint)holder.Id)
-            return false;
+        // The holder injects again only while tapped is clear. A foreground it has already lost has to be
+        // cleared here, or the holder stops and this wait runs out its patience.
+        var holderInFront = ForegroundProcess() == (uint)holder.Id;
+        if (!holderInFront || !tapped.WaitOne(0))
+        {
+            if (!holderInFront)
+                tapped.Reset();
+            return Refusal.Waiting;
+        }
+
         steady.Set();
         if (ForegroundProcess() != (uint)holder.Id)
         {
             steady.Reset();
-            return false;
+            tapped.Reset();
+            return Refusal.Waiting;
         }
 
-        if (JoinedWithoutAKey(window))
+        if (!TakenWithoutTheKey(window))
         {
-            steady.Reset();
-            return false;
+            // Nothing else signals that Windows declined. A switch that is only late must not look like a refusal,
+            // or Focus.Take would be credited for a handover that was already on its way.
+            Wait.ForNothingToHappen(TimeSpan.FromSeconds(1));
+            if (holder.HasExited)
+                Assert.Fail("The focus holder exited early (" + holder.ExitCode + "). " + errors);
         }
 
-        return Win32.GetForegroundWindow() != window;
+        if (Win32.GetForegroundWindow() != window && ForegroundProcess() == (uint)holder.Id)
+            return Refusal.Refused;
+        steady.Reset();
+        tapped.Reset();
+        return Win32.GetForegroundWindow() == window ? Refusal.Granted : Refusal.Waiting;
     }
 
-    /// <summary>What the three call sites did before the key tap lived in one place.</summary>
-    private static bool JoinedWithoutAKey(nint window)
+    /// <summary>What <see cref="Focus.Take"/> does before it taps a key, including the raise while joined.</summary>
+    private static bool TakenWithoutTheKey(nint window)
     {
         if (Win32.SetForegroundWindow(window) && Win32.GetForegroundWindow() == window)
             return true;
@@ -98,6 +222,7 @@ public sealed class FocusTakeoverTests
         if (other != 0 && other != current && Win32.AttachThreadInput(current, other, true))
             try
             {
+                TopLevelWindows.Raise(window);
                 Win32.SetForegroundWindow(window);
             }
             finally
@@ -117,10 +242,12 @@ public sealed class FocusTakeoverTests
         return process;
     }
 
-    private static Process StartHolder(string stopName, string steadyName, StringBuilder errors)
+    private static Process StartHolder(string stopName, string steadyName, string tappedName, string blockedName,
+        string imposedName, StringBuilder errors)
     {
         var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(HolderScript(stopName, steadyName)));
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(
+            HolderScript(stopName, steadyName, tappedName, blockedName, imposedName)));
         var holder = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -151,17 +278,36 @@ public sealed class FocusTakeoverTests
         }
     }
 
-    private static string HolderScript(string stopName, string steadyName)
+    private static string HolderScript(string stopName, string steadyName, string tappedName, string blockedName,
+        string imposedName)
     {
-        return HolderProgram + "\n[Holder]::Run('" + stopName + "', '" + steadyName + "')\n" +
+        return HolderProgram + "\n[Holder]::Run('" + stopName + "', '" + steadyName + "', '" + tappedName + "', '" +
+               blockedName + "', '" + imposedName + "')\n" +
                "} catch {\n[Console]::Error.WriteLine($_.Exception.ToString())\nexit 1\n}\n";
     }
+
+    // Encoded so the timeout can be put back from this process when the holder is killed. Killing skips the
+    // holder's finally, and the timeout is session state.
+    private const string RestoreTimeoutProgram = """
+                                                 $ErrorActionPreference = 'Stop'
+                                                 $ProgressPreference = 'SilentlyContinue'
+                                                 Add-Type -TypeDefinition '
+                                                 using System;
+                                                 using System.Runtime.InteropServices;
+                                                 public static class ForegroundLockTimeout {
+                                                     [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+                                                     public static extern bool Set(uint action, uint param, System.IntPtr value, uint flags);
+                                                 }
+                                                 '
+                                                 if (-not [ForegroundLockTimeout]::Set(0x2001, 0, [IntPtr]::Zero, 0)) { exit 1 }
+                                                 """;
 
     // Windows PowerShell 5 compiles this with the C# 5 compiler. A second process has to be the one that last sent
     // input, or this process would be allowed to take focus without the key tap. The single-quoted program keeps the
     // script valid whatever indentation the C# has.
     private const string HolderProgram = """
                                          $ErrorActionPreference = 'Stop'
+                                         $ProgressPreference = 'SilentlyContinue'
                                          try {
                                          Add-Type -TypeDefinition '
                                          using System;
@@ -170,33 +316,87 @@ public sealed class FocusTakeoverTests
                                          using System.Threading;
                                          public static class Holder
                                          {
-                                             public static void Run(string stopName, string steadyName)
+                                             public static void Run(string stopName, string steadyName, string tappedName, string blockedName, string imposedName)
                                              {
                                                  var stop = EventWaitHandle.OpenExisting(stopName);
                                                  var steady = EventWaitHandle.OpenExisting(steadyName);
-                                                 var thread = new Thread(delegate() { Window(stop, steady); });
+                                                 var tapped = EventWaitHandle.OpenExisting(tappedName);
+                                                 var blocked = EventWaitHandle.OpenExisting(blockedName);
+                                                 var imposed = EventWaitHandle.OpenExisting(imposedName);
+                                                 Exception error = null;
+                                                 var thread = new Thread(delegate()
+                                                 {
+                                                     try { Window(stop, steady, tapped, blocked, imposed); }
+                                                     catch (Exception ex) { error = ex; }
+                                                 });
                                                  thread.SetApartmentState(ApartmentState.STA);
                                                  thread.IsBackground = true;
                                                  thread.Start();
                                                  thread.Join();
+                                                 if (error != null)
+                                                     throw error;
                                              }
 
-                                             static void Window(EventWaitHandle stop, EventWaitHandle steady)
+                                             static void Window(EventWaitHandle stop, EventWaitHandle steady, EventWaitHandle tapped, EventWaitHandle blocked, EventWaitHandle imposed)
                                              {
-                                                 var hwnd = CreateWindowExW(0, "STATIC", "winshell-focus-holder", 0x00CF0000 | 0x10000000,
-                                                     0, 0, 80, 40, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(null), IntPtr.Zero);
-                                                 if (hwnd == IntPtr.Zero)
-                                                     throw new Win32Exception(Marshal.GetLastWin32Error());
-                                                 ShowWindow(hwnd, 5);
+                                                 // A timeout of zero lets every process take the foreground, so the refusal this test
+                                                 // exists for never happens. Ten seconds covers this run. This finally puts zero back,
+                                                 // including when the window cannot be created. A kill skips this finally; the test
+                                                 // sees the imposed event and puts zero back, because the timeout is session state.
+                                                 // A timeout that is still zero must not reach the foreground lock: that lock alone
+                                                 // would look like the refusal.
+                                                 uint previous = 0;
+                                                 bool imposedFlag = false;
+                                                 bool canLock = false;
+                                                 IntPtr hwnd = IntPtr.Zero;
                                                  try
                                                  {
+                                                     if (!ReadLock(ref previous))
+                                                     {
+                                                         var error = Marshal.GetLastWin32Error();
+                                                         Console.WriteLine("could not read the foreground lock timeout: " + error);
+                                                         throw new Win32Exception(error);
+                                                     }
+                                                     if (previous == 0)
+                                                     {
+                                                         imposedFlag = WriteLock(10000);
+                                                         if (!imposedFlag)
+                                                         {
+                                                             var error = Marshal.GetLastWin32Error();
+                                                             Console.WriteLine("could not set the foreground lock timeout: " + error);
+                                                             throw new Win32Exception(error);
+                                                         }
+                                                         imposed.Set();
+                                                     }
+                                                     canLock = previous != 0 || imposedFlag;
+                                                     Console.WriteLine("foreground-lock-timeout=" + previous);
+                                                     hwnd = CreateWindowExW(0, "STATIC", "winshell-focus-holder", 0x00CF0000 | 0x10000000,
+                                                         0, 0, 80, 40, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(null), IntPtr.Zero);
+                                                     if (hwnd == IntPtr.Zero)
+                                                         throw new Win32Exception(Marshal.GetLastWin32Error());
+                                                     ShowWindow(hwnd, 5);
+                                                     var attempts = 0;
                                                      while (!stop.WaitOne(0))
                                                      {
                                                          Pump();
-                                                         if (!steady.WaitOne(0) && GetForegroundWindow() != hwnd)
+                                                         // Tap even when this window is already in front: the test may have cleared the
+                                                         // signal after taking focus, and only a new tap makes this process the last input.
+                                                         if (!steady.WaitOne(0) && !tapped.WaitOne(0) && !blocked.WaitOne(0))
                                                          {
+                                                             LockSetForegroundWindow(2);
                                                              Tap();
-                                                             SetForegroundWindow(hwnd);
+                                                             if (GetForegroundWindow() != hwnd)
+                                                                 SetForegroundWindow(hwnd);
+                                                             if (GetForegroundWindow() == hwnd && canLock)
+                                                             {
+                                                                 // Attached SetForegroundWindow can finish after this process has stopped
+                                                                 // defending the foreground. Lock so that call fails instead of landing late.
+                                                                 LockSetForegroundWindow(1);
+                                                                 tapped.Set();
+                                                                 attempts = 0;
+                                                             }
+                                                             else if (++attempts == 100)
+                                                                 blocked.Set();
                                                          }
                                                          if (stop.WaitOne(0))
                                                              break;
@@ -206,8 +406,22 @@ public sealed class FocusTakeoverTests
                                                  }
                                                  finally
                                                  {
-                                                     DestroyWindow(hwnd);
+                                                     LockSetForegroundWindow(2);
+                                                     if (hwnd != IntPtr.Zero)
+                                                         DestroyWindow(hwnd);
+                                                     if (imposedFlag && !WriteLock(0))
+                                                         throw new Win32Exception(Marshal.GetLastWin32Error());
                                                  }
+                                             }
+
+                                             static bool ReadLock(ref uint value)
+                                             {
+                                                 return GetLock(0x2000, 0, ref value, 0);
+                                             }
+
+                                             static bool WriteLock(uint value)
+                                             {
+                                                 return SetLock(0x2001, 0, new IntPtr((int)value), 0);
                                              }
 
                                              static void Pump()
@@ -234,6 +448,11 @@ public sealed class FocusTakeoverTests
                                                      throw new Win32Exception(Marshal.GetLastWin32Error());
                                              }
 
+                                             [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+                                             static extern bool GetLock(uint action, uint param, ref uint value, uint winIni);
+                                             [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW", SetLastError = true)]
+                                             static extern bool SetLock(uint action, uint param, IntPtr value, uint winIni);
+                                             [DllImport("user32.dll")] static extern bool LockSetForegroundWindow(uint code);
                                              [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
                                              [DllImport("user32.dll", SetLastError = true)] static extern bool SetForegroundWindow(IntPtr hwnd);
                                              [DllImport("user32.dll", SetLastError = true)] static extern uint SendInput(uint count, INPUT[] inputs, int size);
