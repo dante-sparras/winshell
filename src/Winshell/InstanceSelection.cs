@@ -98,7 +98,8 @@ internal static class InstanceSelection
             if (error is not null)
                 return Result.Miss(error);
             // With -c or -p a project is always found, or the error above says why not.
-            var match = instances.FirstOrDefault(i => RunsProject(i, project!));
+            var match = instances.FirstOrDefault(i =>
+                ConfigurationInstances.BuildOf(i.ConfigPath, project!) is not null);
             return match is null
                 ? Result.Miss($"No running instance of {project!.Program}.")
                 : Result.Found(match);
@@ -120,12 +121,5 @@ internal static class InstanceSelection
         }
 
         return instances.Count == 1 ? Result.Found(instances[0]) : Result.Miss(none);
-    }
-
-    /// <summary>Whether <paramref name="info"/> runs <paramref name="project"/>, from <c>bin\shell</c> or from <c>bin\shell.next</c>.</summary>
-    internal static bool RunsProject(InstanceInfo info, ConfigurationProject project)
-    {
-        return string.Equals(ConfigurationProject.ForProgram(info.ConfigPath)?.ProjectFile, project.ProjectFile,
-            StringComparison.OrdinalIgnoreCase);
     }
 }
