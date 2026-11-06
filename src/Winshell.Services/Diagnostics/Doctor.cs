@@ -116,8 +116,7 @@ public static class Doctor
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(context.Instances)),
             Guard("crashes", "Crashes",
-                () => DoctorCrashes.CrashesIn(DoctorProbe.ReadCrashReports(context.CrashRoot), now,
-                    DoctorProbe.PeekCrash))
+                () => DoctorCrashes.CrashesIn(CrashReports.List(context.CrashRoot), now))
         ];
         return WithoutUserFolders(checks,
         [

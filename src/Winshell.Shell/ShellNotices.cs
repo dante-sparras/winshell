@@ -175,13 +175,13 @@ internal sealed class ShellNotices : IDisposable
     /// <summary>Says once that Winshell closed the last time it ran, when it left a report no one has seen.</summary>
     public void ShowPrevious(string stateFile, TimeSpan timeout)
     {
-        if (CrashFollowUp.Find(_crashes.Folder, stateFile) is not { } closed)
+        if (CrashReports.Find(_crashes.Folder, stateFile) is not { } closed)
             return;
-        CrashFollowUp.MarkShown(stateFile, closed.Path);
-        var recovery = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
-        var previous = new CrashReport(closed.Path, "Winshell", new InvalidOperationException(recovery), true)
-            { Subject = "Winshell", Recovery = recovery };
-        _loop.Post(() => Show(ForCrash(previous, timeout)));
+        CrashReports.MarkShown(stateFile, closed.Path);
+        var body = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
+        var notice = new Notice(NoticeKind.Crash, "Winshell stopped working", "", body,
+            "A crash report was saved on this PC.", "Open report", closed.Path, timeout);
+        _loop.Post(() => Show(notice));
     }
 
     public void Dispose()

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace Winshell.Core.Tests;
@@ -23,10 +24,16 @@ public sealed class CrashFollowUpTests : IDisposable
     {
         var folder = Path.Combine(_dir, "crashes");
         Directory.CreateDirectory(folder);
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
         var stray = Path.Combine(folder, "crash-stray.txt");
-        var draw = Path.Combine(folder, "crash-draw.txt");
-        var fatal = Path.Combine(folder, "crash-fatal.txt");
-        File.WriteAllText(stray, "notes\n");
+        var draw = Report(folder, now.AddMinutes(-10), "draw");
+        var fatal = Report(folder, now, "fatal");
+        File.WriteAllText(stray, """
+                                 Winshell crash report
+                                 Winshell closed: yes
+                                 Exception
+                                 System.Exception: stray
+                                 """);
         File.WriteAllText(draw, """
                                 Winshell crash report
                                 Winshell closed: no
@@ -39,33 +46,31 @@ public sealed class CrashFollowUpTests : IDisposable
                                  Exception
                                  System.InvalidOperationException: boom
                                  """);
-        var now = DateTime.UtcNow;
-        File.SetLastWriteTimeUtc(draw, now.AddMinutes(-10));
-        File.SetLastWriteTimeUtc(fatal, now);
-        File.SetLastWriteTimeUtc(stray, now.AddMinutes(2));
+        File.SetLastWriteTimeUtc(stray, now.AddHours(1));
+        File.SetLastWriteTimeUtc(draw, now.AddHours(1));
+        File.SetLastWriteTimeUtc(fatal, now.AddHours(-1));
         var state = Path.Combine(_dir, "state", "last-exit.toml");
-        CrashFollowUp.MarkClean(state, new DateTimeOffset(now.AddHours(-1), TimeSpan.Zero));
+        CrashReports.MarkClean(state, new DateTimeOffset(now.AddHours(-1), TimeSpan.Zero));
 
-        var pending = CrashFollowUp.Find(folder, state);
+        var pending = CrashReports.Find(folder, state);
 
         Assert.Equal(fatal, pending?.Path);
         Assert.Equal("System.InvalidOperationException: boom", pending?.ExceptionLine);
         Assert.Contains("clean = ", File.ReadAllText(state), StringComparison.Ordinal);
 
-        CrashFollowUp.MarkShown(state, fatal);
-        Assert.Null(CrashFollowUp.Find(folder, state));
+        CrashReports.MarkShown(state, fatal);
+        Assert.Null(CrashReports.Find(folder, state));
 
-        var again = Path.Combine(folder, "crash-again.txt");
+        var again = Report(folder, now.AddMinutes(10), "again");
         File.WriteAllText(again, """
                                  Winshell crash report
                                  Winshell closed: yes
                                  Exception
                                  System.Exception: again
                                  """);
-        File.SetLastWriteTimeUtc(again, now.AddMinutes(10));
 
-        Assert.Equal(again, CrashFollowUp.Find(folder, state)?.Path);
-        Assert.Equal("System.Exception: again", CrashFollowUp.Find(folder, state)?.ExceptionLine);
+        Assert.Equal(again, CrashReports.Find(folder, state)?.Path);
+        Assert.Equal("System.Exception: again", CrashReports.Find(folder, state)?.ExceptionLine);
     }
 
     [Fact]
@@ -73,28 +78,36 @@ public sealed class CrashFollowUpTests : IDisposable
     {
         var folder = Path.Combine(_dir, "old");
         Directory.CreateDirectory(folder);
-        var fatal = Path.Combine(folder, "crash-old.txt");
+        var written = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var fatal = Report(folder, written, "old");
         File.WriteAllText(fatal, """
                                  Winshell crash report
                                  Winshell closed: yes
                                  Exception
                                  System.Exception: old
                                  """);
-        var written = File.GetLastWriteTimeUtc(fatal);
+        File.SetLastWriteTimeUtc(fatal, written.AddDays(2));
         var state = Path.Combine(_dir, "old-state.toml");
-        CrashFollowUp.MarkClean(state, new DateTimeOffset(written.AddMinutes(1), TimeSpan.Zero));
+        CrashReports.MarkClean(state, new DateTimeOffset(written.AddMinutes(1), TimeSpan.Zero));
 
-        Assert.Null(CrashFollowUp.Find(folder, state));
-        Assert.Null(CrashFollowUp.Find(Path.Combine(_dir, "missing"), state));
+        Assert.Null(CrashReports.Find(folder, state));
+        Assert.Null(CrashReports.Find(Path.Combine(_dir, "missing"), state));
     }
 
     [Fact]
     public void The_state_file_is_written_without_a_byte_order_mark()
     {
         var state = Path.Combine(_dir, "mark.toml");
-        CrashFollowUp.MarkClean(state, DateTimeOffset.UnixEpoch);
+        CrashReports.MarkClean(state, DateTimeOffset.UnixEpoch);
 
         var text = File.ReadAllText(state);
         Assert.Equal(Encoding.UTF8.GetByteCount(text), File.ReadAllBytes(state).Length);
+    }
+
+    private static string Report(string folder, DateTime utc, string slug)
+    {
+        var name =
+            $"crash-{utc.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-1-{slug}.txt";
+        return Path.Combine(folder, name);
     }
 }

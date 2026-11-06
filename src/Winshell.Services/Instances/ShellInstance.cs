@@ -43,7 +43,7 @@ internal sealed class ShellInstance
     /// <summary>The control pipe's name. It differs from the id's only when that name was taken.</summary>
     public string Pipe { get; private set; }
 
-    /// <summary>The record of the last clean exit, which <see cref="CrashFollowUp"/> reads.</summary>
+    /// <summary>The record of the last clean exit, which <see cref="CrashReports"/> reads.</summary>
     public static string ExitState => Path.Combine(ShellLocations.StateRoot, "last-exit.toml");
 
     /// <summary>Runs first when a crash on another thread is ending the process, which skips every <c>finally</c>.</summary>
@@ -154,7 +154,7 @@ internal sealed class ShellInstance
     public void MarkCleanExit()
     {
         if (_fatal is null)
-            Quietly(() => CrashFollowUp.MarkClean(ExitState, TimeProvider.System.GetLocalNow()));
+            Quietly(() => CrashReports.MarkClean(ExitState, TimeProvider.System.GetLocalNow()));
     }
 
     /// <summary>Stops the pipe, marks the record exited and closes the log. The folder stays for <c>winshell log</c>.</summary>

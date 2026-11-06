@@ -1,3 +1,4 @@
+using System.Globalization;
 using Winshell.Diagnostics;
 using static Winshell.Diagnostics.DoctorCrashes;
 
@@ -24,19 +25,19 @@ public sealed class DoctorEvidenceTests : IDisposable
     [Fact]
     public void A_missing_crash_folder_is_not_a_failure_to_read()
     {
-        var read = DoctorProbe.ReadCrashReports(Path.Combine(_dir, "missing"));
+        var read = CrashReports.List(Path.Combine(_dir, "missing"));
 
-        Assert.Null(read.Unreadable);
+        Assert.Null(read.FolderError);
         Assert.Empty(read.Reports);
-        Assert.Equal(CheckStatus.Pass, CrashesIn(read, DateTime.UtcNow, DoctorProbe.PeekCrash).Status);
+        Assert.Equal(CheckStatus.Pass, CrashesIn(read, DateTime.UtcNow).Status);
     }
 
     [Fact]
     public void An_unreadable_crash_folder_warns()
     {
-        var read = new CrashFolderRead([], @"C:\locked: Access is denied");
+        var read = new CrashList([], @"C:\locked: Access is denied", null);
 
-        var check = CrashesIn(read, DateTime.UtcNow, DoctorProbe.PeekCrash);
+        var check = CrashesIn(read, DateTime.UtcNow);
 
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains(@"Could not read the crash folder: C:\locked: Access is denied", check.Message,
@@ -46,9 +47,10 @@ public sealed class DoctorEvidenceTests : IDisposable
     [Fact]
     public void A_fatal_report_is_named_and_a_stray_file_is_ignored()
     {
+        var now = DateTime.UtcNow;
         var stray = Path.Combine(_dir, "crash-stray.txt");
-        var draw = Path.Combine(_dir, "crash-draw.txt");
-        var fatal = Path.Combine(_dir, "crash-fatal.txt");
+        var draw = Report(_dir, now, "draw");
+        var fatal = Report(_dir, now.AddMinutes(-5), "fatal");
         File.WriteAllText(stray, "notes, not a report\n");
         File.WriteAllText(draw, """
                                 Winshell crash report
@@ -62,15 +64,11 @@ public sealed class DoctorEvidenceTests : IDisposable
                                  Exception
                                  System.InvalidOperationException: boom
                                  """);
-        var now = DateTime.UtcNow;
-        File.SetLastWriteTimeUtc(draw, now);
-        File.SetLastWriteTimeUtc(fatal, now.AddMinutes(-5));
-        File.SetLastWriteTimeUtc(stray, now.AddMinutes(1));
 
-        var read = DoctorProbe.ReadCrashReports(_dir);
-        var check = CrashesIn(read, now.AddMinutes(2), DoctorProbe.PeekCrash);
+        var read = CrashReports.List(_dir);
+        var check = CrashesIn(read, now.AddMinutes(2));
 
-        Assert.Null(read.Unreadable);
+        Assert.Null(read.FolderError);
         Assert.Equal(CheckStatus.Warn, check.Status);
         Assert.Contains("2 crash reports", check.Message, StringComparison.Ordinal);
         Assert.Contains(draw, check.Message, StringComparison.Ordinal);
@@ -86,24 +84,32 @@ public sealed class DoctorEvidenceTests : IDisposable
     [InlineData("Winshell crash report ")]
     public void A_file_whose_first_line_is_not_exactly_the_heading_is_not_a_report(string first)
     {
-        var path = Path.Combine(_dir, "crash-lookalike.txt");
+        var path = Report(_dir, DateTime.UtcNow, "lookalike");
         File.WriteAllText(path, first + "\nWinshell closed: yes\n");
 
-        Assert.Equal(default, DoctorProbe.PeekCrash(path));
+        Assert.Empty(CrashReports.List(_dir).Reports);
     }
 
     [Fact]
     public void A_crash_file_that_cannot_be_opened_warns()
     {
-        var blocked = Path.Combine(_dir, "crash-blocked.txt");
-        Directory.CreateDirectory(blocked);
+        var blocked = Report(_dir, DateTime.UtcNow, "blocked");
+        using (new FileStream(blocked, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            var read = CrashReports.List(_dir);
 
-        var peek = DoctorProbe.PeekCrash(blocked);
+            Assert.NotNull(read.FileError);
+            Assert.Contains(blocked, read.FileError, StringComparison.Ordinal);
+            var check = CrashesIn(read, DateTime.UtcNow);
+            Assert.Equal(CheckStatus.Warn, check.Status);
+            Assert.Contains("Could not read a crash report:", check.Message, StringComparison.Ordinal);
+        }
+    }
 
-        Assert.NotNull(peek.Unreadable);
-        Assert.Contains(blocked, peek.Unreadable, StringComparison.Ordinal);
-        var check = Crashes([(blocked, DateTime.UtcNow)], DateTime.UtcNow, _ => peek);
-        Assert.Equal(CheckStatus.Warn, check.Status);
-        Assert.Contains("Could not read a crash report:", check.Message, StringComparison.Ordinal);
+    private static string Report(string folder, DateTime utc, string slug)
+    {
+        var name =
+            $"crash-{utc.ToString("yyyyMMdd-HHmmss-fffffff", CultureInfo.InvariantCulture)}Z-1-{slug}.txt";
+        return Path.Combine(folder, name);
     }
 }

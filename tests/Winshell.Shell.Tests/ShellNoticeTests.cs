@@ -127,6 +127,27 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.Empty(_shown);
     }
 
+    [Fact]
+    public void A_previous_close_is_shown_from_the_report()
+    {
+        var report = _crashes.Write("Winshell", new InvalidOperationException("boom"), true);
+        Assert.NotNull(report);
+        var state = Path.Combine(_dir, "last-exit.toml");
+
+        _notices.ShowPrevious(state, TimeSpan.FromSeconds(25));
+        _loop.Process();
+
+        var notice = Assert.Single(_shown);
+        Assert.Equal("Winshell stopped working", notice.Title);
+        Assert.Contains("boom", notice.Body, StringComparison.Ordinal);
+        Assert.Equal(report.Path, notice.Target);
+
+        _notices.ShowPrevious(state, TimeSpan.FromSeconds(25));
+        _loop.Process();
+
+        Assert.Single(_shown);
+    }
+
     [Theory]
     [InlineData(2, true)]
     [InlineData(3, true)]
