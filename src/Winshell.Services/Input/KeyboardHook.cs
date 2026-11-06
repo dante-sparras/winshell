@@ -3,116 +3,66 @@ using Winshell.Native;
 namespace Winshell.Input;
 
 /// <summary>
-/// The process's one low-level keyboard hook, on a thread of its own. While attached, every key goes to
-/// <paramref name="onKey"/>, which returns true to swallow it. A second hook cannot attach while another is.
+/// One listener on the process keyboard hook. While attached, every key goes to <paramref name="onKey"/>, which
+/// returns true to swallow it. The process has one hook, so a second listener does not attach while another holds it.
 /// </summary>
 /// <param name="onKey">Runs on the hook thread with the key, whether it came up, and the modifiers Windows sees held.</param>
 /// <param name="onLost">Runs on the hook thread when that thread ends without <see cref="Detach"/>.</param>
 internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey, Action onLost)
 {
-    private static readonly object Gate = new();
-    private static HookThread? Installed;
-    private static KeyboardHook? Owner;
+    private readonly object _gate = new();
+    private IDisposable? _subscription;
 
-    /// <summary>Whether this hook is the one installed.</summary>
+    /// <summary>Whether this listener holds the process hook.</summary>
     public bool IsAttached
     {
         get
         {
-            lock (Gate)
+            lock (_gate)
             {
-                return ReferenceEquals(Owner, this) && Installed is not null;
+                return _subscription is not null;
             }
         }
     }
 
-    internal static bool IsInstalled
-    {
-        get
-        {
-            lock (Gate)
-            {
-                return Installed is not null;
-            }
-        }
-    }
-
-    internal static Thread? InstalledThread
-    {
-        get
-        {
-            lock (Gate)
-            {
-                return Installed?.Thread;
-            }
-        }
-    }
-
-    // The procedure can run before the hook is recorded here. Do not hold the gate while waiting for it.
     public void Attach()
     {
-        lock (Gate)
+        lock (_gate)
         {
-            if (Owner == this && Installed is not null)
+            if (_subscription is not null)
                 return;
-            if (Owner is not null && Owner != this)
-                return;
-            Owner = this;
         }
 
-        var thread = LowLevelKeyboard.Start(OnKey, "Winshell keyboard hook", OnThreadExited);
-        lock (Gate)
+        var subscription = LowLevelKeyboard.Start(OnKey, HookLost);
+        lock (_gate)
         {
-            if (Owner == this && thread is not null)
+            if (_subscription is not null || subscription is null)
             {
-                Installed = thread;
+                subscription?.Dispose();
                 return;
             }
 
-            if (Owner == this)
-                Owner = null;
+            _subscription = subscription;
         }
-
-        thread?.Stop();
     }
 
     public void Detach()
     {
-        HookThread? thread;
-        lock (Gate)
+        IDisposable? subscription;
+        lock (_gate)
         {
-            if (Owner != this)
-                return;
-            thread = Installed;
-            Installed = null;
-            Owner = null;
+            subscription = _subscription;
+            _subscription = null;
         }
 
-        thread?.Stop();
+        subscription?.Dispose();
     }
 
-    /// <summary>Removes this process's keyboard hook, whoever installed it. Tests call this if a registrar is abandoned.</summary>
-    internal static void EmergencyUnhook()
+    private void HookLost()
     {
-        HookThread? thread;
-        lock (Gate)
+        lock (_gate)
         {
-            thread = Installed;
-            Installed = null;
-            Owner = null;
-        }
-
-        thread?.Stop();
-    }
-
-    private void OnThreadExited()
-    {
-        lock (Gate)
-        {
-            if (!ReferenceEquals(Owner, this))
-                return;
-            Installed = null;
-            Owner = null;
+            _subscription = null;
         }
 
         onLost();
@@ -143,17 +93,8 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
         return Win32.GetAsyncKeyState(virtualKey) < 0;
     }
 
-    private static bool OnKey(HookedKey key)
+    private bool OnKey(HookedKey key)
     {
-        return !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () =>
-        {
-            KeyboardHook? owner;
-            lock (Gate)
-            {
-                owner = Owner;
-            }
-
-            return owner is not null && owner.Handle(key);
-        }, false);
+        return !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () => Handle(key), false);
     }
 }

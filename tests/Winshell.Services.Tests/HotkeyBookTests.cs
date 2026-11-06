@@ -3,15 +3,8 @@ using Winshell.Input;
 namespace Winshell.Services.Tests;
 
 [Collection(KeyboardHookCollection.Name)]
-public sealed class HotkeyBookTests : IDisposable
+public sealed class HotkeyBookTests
 {
-    public void Dispose()
-    {
-        var leaked = KeyboardHook.IsInstalled;
-        KeyboardHook.EmergencyUnhook();
-        Assert.False(leaked);
-    }
-
     [Fact]
     public void Parser_uses_windows_names_and_canonical_order()
     {
@@ -270,41 +263,23 @@ public sealed class HotkeyBookTests : IDisposable
     }
 
     [Fact]
-    public void The_keyboard_hook_runs_on_its_own_thread_until_it_is_removed()
+    public void A_second_windows_key_hotkey_waits_until_the_hook_is_free()
     {
-        var loop = new ManualEventLoop();
-        var registrar = new HotkeyRegistrar(loop);
-        Thread? thread;
-        try
-        {
-            Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
-            thread = KeyboardHook.InstalledThread;
-            Assert.NotNull(thread);
-            Assert.NotEqual(Environment.CurrentManagedThreadId, thread.ManagedThreadId);
-            Assert.True(thread.IsAlive);
-        }
-        finally
-        {
-            registrar.Dispose();
-        }
+        using var first = new Hotkey(new ManualEventLoop());
+        using var second = new Hotkey(new ManualEventLoop());
+        first.Sequence = "Win";
+        Assert.True(first.Active);
 
-        Assert.False(thread!.IsAlive);
-        Assert.Null(KeyboardHook.InstalledThread);
+        second.Sequence = "Win";
+        Assert.False(second.Active);
+        Assert.False(second.Taken);
+        Assert.Contains("keyboard hook", second.Error, StringComparison.Ordinal);
 
-        registrar = new HotkeyRegistrar(loop);
-        try
-        {
-            Assert.Equal(HotkeyClaimStatus.Active, registrar.Claim(new Probe(loop), Parse("Win")).Status);
-            thread = KeyboardHook.InstalledThread;
-            Assert.NotNull(thread);
-            KeyboardHook.EmergencyUnhook();
-            Assert.False(thread.IsAlive);
-            Assert.False(KeyboardHook.IsInstalled);
-        }
-        finally
-        {
-            registrar.Dispose();
-        }
+        first.Dispose();
+        second.Enabled = false;
+        second.Enabled = true;
+        Assert.True(second.Active);
+        Assert.Equal("", second.Error);
     }
 
     private static void AssertRejected(string text, params string[] parts)
