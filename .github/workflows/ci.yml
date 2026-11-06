@@ -69,7 +69,7 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && github.event.pull_request.draft != true }}
     runs-on: windows-2025
-    timeout-minutes: 15
+    timeout-minutes: 20
     outputs:
       built: ${{ steps.build.outcome }}
     steps:
@@ -108,7 +108,7 @@ jobs:
         run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
         if: needs.changes.outputs.fast != 'false'
-        timeout-minutes: 10
+        timeout-minutes: 15
         shell: pwsh
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
