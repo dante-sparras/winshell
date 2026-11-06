@@ -5,9 +5,10 @@ namespace Winshell;
 
 /// <summary>
 /// What makes a process a Winshell instance, in <c>winshell.exe</c> and in a configuration's own program alike: its
-/// folder and log, its crash reports, its control pipe, and the record <c>winshell list</c> finds it by. A start
-/// calls <see cref="Open"/>, <see cref="TryOpenPipe"/>, <see cref="Listen"/> and <see cref="Publish"/> in that order.
-/// A start whose pipe failed ends with <see cref="Abandon"/>, and anything else with <see cref="Close"/>.
+/// folder and log, its crash reports, its control pipe, and the record <c>winshell list</c> finds it by.
+/// <see cref="InstanceStart"/> calls <see cref="Open"/>, <see cref="TryOpenPipe"/>, <see cref="Listen"/> and
+/// <see cref="Publish"/> in that order. A start whose pipe failed ends with <see cref="Abandon"/>, and anything else
+/// with <see cref="Close"/>.
 /// </summary>
 internal sealed class ShellInstance
 {

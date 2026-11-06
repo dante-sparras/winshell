@@ -77,18 +77,33 @@ internal sealed class IpcServer : IDisposable
         return Create(pipe, false);
     }
 
-    /// <summary>Opens a free pipe, trying a new <c>winshell-</c> id when the name is taken. At most eight tries.</summary>
+    /// <summary>
+    /// The names a start tries, in order: <paramref name="pipe"/>, then that name with <c>-2</c> through <c>-8</c>.
+    /// </summary>
+    internal static IReadOnlyList<string> Candidates(string pipe)
+    {
+        var names = new string[8];
+        names[0] = pipe;
+        for (var n = 1; n < names.Length; n++)
+            names[n] = pipe + "-" + (n + 1);
+        return names;
+    }
+
+    /// <summary>Opens the first free name from <see cref="Candidates"/>. The chosen name is written back to <paramref name="pipe"/>.</summary>
     internal static NamedPipeServerStream OpenAvailable(ref string pipe)
     {
-        for (var attempt = 0; attempt < 8; attempt++)
+        var names = Candidates(pipe);
+        for (var attempt = 0; attempt < names.Count; attempt++)
+        {
+            pipe = names[attempt];
             try
             {
                 return OpenFirst(pipe);
             }
-            catch (IOException) when (attempt < 7)
+            catch (IOException) when (attempt < names.Count - 1)
             {
-                pipe = "winshell-" + Instances.NewId();
             }
+        }
 
         throw new IOException("The control pipe is already taken.");
     }
