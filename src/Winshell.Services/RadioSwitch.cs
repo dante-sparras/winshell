@@ -2,7 +2,7 @@ using Windows.Devices.Radios;
 
 namespace Winshell;
 
-/// <summary>A radio <see cref="RadioSwitch"/> can read and ask Windows to change. Tests pass a fake.</summary>
+/// <summary>A radio <see cref="RadioSwitch"/> can read and ask Windows to change.</summary>
 internal interface IDeviceRadio
 {
     RadioKind Kind { get; }
@@ -31,6 +31,12 @@ internal sealed class WindowsRadioSource : IRadioSource
     {
     }
 
+    /// <summary>One <see cref="Radio"/> the caller already holds, rather than every radio from <see cref="GetRadiosAsync"/>.</summary>
+    internal static IDeviceRadio Wrap(Radio radio)
+    {
+        return new WindowsRadio(radio);
+    }
+
     public async Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync()
     {
         var radios = await Radio.GetRadiosAsync();
@@ -55,24 +61,37 @@ internal sealed class WindowsRadioSource : IRadioSource
 }
 
 /// <summary>
-/// Asks Windows to turn every radio of one kind on or off: <see cref="Radio.RequestAccessAsync"/>, then
-/// <see cref="Radio.SetStateAsync"/>. An allowed request can still leave the radio where hardware or policy put it.
-/// The result is an error message, or null when every radio of that kind reports the requested state.
+/// Asks Windows to turn radios on or off: <see cref="Radio.RequestAccessAsync"/>, then
+/// <see cref="Radio.SetStateAsync"/>. An allowed request can still leave a radio where hardware or policy put it.
+/// The result is an error message, or null when every radio it asked reports the requested state.
+/// One method asks every radio of a kind. The other asks the single radio it is given.
 /// </summary>
 internal static class RadioSwitch
 {
     internal const string NoAdapterRadio = "Windows reports no Bluetooth radio for this adapter.";
     internal const string Unchanged = "Windows did not change the radio.";
 
+    /// <summary>Every radio of <paramref name="kind"/>. Null when each of them reports <paramref name="enabled"/>.</summary>
     public static async Task<string?> SetEnabledAsync(RadioKind kind, bool enabled, IRadioSource source)
     {
         var radios = (await source.GetRadiosAsync().ConfigureAwait(false)).Where(radio => radio.Kind == kind).ToList();
         if (radios.Count == 0)
             return Missing(kind);
+        return await SetListedAsync(radios, enabled, source).ConfigureAwait(false);
+    }
 
-        // Already there: do not request access. That call can prompt, and nothing would change.
-        // Turning off skips a radio that is not on. Disabled is not a state an app can request.
-        // Turning on asks every radio that is not on, including a disabled one, which may refuse.
+    /// <summary>One radio, leaving every other radio alone. Null when it reports <paramref name="enabled"/>.</summary>
+    public static Task<string?> SetEnabledAsync(IDeviceRadio radio, bool enabled, IRadioSource source)
+    {
+        return SetListedAsync([radio], enabled, source);
+    }
+
+    // Already there: do not request access. That call can prompt, and nothing would change.
+    // Turning off skips a radio that is not on. Disabled is not a state an app can request.
+    // Turning on asks every radio that is not on, including a disabled one, which may refuse.
+    private static async Task<string?> SetListedAsync(IReadOnlyList<IDeviceRadio> radios, bool enabled,
+        IRadioSource source)
+    {
         if (!radios.Any(radio => NeedsChange(radio, enabled)))
             return null;
 

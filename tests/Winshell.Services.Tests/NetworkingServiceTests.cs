@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Windows.Devices.Radios;
 using Winshell.Network;
 
 namespace Winshell.Services.Tests;
@@ -281,34 +282,55 @@ public sealed class NetworkingServiceTests
     [Fact]
     public async Task Setting_wifi_follows_the_snapshot_and_a_refusal_stays_until_the_radios_change()
     {
-        using var session = new Session(RadioOff());
+        var radio = new FakeRadio(RadioKind.WiFi, RadioState.Off);
+        var source = new FakeSource(radio);
+        using var session = new Session(RadioOff(), source);
         var service = session.Service;
-        var backend = session.Backend;
         var failed = Failures(h => service.OperationFailed += h);
 
         await service.SetWifiEnabledAsync(false);
-        Assert.Empty(backend.Calls);
+        Assert.Equal(0, radio.Sets);
 
         await service.SetWifiEnabledAsync(true);
         Assert.False(service.WifiEnabled);
         session.Loop.Process();
         Assert.True(service.WifiEnabled);
+        Assert.Equal(RadioState.On, radio.State);
         Assert.Equal("", service.Error);
         Assert.Empty(failed);
-        Assert.Equal("wifi-on", Assert.Single(backend.Calls));
 
-        backend.RadioError = "Windows or its policy denied radio control.";
+        source.Access = RadioAccessStatus.DeniedByUser;
         await service.SetWifiEnabledAsync(false);
         session.Loop.Process();
         Assert.True(service.WifiEnabled);
-        Assert.Equal(backend.RadioError, service.Error);
-        Assert.Equal([backend.RadioError], failed);
+        Assert.Equal("The user denied radio control.", service.Error);
+        Assert.Equal(1, radio.Sets);
 
+        source.Access = RadioAccessStatus.Allowed;
+        radio.Result = RadioAccessStatus.DeniedBySystem;
+        await service.SetWifiEnabledAsync(false);
+        session.Loop.Process();
+        Assert.True(service.WifiEnabled);
+        Assert.Equal(RadioSwitch.AccessError(RadioAccessStatus.DeniedBySystem), service.Error);
+        Assert.Equal(RadioState.On, radio.State);
+
+        radio.Result = RadioAccessStatus.Allowed;
+        radio.Reach = false;
+        await service.SetWifiEnabledAsync(false);
+        session.Loop.Process();
+        Assert.Equal(RadioSwitch.Unchanged, service.Error);
+        Assert.Equal(RadioState.On, radio.State);
         session.Show(Snapshot());
-        Assert.Equal(backend.RadioError, service.Error);
+        Assert.Equal(RadioSwitch.Unchanged, service.Error);
+        Assert.Equal(
+            [
+                "The user denied radio control.",
+                RadioSwitch.AccessError(RadioAccessStatus.DeniedBySystem),
+                RadioSwitch.Unchanged
+            ],
+            failed);
 
-        backend.RadioError = null;
-        backend.RadioException = new UnauthorizedAccessException("Access revoked");
+        radio.Failure = new UnauthorizedAccessException("Access revoked");
         await service.SetWifiEnabledAsync(false);
         session.Loop.Process();
         Assert.Equal("Access revoked", service.Error);
@@ -321,16 +343,16 @@ public sealed class NetworkingServiceTests
     [Fact]
     public async Task A_wifi_request_in_flight_ignores_another_and_a_late_answer_is_dropped()
     {
-        using var session = new Session(RadioOff());
-        var gate = new TaskCompletionSource<string?>();
-        session.Backend.RadioGate = gate;
+        var gate = new TaskCompletionSource<RadioAccessStatus>();
+        var radio = new FakeRadio(RadioKind.WiFi, RadioState.Off) { Gate = gate };
+        using var session = new Session(RadioOff(), new FakeSource(radio));
 
         var first = session.Service.SetWifiEnabledAsync(true);
         await session.Service.SetWifiEnabledAsync(false);
-        Assert.Equal("wifi-on", Assert.Single(session.Backend.Calls));
+        Assert.Equal(1, radio.Sets);
 
         session.Service.Dispose();
-        gate.SetResult("too late");
+        gate.SetResult(RadioAccessStatus.Allowed);
         await first;
         session.Loop.Process();
         Assert.Equal("", session.Service.Error);
@@ -577,9 +599,11 @@ public sealed class NetworkingServiceTests
 
     private sealed class Session : IDisposable
     {
-        public Session(NetworkSnapshot snapshot)
+        public Session(NetworkSnapshot snapshot, IRadioSource? radios = null)
         {
-            Service = new NetworkingService(Loop, Backend);
+            if (radios is FakeSource source)
+                Backend.Radios = source;
+            Service = new NetworkingService(Loop, Backend, radios);
             Show(snapshot);
         }
 
@@ -633,11 +657,7 @@ public sealed class NetworkingServiceTests
 
         public Task AccessTask { get; set; } = Task.CompletedTask;
 
-        public string? RadioError { get; set; }
-
-        public Exception? RadioException { get; set; }
-
-        public TaskCompletionSource<string?>? RadioGate { get; set; }
+        public FakeSource? Radios { get; set; }
 
         public string? AutoError { get; set; }
 
@@ -676,30 +696,24 @@ public sealed class NetworkingServiceTests
             return Failure is { } e ? Task.FromException(e) : AccessTask;
         }
 
-        public Task<string?> SetWifiEnabledAsync(bool enabled)
+        public Task RefreshNowAsync()
         {
-            Calls.Add(enabled ? "wifi-on" : "wifi-off");
-            if (RadioGate is { } gate)
-                return FinishRadio(gate.Task, enabled);
-            if (RadioException is { } exception)
-                return Task.FromException<string?>(exception);
-            return Task.FromResult(ApplyRadio(enabled, RadioError));
-        }
-
-        private async Task<string?> FinishRadio(Task<string?> pending, bool enabled)
-        {
-            return ApplyRadio(enabled, await pending.ConfigureAwait(false));
-        }
-
-        private string? ApplyRadio(bool enabled, string? error)
-        {
-            if (error is null)
+            if (Radios is { } source)
+            {
+                var wifi = source.Radios.Where(radio => radio.Kind == RadioKind.WiFi).ToArray();
+                var enabled = wifi.Any(radio => radio.State == RadioState.On);
+                var hardware = wifi.Any(radio => radio.State is RadioState.On or RadioState.Off);
+                var state = enabled ? WifiRadioState.On
+                    : wifi.Length == 0 ? WifiRadioState.Unknown
+                    : wifi.All(radio => radio.State == RadioState.Disabled) ? WifiRadioState.Disabled
+                    : WifiRadioState.Off;
                 Current = Current with
                 {
-                    WifiEnabled = enabled, WifiHardwareEnabled = true,
-                    WifiState = enabled ? WifiRadioState.On : WifiRadioState.Off
+                    WifiEnabled = enabled, WifiHardwareEnabled = hardware, WifiState = state
                 };
-            return error;
+            }
+
+            return Task.CompletedTask;
         }
 
         public Task ScanAsync(Guid device)

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
+using Windows.Devices.Radios;
 
 namespace Winshell.Bluetooth;
 
@@ -14,6 +15,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     private readonly IEventLoop _loop;
     private readonly TimeProvider _time;
+    private readonly IRadioSource _radios;
 
     private readonly MonitorWarning _warning;
 
@@ -37,10 +39,12 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private long _revision;
     private volatile bool _disposed;
 
-    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null)
+    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null,
+        IRadioSource? radios = null)
     {
         _loop = loop;
         _time = time ?? TimeProvider.System;
+        _radios = radios ?? WindowsRadioSource.Instance;
         _warning = new MonitorWarning(() => log, "bluetooth");
         Backend = backend ?? new BluetoothBackend();
         Backend.Changed += Refresh;
@@ -264,7 +268,10 @@ public sealed class BluetoothService : ObservableObject, IDisposable
             return;
         await ChangeAdapterAsync(adapter, _radioSet, async () =>
         {
-            var error = await Backend.SetRadioEnabledAsync(enabled).ConfigureAwait(false);
+            var radio = await Backend.GetRadioAsync().ConfigureAwait(false);
+            if (radio is null || radio.Kind != RadioKind.Bluetooth)
+                return (RadioSwitch.NoAdapterRadio, false);
+            var error = await RadioSwitch.SetEnabledAsync(radio, enabled, _radios).ConfigureAwait(false);
             return (error, error is null);
         }).ConfigureAwait(false);
     }

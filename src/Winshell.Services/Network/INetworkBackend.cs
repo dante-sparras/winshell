@@ -7,8 +7,8 @@ internal interface INetworkBackend
     void Refresh();
     Task RequestAccessAsync();
 
-    /// <summary>Asks Windows to turn every Wi-Fi radio on or off. Null when they report <paramref name="enabled"/>.</summary>
-    Task<string?> SetWifiEnabledAsync(bool enabled);
+    /// <summary>Reads the adapters, profiles, radios and connectivity now, and publishes the snapshot.</summary>
+    Task RefreshNowAsync();
 
     Task ScanAsync(Guid device);
     Task<ConnectionFailReason?> ConnectAsync(Guid device, string ssid, string? password);
