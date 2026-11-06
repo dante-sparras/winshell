@@ -12,13 +12,17 @@ internal static class DoctorCrashes
         return Crashes(folder.Reports, nowUtc, folder.FileError);
     }
 
-    internal static DoctorCheck Crashes(IReadOnlyList<CrashRecord> reports, DateTime nowUtc, string? fileError)
+    internal static DoctorCheck Crashes(IReadOnlyList<CrashRecord> reports, DateTime nowUtc, CrashFileError? fileError)
     {
-        var recent = reports.Where(r => nowUtc - r.Written.UtcDateTime <= TimeSpan.FromDays(7))
-            .OrderByDescending(r => r.Written).ToList();
-        if (fileError is not null && recent.Count == 0)
+        // List already returns newest first: the time in the file name, then the process, then the name.
+        var recent = reports.Where(r => nowUtc - r.Written.UtcDateTime <= TimeSpan.FromDays(7)).ToList();
+        // The same window as a report that did read. An older file that cannot be opened is not this check.
+        string? recentError = null;
+        if (fileError is { } failed && nowUtc - failed.Written.UtcDateTime <= TimeSpan.FromDays(7))
+            recentError = $"{failed.Path}: {failed.Message}";
+        if (recentError is not null && recent.Count == 0)
             return new DoctorCheck("crashes", "Crashes", CheckStatus.Warn,
-                $"Could not read a crash report: {fileError}",
+                $"Could not read a crash report: {recentError}",
                 $"Read the crash folder, then attach a report to a bug report at {Doctor.BugReports}.");
         if (recent.Count == 0)
             return new DoctorCheck("crashes", "Crashes", CheckStatus.Pass, "No crash reports in the last 7 days");
@@ -39,8 +43,8 @@ internal static class DoctorCrashes
             message += " " + recent[0].ExceptionLine;
         }
 
-        if (fileError is not null)
-            message += $" Could not read a crash report: {fileError}.";
+        if (recentError is not null)
+            message += $" Could not read a crash report: {recentError}.";
         return new DoctorCheck("crashes", "Crashes", CheckStatus.Warn, message,
             $"Read it, then attach it to a bug report at {Doctor.BugReports}.");
     }

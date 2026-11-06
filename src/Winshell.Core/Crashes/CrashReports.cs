@@ -27,10 +27,18 @@ internal sealed record CrashReport(string Path, string Where, Exception Error, b
 internal readonly record struct CrashRecord(string Path, DateTimeOffset Written, bool Closed, string ExceptionLine);
 
 /// <summary>
-/// The reports in a folder, newest first. <see cref="FolderError"/> is set when the folder cannot be listed.
-/// <see cref="FileError"/> is set when a file is named as a report but cannot be read. A missing folder has neither.
+/// A file named as a report that could not be read. <see cref="Written"/> is the UTC instant in its name.
 /// </summary>
-internal readonly record struct CrashList(IReadOnlyList<CrashRecord> Reports, string? FolderError, string? FileError);
+internal readonly record struct CrashFileError(string Path, DateTimeOffset Written, string Message);
+
+/// <summary>
+/// The reports in a folder, newest first. <see cref="FolderError"/> is set when the folder cannot be listed.
+/// <see cref="FileError"/> is the newest file named as a report that could not be read. A missing folder has neither.
+/// </summary>
+internal readonly record struct CrashList(
+    IReadOnlyList<CrashRecord> Reports,
+    string? FolderError,
+    CrashFileError? FileError);
 
 /// <summary>
 /// Writes and reads crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent
@@ -398,14 +406,16 @@ internal sealed partial class CrashReports(string folder)
         try
         {
             var found = new List<(CrashRecord Record, long Ticks, long Pid, string Name)>();
-            string? fileError = null;
+            var failed =
+                new List<(string Path, DateTimeOffset Written, long Ticks, long Pid, string Name, string Why)>();
             foreach (var file in new DirectoryInfo(folder).EnumerateFiles("crash-*.txt"))
             {
                 if (OrderOf(file.Name) is not { } order)
                     continue;
-                var read = ReadRecord(file.FullName, new DateTimeOffset(order.Ticks, TimeSpan.Zero));
+                var written = new DateTimeOffset(order.Ticks, TimeSpan.Zero);
+                var read = ReadRecord(file.FullName, written);
                 if (read.Error is { } why)
-                    fileError ??= $"{file.FullName}: {why}";
+                    failed.Add((file.FullName, written, order.Ticks, order.Pid, file.Name, why));
                 else if (read.Record is { } record)
                     found.Add((record, order.Ticks, order.Pid, file.Name));
             }
@@ -416,6 +426,17 @@ internal sealed partial class CrashReports(string folder)
                 .ThenByDescending(r => r.Name, StringComparer.Ordinal)
                 .Select(r => r.Record)
                 .ToList();
+            CrashFileError? fileError = null;
+            if (failed.Count > 0)
+            {
+                var newest = failed
+                    .OrderByDescending(r => r.Ticks)
+                    .ThenByDescending(r => r.Pid)
+                    .ThenByDescending(r => r.Name, StringComparer.Ordinal)
+                    .First();
+                fileError = new CrashFileError(newest.Path, newest.Written, newest.Why);
+            }
+
             return new CrashList(reports, null, fileError);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

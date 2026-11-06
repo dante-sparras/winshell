@@ -104,6 +104,25 @@ public sealed class CrashFollowUpTests : IDisposable
         Assert.Equal(Encoding.UTF8.GetByteCount(text), File.ReadAllBytes(state).Length);
     }
 
+    [Fact]
+    public void Marking_a_clean_exit_keeps_the_rest_of_the_state_file()
+    {
+        var state = Path.Combine(_dir, "kept.toml");
+        File.WriteAllText(state, """
+                                 # stay
+                                 shown = "C:\\report.txt"
+                                 extra = 1
+                                 """);
+
+        CrashReports.MarkClean(state, DateTimeOffset.UnixEpoch);
+
+        var text = File.ReadAllText(state);
+        Assert.Contains("# stay", text, StringComparison.Ordinal);
+        Assert.Contains("shown = \"C:\\\\report.txt\"", text, StringComparison.Ordinal);
+        Assert.Contains("extra = 1", text, StringComparison.Ordinal);
+        Assert.Contains("clean = \"1970-01-01T00:00:00.0000000+00:00\"", text, StringComparison.Ordinal);
+    }
+
     private static string Report(string folder, DateTime utc, string slug)
     {
         var name =

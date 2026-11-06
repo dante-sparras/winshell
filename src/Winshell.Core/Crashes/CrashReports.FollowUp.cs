@@ -84,7 +84,9 @@ internal sealed partial class CrashReports
     /// <summary>Writes the record, or returns false when a hand save landed and the file was left as it is.</summary>
     private static bool Put(string stateFile, DateTimeOffset? clean, string? shown, string? expected)
     {
-        if (!TomlDocument.TryParse(stateFile, "", out var document, out var error))
+        // Edit the file that is there. A file that is not TOML is replaced with the record alone.
+        if (!TomlDocument.TryParse(stateFile, expected ?? "", out var document, out _)
+            && !TomlDocument.TryParse(stateFile, "", out document, out var error))
             throw new IOException(error);
         if (clean is { } when)
             document.Set("clean", when.ToString("o", CultureInfo.InvariantCulture));

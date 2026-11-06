@@ -408,8 +408,8 @@ public sealed class DoctorTests : IDisposable
         var recent =
             Crashes(
             [
-                Report(@"C:\r\old.txt", now.AddDays(-8)), Report(@"C:\r\a.txt", now.AddDays(-2)),
-                Report(@"C:\r\b.txt", now.AddHours(-1))
+                Report(@"C:\r\b.txt", now.AddHours(-1)), Report(@"C:\r\a.txt", now.AddDays(-2)),
+                Report(@"C:\r\old.txt", now.AddDays(-8))
             ], now, null);
         Assert.Equal(CheckStatus.Warn, recent.Status);
         Assert.Equal(@"2 crash reports in the last 7 days. The newest is C:\r\b.txt.", recent.Message);

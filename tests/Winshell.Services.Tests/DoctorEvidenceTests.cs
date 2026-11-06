@@ -98,11 +98,42 @@ public sealed class DoctorEvidenceTests : IDisposable
         {
             var read = CrashReports.List(_dir);
 
-            Assert.NotNull(read.FileError);
-            Assert.Contains(blocked, read.FileError, StringComparison.Ordinal);
+            Assert.Equal(blocked, read.FileError?.Path);
             var check = CrashesIn(read, DateTime.UtcNow);
             Assert.Equal(CheckStatus.Warn, check.Status);
             Assert.Contains("Could not read a crash report:", check.Message, StringComparison.Ordinal);
+            Assert.Contains(blocked, check.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void An_unreadable_report_older_than_7_days_is_not_a_warning()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var old = Report(_dir, now.AddDays(-8), "old");
+        using (new FileStream(old, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            var check = CrashesIn(CrashReports.List(_dir), now);
+
+            Assert.Equal(CheckStatus.Pass, check.Status);
+            Assert.Equal("No crash reports in the last 7 days", check.Message);
+        }
+    }
+
+    [Fact]
+    public void Two_unreadable_reports_name_the_newer_one()
+    {
+        var now = new DateTime(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+        var older = Report(_dir, now.AddDays(-2), "older");
+        var newer = Report(_dir, now.AddHours(-1), "newer");
+        using (new FileStream(older, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        using (new FileStream(newer, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+        {
+            var check = CrashesIn(CrashReports.List(_dir), now);
+
+            Assert.Equal(CheckStatus.Warn, check.Status);
+            Assert.Contains(newer, check.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain(older, check.Message, StringComparison.Ordinal);
         }
     }
 
