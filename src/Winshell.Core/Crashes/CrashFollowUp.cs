@@ -119,8 +119,8 @@ internal static class CrashFollowUp
             text.Append("clean = ").Append(Quote(when.ToString("o", CultureInfo.InvariantCulture))).Append('\n');
         if (shown is { Length: > 0 })
             text.Append("shown = ").Append(Quote(shown)).Append('\n');
-        // File.WriteAllText wrote a byte order mark. Keep it, so a file from before this save still reads the same.
-        return AtomicFile.Save(stateFile, text.ToString(), true, expected) == AtomicSave.Saved;
+        // File.WriteAllText writes UTF-8 without a byte order mark. Keep that.
+        return AtomicFile.Save(stateFile, text.ToString(), false, expected) == AtomicSave.Saved;
     }
 
     /// <summary>The file as UTF-8 text with a byte order mark stripped, or null when it is missing.</summary>
