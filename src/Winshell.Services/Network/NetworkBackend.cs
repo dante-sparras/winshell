@@ -99,7 +99,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         WinNetworkInformation.NetworkStatusChanged += _ => Refresh();
         NetworkChange.NetworkAddressChanged += (_, _) => Refresh();
         NetworkChange.NetworkAvailabilityChanged += (_, _) => Refresh();
-        Wlan.Listen(() => NativeCallback.Guard(Log.Default, "network", Refresh));
+        Wlan.Listen(Refresh, e => Log.Default.Warn("network", e.Message));
         await RefreshNowAsync().ConfigureAwait(false);
     }
 

@@ -48,11 +48,12 @@ internal static unsafe class PowerMode
 
     /// <summary>
     /// Calls <paramref name="changed"/> on a Windows thread with the effective mode, once right away and then on each
-    /// change, for the life of the process. Call it once. Does nothing on a Windows without these notifications.
+    /// change, for the life of the process, and hands <paramref name="failed"/> each exception it throws. Call it once.
+    /// Does nothing on a Windows without these notifications.
     /// </summary>
-    internal static void ListenEffective(Action<int> changed)
+    internal static void ListenEffective(Action<int> changed, Action<Exception> failed)
     {
-        _effectiveChanged = changed;
+        _effectiveChanged = mode => Callback.Run(failed, () => changed(mode));
         try
         {
             _ = PInvoke.PowerRegisterForEffectivePowerModeNotifications(PInvoke.EFFECTIVE_POWER_MODE_V2,
@@ -66,14 +67,6 @@ internal static unsafe class PowerMode
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
     private static void OnEffectiveChanged(EFFECTIVE_POWER_MODE mode, void* context)
     {
-        try
-        {
-            _effectiveChanged?.Invoke((int)mode);
-        }
-#pragma warning disable CA1031 // An exception that reaches Windows ends the process. The handler reports its own failures.
-        catch (Exception)
-#pragma warning restore CA1031
-        {
-        }
+        _effectiveChanged?.Invoke((int)mode);
     }
 }

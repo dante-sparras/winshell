@@ -33,7 +33,7 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
                 return;
         }
 
-        var subscription = LowLevelKeyboard.Start(OnKey, HookLost);
+        var subscription = LowLevelKeyboard.Start(OnKey, e => Log.Default.Warn("hotkey", e.Message), HookLost);
         lock (_gate)
         {
             if (_subscription is not null || subscription is null)
@@ -95,6 +95,6 @@ internal sealed class KeyboardHook(Func<int, bool, HotkeyModifiers, bool> onKey,
 
     private bool OnKey(HookedKey key)
     {
-        return !KeyMask.IsOurs(key.ExtraInfo) && NativeCallback.Guard(Log.Default, "hotkey", () => Handle(key), false);
+        return !KeyMask.IsOurs(key.ExtraInfo) && Handle(key);
     }
 }

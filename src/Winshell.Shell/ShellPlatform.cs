@@ -44,7 +44,7 @@ internal sealed class ShellPlatform : IDisposable
         OutsideClicks = new OutsideClicks(this);
         // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
         foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
-            if (WinEventHook.Start(evt, OnForegroundEvent) is { } watch)
+            if (WinEventHook.Start(evt, OnForegroundEvent, e => Log.Warn("shell", e.Message)) is { } watch)
                 _foregroundWatches.Add(watch);
         ReadFullscreen();
     }
@@ -252,7 +252,7 @@ internal sealed class ShellPlatform : IDisposable
         if (hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
                       || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
             return;
-        NativeCallback.Guard(Log, "shell", () => Loop.Post(ReadFullscreen));
+        Loop.Post(ReadFullscreen);
     }
 
     private void ReadFullscreen()

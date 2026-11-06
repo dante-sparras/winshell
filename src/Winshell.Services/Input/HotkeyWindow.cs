@@ -169,7 +169,7 @@ internal sealed class HotkeyWindow(Action<int> onHotkey) : IDisposable
                 return false;
         }
 
-        var target = HotkeyTarget.Create(id => NativeCallback.Guard(Log.Default, "hotkey", () => onHotkey(id)));
+        var target = HotkeyTarget.Create(onHotkey, e => Log.Default.Warn("hotkey", e.Message));
         if (target is null)
             return false;
         lock (_lock)

@@ -98,13 +98,14 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 
     public bool StartWatching()
     {
-        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent);
+        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent,
+            e => Log.Default.Warn("desktops", e.Message));
         return _hook is not null;
     }
 
     private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        NativeCallback.Guard(Log.Default, "desktops", () => Switched?.Invoke());
+        Switched?.Invoke();
     }
 
     public string ListStamp =>

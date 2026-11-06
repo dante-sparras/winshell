@@ -14,17 +14,17 @@ internal static unsafe class LowLevelMouse
 
     /// <summary>Starts watching for presses of any mouse button, until the watch is disposed. Null if Windows refused the hook.</summary>
     /// <param name="onPress">
-    /// Runs on the hook thread with each press, at its point on the virtual desktop in physical pixels. Its exception
-    /// does not reach Windows, so it reports its own.
+    /// Runs on the hook thread with each press, at its point on the virtual desktop in physical pixels.
     /// </param>
-    internal static IDisposable? Start(Action<POINT> onPress)
+    /// <param name="failed">Gets each exception <paramref name="onPress"/> throws, on the hook thread.</param>
+    internal static IDisposable? Start(Action<POINT> onPress, Action<Exception> failed)
     {
         lock (Gate)
         {
             _thread ??= HookThread.Start(Win32.WH_MOUSE_LL, &Proc, "Winshell mouse hook");
             if (_thread is null)
                 return null;
-            var watch = new Watch(onPress);
+            var watch = new Watch(onPress, failed);
             Volatile.Write(ref _watches, [watch, .. _watches]);
             return watch;
         }
@@ -52,26 +52,19 @@ internal static unsafe class LowLevelMouse
         {
             var pt = ((MSLLHOOKSTRUCT*)lParam)->pt;
             foreach (var watch in Volatile.Read(ref _watches))
-                try
-                {
-                    watch.OnPress(pt);
-                }
-#pragma warning disable CA1031
-                // Windows called in; nothing above this frame can catch it.
-                catch (Exception)
-#pragma warning restore CA1031
-                {
-                }
+                Callback.Run(watch.Failed, () => watch.OnPress(pt));
         }
 
         return Win32.CallNextHookEx(0, code, wParam, lParam);
     }
 
-    private sealed class Watch(Action<POINT> onPress) : IDisposable
+    private sealed class Watch(Action<POINT> onPress, Action<Exception> failed) : IDisposable
     {
         private int _stopped;
 
         public Action<POINT> OnPress { get; } = onPress;
+
+        public Action<Exception> Failed { get; } = failed;
 
         public void Dispose()
         {

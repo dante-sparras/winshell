@@ -73,7 +73,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
     public bool Open(Func<NotifyIconCall, bool> apply)
     {
         _apply = apply;
-        _window = TrayWindow.Create(names.Window, OnCopyData, OnMessage);
+        _window = TrayWindow.Create(names.Window, OnCopyData, OnMessage, Failed);
         if (_window is null)
             return false;
         // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
@@ -82,7 +82,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         _window.AllowFromAnyLevel(WM_COPYDATA);
         _settingsWatch = TrayIconSettings.Watch(loop, () => SettingsChanged?.Invoke());
         foreach (var eventType in new uint[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_REORDER })
-            if (WinEventHook.Start(eventType, OnOrderChanged) is { } hook)
+            if (WinEventHook.Start(eventType, OnOrderChanged, Failed) is { } hook)
                 _eventHooks.Add(hook);
             else
                 log.Warn("tray", "Could not watch taskbar order; the tray will check every thirty seconds.");
@@ -220,22 +220,12 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         ExplorerInFront?.Invoke();
     }
 
-    private nint OnCopyData(CopyData data)
+    private void Failed(Exception e)
     {
-        try
-        {
-            return Answer(data);
-        }
-#pragma warning disable CA1031 // A malformed message from another app must not take the shell down.
-        catch (Exception e)
-#pragma warning restore CA1031
-        {
-            log.Warn("tray", e.Message);
-            return 0;
-        }
+        log.Warn("tray", e.Message);
     }
 
-    private nint Answer(CopyData data)
+    private nint OnCopyData(CopyData data)
     {
         var answer = 1;
         if (data.Kind == TrayProtocol.NotifyIconData && TrayProtocol.Read(data.Payload) is { } call)
@@ -256,7 +246,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
     {
         if (msg == TaskbarCreatedMessage)
         {
-            NativeCallback.Guard(log, "tray", () => TaskbarCreated?.Invoke());
+            TaskbarCreated?.Invoke();
             return true;
         }
 

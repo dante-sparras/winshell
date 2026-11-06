@@ -42,8 +42,7 @@ internal delegate nint CopyDataHandler(CopyData data);
 /// <summary>
 /// A window of a taskbar class that apps send their notification area icons to. Layered and transparent, so it can
 /// report Explorer's taskbar rectangle without taking its clicks; topmost and never activated. Its messages arrive on
-/// the thread that made it. A handler's exception does not reach Windows: the message goes to Windows' default
-/// handling, so a handler logs its own.
+/// the thread that made it. A message whose handler throws goes to Windows' default handling.
 /// </summary>
 internal sealed unsafe class TrayWindow : IDisposable
 {
@@ -61,11 +60,13 @@ internal sealed unsafe class TrayWindow : IDisposable
     /// <param name="className">The window class, registered once in the process.</param>
     /// <param name="copyData">Answers each <c>WM_COPYDATA</c> message.</param>
     /// <param name="message">Gets every other message, and returns true when it handled one, which is then answered with 0.</param>
-    internal static TrayWindow? Create(string className, CopyDataHandler copyData, Func<uint, nint, nint, bool> message)
+    /// <param name="failed">Gets each exception <paramref name="copyData"/> or <paramref name="message"/> throws.</param>
+    internal static TrayWindow? Create(string className, CopyDataHandler copyData, Func<uint, nint, nint, bool> message,
+        Action<Exception> failed)
     {
         var window = NativeWindow.TryCreate(className, Win32.WS_POPUP,
             Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED |
-            Win32.WS_EX_TRANSPARENT, OnMessage(copyData, message), false);
+            Win32.WS_EX_TRANSPARENT, OnMessage(copyData, message), failed, false);
         if (window is null)
             return null;
         Win32.SetLayeredWindowAttributes(window.Handle, 0, 0, Win32.LWA_ALPHA);
