@@ -39,7 +39,6 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Executable` | string, read-only | The full path of the program that added the icon. |
 | `Icon` | [PixelImage](winshell.md#pixelimage)?, read-only | The icon as the app set it, at the size it chose. It changes when the app changes the icon. |
 | `Id` | string, read-only | The program's file name without its extension. |
-| `Menu` | [SystemTrayMenu](#systemtraymenu), read-only | The icon's menu, which the app draws itself. |
 | `Overflow` | bool, read-only | Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings. |
 | `ProcessId` | int, read-only | The process that added the icon, the owner of the window its clicks go to. |
 | `Tooltip` | string, read-only | The icon's tooltip, which may run over several lines. |
@@ -51,12 +50,3 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `DoubleClick()` | void | A double click at the cursor, which many older apps need before they show their window. |
 | `IconAt(int size)` | [PixelImage](winshell.md#pixelimage)? | The icon at a size in pixels, for the screen's scale. An icon loaded from a resource is drawn again at that size. Any other is the app's own bitmap, at the size it chose. |
 | `MiddleClick()` | void | A middle click at the cursor. What it does is up to the app. |
-
-## SystemTrayMenu
-
-An app's tray menu. The app draws it; Display asks the app to open it.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `Display()` | void | Opens the menu at the cursor. |
-| `Display(int x, int y)` | void | Opens the menu at a point on the virtual desktop, in physical pixels. |

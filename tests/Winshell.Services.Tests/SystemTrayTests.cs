@@ -140,9 +140,7 @@ public sealed class SystemTrayTests
             item.DoubleClick,
             item.MiddleClick,
             item.Display,
-            () => item.Display(10, 20),
-            item.Menu.Display,
-            () => item.Menu.Display(30, 40)
+            () => item.Display(10, 20)
         ];
 
         Assert.Equal(
@@ -151,9 +149,7 @@ public sealed class SystemTrayTests
             "201 202 400 203 202 400 at 5,6",
             "207 208 at 5,6",
             "204 205 7b at 5,6",
-            "204 205 7b at 10,20",
-            "204 205 7b at 5,6",
-            "204 205 7b at 30,40"
+            "204 205 7b at 10,20"
         ], clicks.Select(Clicked));
     }
 
@@ -192,6 +188,25 @@ public sealed class SystemTrayTests
         _backend.Send(Call(TrayProtocol.Add, TrayProtocol.NIF_ICON) with { Icon = 0x42 });
 
         Assert.Same(image, tray.Items[0].IconAt(32));
+    }
+
+    [Fact]
+    public void An_icon_from_a_resource_is_drawn_again_at_a_new_size()
+    {
+        using var tray = Tray();
+        var image = new PixelImage(16, 16, new byte[16 * 16 * 4]);
+        var sharp = new PixelImage(32, 32, new byte[32 * 32 * 4]);
+        var resource = new IconResource(@"C:\Apps\sync.exe", 1, "");
+        _backend.Images[0x42] = image;
+        _backend.Resources[0x42] = resource;
+        _backend.Drawn[(resource, 32)] = sharp;
+        _backend.Send(Call(TrayProtocol.Add, TrayProtocol.NIF_ICON) with { Icon = 0x42 });
+        var item = tray.Items[0];
+
+        Assert.Same(sharp, item.IconAt(32));
+        Assert.Same(image, item.IconAt(16));
+        // A resource that can't be drawn at that size leaves the app's own bitmap.
+        Assert.Same(image, item.IconAt(48));
     }
 
     [Fact]

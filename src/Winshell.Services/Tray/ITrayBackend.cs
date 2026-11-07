@@ -45,6 +45,12 @@ internal interface ITrayBackend : IDisposable
     /// <summary>Draws an app's icon handle, and finds the resource it was loaded from, while the app still has it.</summary>
     (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon);
 
+    /// <summary>
+    /// Draws an icon from the resource it was loaded from, at a size in pixels. Null when the module or the resource is
+    /// gone or is not on a local drive.
+    /// </summary>
+    PixelImage? DrawIcon(IconResource resource, int size);
+
     /// <summary>The process that owns a window, or 0 when the window is gone.</summary>
     uint ProcessOf(nint window);
 

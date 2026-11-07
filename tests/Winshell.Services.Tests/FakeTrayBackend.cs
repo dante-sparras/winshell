@@ -46,6 +46,12 @@ internal sealed class FakeTrayBackend : ITrayBackend
     /// <summary>What an icon handle draws.</summary>
     public Dictionary<nint, PixelImage> Images { get; } = [];
 
+    /// <summary>The resource an icon handle was loaded from; any other was drawn by its app.</summary>
+    public Dictionary<nint, IconResource> Resources { get; } = [];
+
+    /// <summary>What a resource draws at a size; any other size can't be drawn.</summary>
+    public Dictionary<(IconResource Resource, int Size), PixelImage> Drawn { get; } = [];
+
     /// <summary>An app's <c>Shell_NotifyIcon</c> call, and the tray's answer.</summary>
     public bool Send(NotifyIconCall call)
     {
@@ -113,7 +119,12 @@ internal sealed class FakeTrayBackend : ITrayBackend
 
     public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon)
     {
-        return (Images.GetValueOrDefault(icon), null);
+        return (Images.GetValueOrDefault(icon), Resources.GetValueOrDefault(icon));
+    }
+
+    public PixelImage? DrawIcon(IconResource resource, int size)
+    {
+        return Drawn.GetValueOrDefault((resource, size));
     }
 
     public uint ProcessOf(nint window)

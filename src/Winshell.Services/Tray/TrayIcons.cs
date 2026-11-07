@@ -1,3 +1,5 @@
+using Windows.Win32;
+
 namespace Winshell.Tray;
 
 /// <summary>
@@ -10,7 +12,6 @@ internal sealed class TrayIcons(
     Func<nint, (PixelImage? Image, IconResource? Resource)> readIcon,
     Func<nint, (int ProcessId, string ProgramPath)> ownerOf)
 {
-    private const uint WM_USER = 0x0400;
     private readonly Dictionary<string, TrayIcon> _icons = [];
     private readonly Dictionary<(nint Window, uint Id), TrayIcon> _byWindow = [];
     private readonly Dictionary<Guid, TrayIcon> _byGuid = [];
@@ -57,7 +58,7 @@ internal sealed class TrayIcons(
                     icon.Guid = call.Guid;
                 // A system message such as WM_CLOSE is no app's callback, and is never sent.
                 if ((call.Flags & TrayProtocol.NIF_MESSAGE) != 0)
-                    icon.CallbackMessage = call.CallbackMessage >= WM_USER ? call.CallbackMessage : 0;
+                    icon.CallbackMessage = call.CallbackMessage >= PInvoke.WM_USER ? call.CallbackMessage : 0;
                 if ((call.Flags & TrayProtocol.NIF_TIP) != 0)
                     icon.Tip = call.Tip;
                 if ((call.Flags & TrayProtocol.NIF_STATE) != 0 && (call.StateMask & TrayProtocol.NIS_HIDDEN) != 0)
