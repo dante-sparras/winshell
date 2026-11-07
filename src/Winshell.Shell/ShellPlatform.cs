@@ -338,9 +338,14 @@ internal sealed class ShellPlatform : IDisposable
             _uiSettings = null;
         }
 
-        foreach (var w in _windows.ToArray())
-            w.Dispose();
-        // Last, since a window lets go of its grab as it goes.
-        OutsideClicks.Dispose();
+        try
+        {
+            Shell.DisposeEach(_windows.ToArray());
+        }
+        finally
+        {
+            // Last, since a window lets go of its grab as it goes.
+            OutsideClicks.Dispose();
+        }
     }
 }

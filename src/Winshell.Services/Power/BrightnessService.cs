@@ -86,7 +86,10 @@ public sealed class BrightnessService : ObservableObject, IDisposable
 
     /// <param name="loop">The loop readings are applied on.</param>
     /// <param name="log">Where a failed read or write is reported.</param>
-    /// <param name="screens">The shell's screens. When they change, a monitor came, went or changed mode, so the monitors are read again.</param>
+    /// <param name="screens">
+    /// The shell's screens. When a monitor comes, goes or changes mode, the monitors are read again. A work area alone
+    /// moves with every panel and app bar, and reads nothing.
+    /// </param>
     /// <param name="backend">Windows, or a fake in tests.</param>
     internal BrightnessService(IEventLoop loop, Log log, INotifyCollectionChanged screens,
         IBrightnessBackend? backend = null)
@@ -118,7 +121,11 @@ public sealed class BrightnessService : ObservableObject, IDisposable
 
     private void OnScreensChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        _reader.Request();
+        var workAreaOnly = e is { Action: NotifyCollectionChangedAction.Replace, OldItems: [ScreenInfo old] }
+                           && e.NewItems is [ScreenInfo now]
+                           && old with { WorkArea = now.WorkArea } == now;
+        if (!workAreaOnly)
+            _reader.Request();
     }
 
     /// <summary>Stops following brightness changes.</summary>
