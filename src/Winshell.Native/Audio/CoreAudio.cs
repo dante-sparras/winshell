@@ -78,7 +78,11 @@ internal static class CoreAudio
         return null;
     }
 
-    /// <summary>Releases a COM object's callable wrapper now, not when the GC finds it. Does nothing for null.</summary>
+    /// <summary>
+    /// Releases a COM object's callable wrapper now, not when the GC finds it, with every hand-out it counts, unlike
+    /// <see cref="Com.Release"/>: the audio service takes the same device again when it rereads the list, and releases
+    /// it once. Does nothing for null.
+    /// </summary>
     public static void Release(object? comObject)
     {
         if (comObject is not null)
@@ -94,10 +98,19 @@ internal static class CoreAudio
         return PInvoke.SHLoadIndirectString(text, buffer).Value == 0 ? new string(buffer).TrimEnd('\0') : "";
     }
 
+    /// <summary>
+    /// Throws <see cref="InvalidCastException"/> for a class without the interface, and <see cref="COMException"/>
+    /// when Windows cannot create it.
+    /// </summary>
     private static T Create<T>(Guid clsid)
+        where T : class
     {
-        var type = Type.GetTypeFromCLSID(clsid, true)!;
-        return (T)Activator.CreateInstance(type)!;
+        var created = Com.Create<T>(clsid, CLSCTX.CLSCTX_SERVER, out var hr);
+        if (created is not null)
+            return created;
+        // E_NOINTERFACE becomes InvalidCastException.
+        Marshal.ThrowExceptionForHR(hr);
+        throw new InvalidCastException();
     }
 }
 

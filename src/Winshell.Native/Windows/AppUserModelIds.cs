@@ -24,27 +24,20 @@ internal static unsafe class AppUserModelIds
     {
         var iid = typeof(IPropertyStore).GUID;
         void* pointer = null;
-        if (PInvoke.SHGetPropertyStoreForWindow((HWND)hwnd, &iid, &pointer).Failed || pointer is null)
+        if (PInvoke.SHGetPropertyStoreForWindow((HWND)hwnd, &iid, &pointer).Failed ||
+            Com.Wrap<IPropertyStore>((nint)pointer) is not { } store)
             return "";
         try
         {
-            var store = (IPropertyStore)Marshal.GetObjectForIUnknown((nint)pointer);
-            try
-            {
-                return PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? "";
-            }
-            finally
-            {
-                Marshal.ReleaseComObject(store);
-            }
+            return PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? "";
         }
-        catch (Exception ex) when (ex is COMException or InvalidCastException)
+        catch (COMException)
         {
             return "";
         }
         finally
         {
-            Marshal.Release((nint)pointer);
+            Com.Release(store);
         }
     }
 

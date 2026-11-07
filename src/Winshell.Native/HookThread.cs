@@ -11,15 +11,12 @@ internal sealed unsafe class HookThread
     private readonly uint _threadId;
     private readonly Lifetime _life;
 
-    private HookThread(nint handle, Thread thread, uint threadId, Lifetime life)
+    private HookThread(Thread thread, uint threadId, Lifetime life)
     {
-        Handle = handle;
         Thread = thread;
         _threadId = threadId;
         _life = life;
     }
-
-    internal nint Handle { get; }
 
     internal Thread Thread { get; }
 
@@ -40,7 +37,7 @@ internal sealed unsafe class HookThread
         var (hook, threadId) = started.Task.Result;
 #pragma warning restore VSTHRD002
         if (hook != 0)
-            return new HookThread(hook, thread, threadId, life);
+            return new HookThread(thread, threadId, life);
         thread.Join();
         return null;
     }

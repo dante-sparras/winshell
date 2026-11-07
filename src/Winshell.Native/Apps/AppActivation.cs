@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
 
@@ -13,19 +14,16 @@ internal static class AppActivation
     /// </summary>
     internal static void Activate(string appUserModelId, string arguments)
     {
-        object? created = null;
+        var manager = Com.Create<IApplicationActivationManager>(Clsid, CLSCTX.CLSCTX_SERVER, out var hr);
+        if (manager is null)
+            throw new InvalidOperationException($"The activation manager is not available (0x{hr:X8}).");
         try
         {
-            var type = Type.GetTypeFromCLSID(Clsid);
-            created = type is null ? null : Activator.CreateInstance(type);
-            if (created is not IApplicationActivationManager manager)
-                throw new InvalidOperationException("The activation manager is not available.");
             manager.ActivateApplication(appUserModelId, arguments, 0, out _);
         }
         finally
         {
-            if (created is not null && Marshal.IsComObject(created))
-                Marshal.ReleaseComObject(created);
+            Com.Release(manager);
         }
     }
 
