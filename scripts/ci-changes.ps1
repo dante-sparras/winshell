@@ -34,10 +34,10 @@ $checks = [ordered]@{
     docs = $unknown
     scripts = Test-Changed '^scripts/|^tests/Scripts/|^\.github/(workflows|actions)/'
     workflows = Test-Changed '^\.github/(workflows|actions)/'
-    # What package.yml's jobs read: the release files, the template, the library's project and build files, and the
-    # scripts and actions that pack, package and test them.
+    # What package.yml's jobs read: the release files, the template, the library's project and build files, the package
+    # tests and the support they compile, and the scripts and actions that pack, package and test them.
     package = Test-Changed (
-        '^(packaging|templates|src/Winshell\.Package|tests/Winshell\.Package\.Tests|scripts/lib|\.github/actions)/',
+        '^(packaging|templates|src/Winshell\.Package|tests/(Winshell\.Package\.Tests|TestSupport)|scripts/lib|\.github/actions)/',
         '^src/[^/]+/[^/]+\.csproj$',
         '^((src|tests)/)?Directory\.',
         '^(global\.json|nuget\.config|BannedSymbols\.Interop\.txt|release-please-config\.json|\.release-please-manifest\.json)$',

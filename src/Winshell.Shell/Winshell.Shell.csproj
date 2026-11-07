@@ -1,7 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
-    <SupportedOSPlatformVersion>10.0.22621.0</SupportedOSPlatformVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <UseWinUI>true</UseWinUI>
   </PropertyGroup>

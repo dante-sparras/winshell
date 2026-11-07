@@ -85,9 +85,8 @@ jobs:
           persist-credentials: false
           # A release builds its tagged commit, not whatever commit started this run.
           ref: ${{ inputs.tag || github.sha }}
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
       - name: Check the commit to sign
         # SignPath records the run's commit as the origin of what it signs, so the checkout must be that commit. This
         # runs before the build, so a repair started from main stops at once: start it from the release's tag.

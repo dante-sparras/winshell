@@ -298,8 +298,8 @@ if ($Verify) {
         $listed[$name] = $hash
     }
     $machines = @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }
-    # What SignPath signs: the binaries built from this repository. The runtime and libraries keep their publishers' signatures.
-    $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Native.dll', 'Winshell.Core.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll'
+    [xml] $signing = Get-Content -Raw -LiteralPath (Join-Path $root 'packaging/signpath/artifact-configuration.xml')
+    $signedPaths = $signing.'artifact-configuration'.'zip-file'.'pe-file-set'.include.path
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
         $name = Get-ReleaseZipName $Version $rid
@@ -334,6 +334,8 @@ if ($Verify) {
             Write-Output "$name runs every winshell doctor check"
         }
         # The product name and version SignPath's artifact configuration requires of each binary it signs.
+        $ownBinaries = $signedPaths | Where-Object { $_.StartsWith("$rid/", [StringComparison]::Ordinal) } | ForEach-Object { $_.Substring($rid.Length + 1) }
+        if (-not $ownBinaries) { throw "packaging/signpath/artifact-configuration.xml signs nothing in $rid" }
         foreach ($binary in $ownBinaries) {
             $info = (Get-Item -LiteralPath (Join-Path $dir $binary)).VersionInfo
             if ($info.ProductName -cne 'Winshell' -or $info.ProductVersion -notmatch "^$([regex]::Escape($Version))(\+|$)") {

@@ -6,7 +6,6 @@
 //   dotnet run scripts/generate-reference.cs
 
 #:property PublishAot=false
-#:property TargetFramework=net10.0-windows10.0.22621.0
 #:property RuntimeIdentifier=$(NETCoreSdkRuntimeIdentifier)
 #:project ../src/Winshell.Shell/Winshell.Shell.csproj
 using System.Globalization;
