@@ -79,9 +79,11 @@ internal static unsafe class AppUserModelIds
         return TextBuffer.Read(0, MaxCharacters, buffer =>
         {
             var answer = query(buffer);
-            // The length counts the terminating null.
+            if (answer.Code != WIN32_ERROR.ERROR_SUCCESS)
+                return new TextBuffer.Answer(answer.Code, (int)answer.Length);
+            // The length counts the terminating null, which must fit too.
             return new TextBuffer.Answer(answer.Code,
-                answer.Code == WIN32_ERROR.ERROR_SUCCESS ? (int)answer.Length - 1 : (int)answer.Length);
+                answer.Length > (uint)buffer.Length ? -1 : (int)answer.Length - 1);
         }) ?? "";
     }
 }

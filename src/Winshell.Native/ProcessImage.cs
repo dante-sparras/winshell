@@ -80,9 +80,10 @@ internal static class ProcessImage
         var size = (uint)buffer.Length;
         fixed (char* name = buffer)
         {
-            var code = PInvoke.QueryFullProcessImageName(process, 0, name, &size)
-                ? WIN32_ERROR.ERROR_SUCCESS
-                : (WIN32_ERROR)Marshal.GetLastPInvokeError();
+            var ok = PInvoke.QueryFullProcessImageName(process, 0, name, &size);
+            var error = (WIN32_ERROR)Marshal.GetLastPInvokeError();
+            var code = ok ? WIN32_ERROR.ERROR_SUCCESS :
+                error == WIN32_ERROR.ERROR_SUCCESS ? WIN32_ERROR.ERROR_GEN_FAILURE : error;
             return new TextBuffer.Answer(code, size > int.MaxValue ? -1 : (int)size);
         }
     }

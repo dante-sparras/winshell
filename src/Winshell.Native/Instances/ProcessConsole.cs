@@ -15,7 +15,7 @@ internal enum StandardStream
 /// <summary>Where a standard stream goes.</summary>
 internal enum StreamTarget
 {
-    /// <summary>No handle, a console, or something Windows does not name.</summary>
+    /// <summary>No handle, a character device such as a console, or something Windows does not name.</summary>
     Other,
     File,
     Pipe

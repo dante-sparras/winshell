@@ -15,8 +15,7 @@ internal static unsafe partial class ShellItems
     /// <summary>The name the shell shows for the item, or null when it has no such item.</summary>
     internal static string? Name(string parsingName)
     {
-        return Use<IShellItem, string?>(parsingName, null,
-            item => item.GetDisplayName(0, out var name) == 0 ? name : null);
+        return Use<IShellItem, string>(parsingName, item => item.GetDisplayName(0, out var name) == 0 ? name : null);
     }
 
     /// <summary>
@@ -25,7 +24,7 @@ internal static unsafe partial class ShellItems
     /// </summary>
     internal static (int Width, int Height, byte[] Bgra)? Icon(string parsingName, int size)
     {
-        return Use<IShellItemImageFactory, (int, int, byte[])?>(parsingName, null, factory =>
+        return Use<IShellItemImageFactory, (int, int, byte[])?>(parsingName, factory =>
         {
             var result = factory.GetImage(new SIZE(size, size), IconFlags, out var bitmap);
             if (bitmap == 0)
@@ -42,13 +41,13 @@ internal static unsafe partial class ShellItems
     }
 
     /// <summary>
-    /// Creates the item as <typeparamref name="T"/>, passes it to <paramref name="use"/> and releases it.
-    /// <paramref name="missing"/> when the shell has no such item.
+    /// Creates the item as <typeparamref name="T"/>, passes it to <paramref name="use"/> and releases it. Default when
+    /// the shell has no such item.
     /// </summary>
-    private static TResult Use<T, TResult>(string parsingName, TResult missing, Func<T, TResult> use) where T : class
+    private static TResult? Use<T, TResult>(string parsingName, Func<T, TResult?> use) where T : class
     {
         if (SHCreateItemFromParsingName(parsingName, 0, typeof(T).GUID, out var pointer) < 0 || pointer == 0)
-            return missing;
+            return default;
         T? item = null;
         try
         {
@@ -101,18 +100,4 @@ internal static unsafe partial class ShellItems
         [PreserveSig]
         int GetImage(SIZE size, SIIGBF flags, out nint bitmap);
     }
-}
-
-/// <summary>IShellItem. Only <c>GetDisplayName</c> is used; the two methods before it keep it on its vtable slot.</summary>
-[ComImport]
-[Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IShellItem
-{
-    void BindToHandler();
-
-    void GetParent();
-
-    [PreserveSig]
-    int GetDisplayName(int sigdn, [MarshalAs(UnmanagedType.LPWStr)] out string name);
 }

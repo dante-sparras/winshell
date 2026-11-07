@@ -17,7 +17,7 @@ internal static class TextBuffer
     /// <summary>
     /// The text, or null when <paramref name="query"/> fails for another reason, needs more than
     /// <paramref name="maxCharacters"/>, or is short a second time. A first capacity of 0 passes an empty buffer, which
-    /// a call that reports its size first reads as a null pointer.
+    /// <c>fixed</c> pins as a null pointer, for a call that reports its size first.
     /// </summary>
     internal static string? Read(int firstCapacity, int maxCharacters, Func<char[], Answer> query)
     {
