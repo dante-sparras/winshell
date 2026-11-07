@@ -101,15 +101,17 @@ public sealed class PowerDevice : ObservableObject
 /// <summary>The batteries of this PC, as Windows reports them.</summary>
 public sealed class PowerService : ObservableObject, IDisposable
 {
-    private readonly IDisposable _subscription;
+    private readonly IPowerBackend _backend;
+    private readonly StateReader<PowerSnapshot> _reader;
     private bool _onBattery;
-    private bool _disposed;
 
-    internal PowerService(IEventLoop loop, SnapshotSource<PowerSnapshot>? source = null)
+    internal PowerService(IEventLoop loop, IPowerBackend? backend = null)
     {
-        source ??= PowerBackend.Instance;
-        Apply(source.Current);
-        _subscription = source.Subscribe(s => loop.Post(() => Apply(s)));
+        _backend = backend ?? new PowerBackend();
+        _reader = new StateReader<PowerSnapshot>(_backend.ReadAsync, Apply, loop,
+            new MonitorWarning(() => Log.Default, "power"));
+        _backend.Changed += _reader.Request;
+        _reader.Request();
     }
 
     /// <summary>All the batteries as one, as Windows reports its aggregate battery.</summary>
@@ -123,8 +125,6 @@ public sealed class PowerService : ObservableObject, IDisposable
 
     private void Apply(PowerSnapshot snapshot)
     {
-        if (_disposed)
-            return;
         DisplayDevice.Update(snapshot.Display, snapshot.Ready);
         Set(ref _onBattery, snapshot.OnBattery, nameof(OnBattery));
         Devices.Sync(snapshot.Devices, d => d.DeviceId, i => i.DeviceId, _ => new PowerDevice(),
@@ -134,31 +134,30 @@ public sealed class PowerService : ObservableObject, IDisposable
     /// <summary>Stops following battery changes.</summary>
     public void Dispose()
     {
-        _disposed = true;
-        _subscription.Dispose();
+        _backend.Changed -= _reader.Request;
+        _reader.Stop(_backend.Dispose);
     }
 }
 
 /// <summary>The Windows power mode. Setting <see cref="Mode"/> changes the slider for the supply in use.</summary>
 public sealed class PowerModeService : ObservableObject, IDisposable
 {
-    private readonly IDisposable _subscription;
-    private readonly Func<PowerModeLevel, uint> _set;
+    private readonly IPowerModeBackend _backend;
+    private readonly StateReader<PowerModeSnapshot> _reader;
     private readonly Log _log;
     private PowerModeLevel _mode = PowerModeLevel.Balanced;
     private EffectivePowerMode _effective = EffectivePowerMode.Balanced;
     private bool _available;
     private bool _ready;
-    private bool _disposed;
 
-    internal PowerModeService(IEventLoop loop, Log log, SnapshotSource<PowerModeSnapshot>? source = null,
-        Func<PowerModeLevel, uint>? set = null)
+    internal PowerModeService(IEventLoop loop, Log log, IPowerModeBackend? backend = null)
     {
         _log = log;
-        source ??= PowerModeBackend.Instance;
-        _set = set ?? PowerModeBackend.Instance.Set;
-        Apply(source.Current);
-        _subscription = source.Subscribe(s => loop.Post(() => Apply(s)));
+        _backend = backend ?? new PowerModeBackend();
+        _reader = new StateReader<PowerModeSnapshot>(_backend.ReadAsync, Apply, loop,
+            new MonitorWarning(() => log, "power"));
+        _backend.Changed += _reader.Request;
+        _reader.Request();
     }
 
     /// <summary>
@@ -176,7 +175,7 @@ public sealed class PowerModeService : ObservableObject, IDisposable
                 return;
             }
 
-            var error = _set(value);
+            var error = _backend.Set(value);
             if (error != 0)
                 _log.Warn("power", $"Windows did not set the power mode (error {error}).");
         }
@@ -196,8 +195,6 @@ public sealed class PowerModeService : ObservableObject, IDisposable
 
     private void Apply(PowerModeSnapshot snapshot)
     {
-        if (_disposed)
-            return;
         Set(ref _mode, snapshot.Mode, nameof(Mode));
         Set(ref _effective, snapshot.Effective, nameof(Effective));
         Set(ref _available, snapshot.Available, nameof(Available));
@@ -207,7 +204,7 @@ public sealed class PowerModeService : ObservableObject, IDisposable
     /// <summary>Stops following power mode changes.</summary>
     public void Dispose()
     {
-        _disposed = true;
-        _subscription.Dispose();
+        _backend.Changed -= _reader.Request;
+        _reader.Stop(_backend.Dispose);
     }
 }

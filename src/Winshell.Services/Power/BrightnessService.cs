@@ -76,20 +76,22 @@ public sealed class BrightnessMonitor : ObservableObject
 /// <summary>The brightness of the connected monitors that report one.</summary>
 public sealed class BrightnessService : ObservableObject, IDisposable
 {
-    private readonly IDisposable _subscription;
+    private readonly IBrightnessBackend _backend;
+    private readonly StateReader<BrightnessSnapshot> _reader;
     private readonly BrightnessWriter _writer;
     private readonly Log _log;
     private bool _ready;
-    private bool _disposed;
 
-    internal BrightnessService(IEventLoop loop, Log log, SnapshotSource<BrightnessSnapshot>? source = null,
-        BrightnessWriter? writer = null)
+    internal BrightnessService(IEventLoop loop, Log log, IBrightnessBackend? backend = null)
     {
         _log = log;
-        source ??= BrightnessBackend.Instance;
-        _writer = writer ?? BrightnessBackend.Instance.Writer;
-        Apply(source.Current);
-        _subscription = source.Subscribe(s => loop.Post(() => Apply(s)));
+        _backend = backend ?? new BrightnessBackend();
+        _reader = new StateReader<BrightnessSnapshot>(_backend.ReadAsync, Apply, loop,
+            new MonitorWarning(() => log, "power"));
+        // A monitor's read after its writes end shows what it took.
+        _writer = new BrightnessWriter(_backend.Set, _reader.Request);
+        _backend.Changed += _reader.Request;
+        _reader.Request();
     }
 
     /// <summary>The connected monitors whose brightness Windows can read. Empty until <see cref="Ready"/>.</summary>
@@ -100,8 +102,6 @@ public sealed class BrightnessService : ObservableObject, IDisposable
 
     private void Apply(BrightnessSnapshot snapshot)
     {
-        if (_disposed)
-            return;
         Monitors.Sync(snapshot.Monitors, m => m.DeviceName, i => i.DeviceName,
             _ => new BrightnessMonitor(_writer, _log), (m, i) => m.Update(i));
         Set(ref _ready, snapshot.Ready, nameof(Ready));
@@ -110,7 +110,7 @@ public sealed class BrightnessService : ObservableObject, IDisposable
     /// <summary>Stops following brightness changes.</summary>
     public void Dispose()
     {
-        _disposed = true;
-        _subscription.Dispose();
+        _backend.Changed -= _reader.Request;
+        _reader.Stop(_backend.Dispose);
     }
 }

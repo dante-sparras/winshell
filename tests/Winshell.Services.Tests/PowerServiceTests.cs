@@ -33,8 +33,9 @@ public sealed class PowerServiceTests
     public void A_snapshot_changes_only_the_properties_that_differ()
     {
         var loop = new ManualEventLoop();
-        var source = new FakeSource<PowerSnapshot>(Snapshot(Battery("a", 0.5)));
+        var source = new FakePowerBackend(Snapshot(Battery("a", 0.5)));
         using var power = new PowerService(loop, source);
+        loop.Process();
         var changes = Watch(power.DisplayDevice);
 
         source.Push(Snapshot(Battery("a", 0.25)));
@@ -49,8 +50,9 @@ public sealed class PowerServiceTests
     public void A_device_that_stays_is_the_same_object()
     {
         var loop = new ManualEventLoop();
-        var source = new FakeSource<PowerSnapshot>(Snapshot(Battery("a"), Battery("b")));
+        var source = new FakePowerBackend(Snapshot(Battery("a"), Battery("b")));
         using var power = new PowerService(loop, source);
+        loop.Process();
         var kept = power.Devices[1];
 
         source.Push(Snapshot(Battery("b", 0.75)));
@@ -65,7 +67,7 @@ public sealed class PowerServiceTests
     public void A_disposed_service_stops_following_the_source()
     {
         var loop = new ManualEventLoop();
-        var source = new FakeSource<PowerSnapshot>(Snapshot());
+        var source = new FakePowerBackend(Snapshot());
         var power = new PowerService(loop, source);
 
         source.Push(Snapshot(Battery("a")));
@@ -73,6 +75,7 @@ public sealed class PowerServiceTests
         loop.Process();
 
         Assert.Empty(power.Devices);
+        Assert.True(source.Disposed);
     }
 
     [Fact]
@@ -80,8 +83,7 @@ public sealed class PowerServiceTests
     {
         var lines = new List<string>();
         var log = new Log { Sink = (_, _, message) => lines.Add(message) };
-        using var mode = new PowerModeService(new ManualEventLoop(), log,
-            new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ => 5);
+        using var mode = new PowerModeService(new ManualEventLoop(), log, new FakePowerModeBackend(_ => 5));
 
         mode.Mode = PowerModeLevel.BestPerformance;
 
@@ -94,12 +96,11 @@ public sealed class PowerServiceTests
         var lines = new List<string>();
         var log = new Log { Sink = (_, _, message) => lines.Add(message) };
         var asked = 0;
-        using var mode = new PowerModeService(new ManualEventLoop(), log,
-            new FakeSource<PowerModeSnapshot>(PowerModeSnapshot.Initial), _ =>
-            {
-                asked++;
-                return 0;
-            });
+        using var mode = new PowerModeService(new ManualEventLoop(), log, new FakePowerModeBackend(_ =>
+        {
+            asked++;
+            return 0;
+        }));
 
         mode.Mode = (PowerModeLevel)9;
 
@@ -112,20 +113,21 @@ public sealed class PowerServiceTests
     {
         var loop = new ManualEventLoop();
         var written = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var writer = new BrightnessWriter((_, value) =>
+        var source = new FakeBrightnessBackend(new BrightnessSnapshot(true, [Monitor(10)]), (_, value) =>
         {
             written.TrySetResult(value);
             return null;
         });
-        var source = new FakeSource<BrightnessSnapshot>(new BrightnessSnapshot(true, [Monitor(10)]));
-        using var brightness = new BrightnessService(loop, Log.Default, source, writer);
+        using var brightness = new BrightnessService(loop, Log.Default, source);
+        loop.Process();
         var monitor = brightness.Monitors[0];
 
         monitor.Brightness = 150;
 
         Assert.Equal(100, monitor.Brightness);
         Assert.Equal(100, await written.Task.WaitAsync(TestContext.Current.CancellationToken));
-        await Wait.UntilAsync(() => !writer.IsWriting("d"), "the write to end");
+        // The writes ending ask for a read.
+        await Wait.UntilAsync(() => source.Reads == 2, "the write to end");
         source.Push(new BrightnessSnapshot(true, [Monitor(60)]));
         loop.Process();
         Assert.Equal(60, monitor.Brightness);

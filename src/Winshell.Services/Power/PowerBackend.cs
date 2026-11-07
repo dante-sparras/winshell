@@ -37,15 +37,22 @@ internal sealed record PowerSnapshot(
     public static readonly PowerSnapshot Initial = new(false, PowerDeviceInfo.NoBattery, [], false);
 }
 
+internal interface IPowerBackend : IDisposable
+{
+    /// <summary>Windows reported a change to a battery or the power supply. Raised on any thread.</summary>
+    event Action? Changed;
+
+    /// <summary>Reads the batteries. The first read starts watching Windows until the backend is disposed.</summary>
+    Task<PowerSnapshot> ReadAsync(CancellationToken cancellation);
+}
+
 /// <summary>
 /// The batteries of this PC. The display device is Windows' aggregate battery; the devices are each
 /// battery Windows enumerates. Windows tells about changes through the batteries' ReportUpdated and the
 /// PowerManager events.
 /// </summary>
-internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
+internal sealed class PowerBackend : IPowerBackend
 {
-    public static readonly PowerBackend Instance = new();
-
     private readonly object _batteriesLock = new();
 
     private readonly Dictionary<string, (WinBattery Battery, string Name)> _batteries = new(StringComparer.Ordinal);
@@ -54,56 +61,105 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
     private WinBattery? _aggregate;
     private DeviceWatcher? _watcher;
 
-    private PowerBackend()
-        : base(PowerSnapshot.Initial)
+    public event Action? Changed;
+
+    public Task<PowerSnapshot> ReadAsync(CancellationToken cancellation)
     {
+        return Task.Run(Read, cancellation);
     }
 
-    protected override string Category => "power";
-
-    protected override async Task StartAsync()
+    private void Watch()
     {
         _aggregate = WinBattery.AggregateBattery;
-        _aggregate.ReportUpdated += (_, _) => Refresh();
-        PowerManager.BatteryStatusChanged += (_, _) => Refresh();
-        PowerManager.PowerSupplyStatusChanged += (_, _) => Refresh();
-        PowerManager.RemainingChargePercentChanged += (_, _) => Refresh();
-        PowerManager.RemainingDischargeTimeChanged += (_, _) => Refresh();
-        await RefreshNowAsync().ConfigureAwait(false);
+        _aggregate.ReportUpdated += OnReportUpdated;
+        PowerManager.BatteryStatusChanged += OnPowerChanged;
+        PowerManager.PowerSupplyStatusChanged += OnPowerChanged;
+        PowerManager.RemainingChargePercentChanged += OnPowerChanged;
+        PowerManager.RemainingDischargeTimeChanged += OnPowerChanged;
 
         // Each battery, kept up to date as batteries come and go.
         _watcher = DeviceInformation.CreateWatcher(WinBattery.GetDeviceSelector());
-        _watcher.Added += (_, info) => ServiceSupport.Run(Category, () => AddBatteryAsync(info.Id, info.Name));
-        _watcher.Removed += (_, update) =>
-        {
-            lock (_batteriesLock)
-            {
-                _batteries.Remove(update.Id);
-            }
-
-            Refresh();
-        };
+        _watcher.Added += OnBatteryAdded;
+        _watcher.Removed += OnBatteryRemoved;
         _watcher.Start();
     }
 
-    private async Task AddBatteryAsync(string id, string name)
+    /// <summary>Stops watching Windows.</summary>
+    public void Dispose()
+    {
+        if (_aggregate is null)
+            return;
+        _aggregate.ReportUpdated -= OnReportUpdated;
+        _aggregate = null;
+        PowerManager.BatteryStatusChanged -= OnPowerChanged;
+        PowerManager.PowerSupplyStatusChanged -= OnPowerChanged;
+        PowerManager.RemainingChargePercentChanged -= OnPowerChanged;
+        PowerManager.RemainingDischargeTimeChanged -= OnPowerChanged;
+        if (_watcher is { } watcher)
+        {
+            watcher.Added -= OnBatteryAdded;
+            watcher.Removed -= OnBatteryRemoved;
+            if (watcher.Status is DeviceWatcherStatus.Started or DeviceWatcherStatus.EnumerationCompleted)
+                watcher.Stop();
+            _watcher = null;
+        }
+
+        lock (_batteriesLock)
+        {
+            foreach (var (battery, _) in _batteries.Values)
+                battery.ReportUpdated -= OnReportUpdated;
+            _batteries.Clear();
+        }
+    }
+
+    private void OnReportUpdated(WinBattery sender, object args)
+    {
+        Changed?.Invoke();
+    }
+
+    private void OnPowerChanged(object? sender, object args)
+    {
+        Changed?.Invoke();
+    }
+
+    private void OnBatteryAdded(DeviceWatcher sender, DeviceInformation info)
+    {
+        ServiceSupport.Run("power", () => AddBatteryAsync(sender, info.Id, info.Name));
+    }
+
+    private void OnBatteryRemoved(DeviceWatcher sender, DeviceInformationUpdate update)
+    {
+        lock (_batteriesLock)
+        {
+            if (_batteries.Remove(update.Id, out var removed))
+                removed.Battery.ReportUpdated -= OnReportUpdated;
+        }
+
+        Changed?.Invoke();
+    }
+
+    private async Task AddBatteryAsync(DeviceWatcher watcher, string id, string name)
     {
         var battery = await WinBattery.FromIdAsync(id);
         if (battery is null)
             return;
-        battery.ReportUpdated += (_, _) => Refresh();
         lock (_batteriesLock)
         {
+            // A battery found as the backend stops is not watched.
+            if (!ReferenceEquals(watcher, _watcher))
+                return;
+            battery.ReportUpdated += OnReportUpdated;
             _batteries[id] = (battery, name);
         }
 
-        Refresh();
+        Changed?.Invoke();
     }
 
-    protected override Task<PowerSnapshot> ReadAsync()
+    private PowerSnapshot Read()
     {
-        var status = default(SYSTEM_POWER_STATUS);
-        var hasStatus = Win32.GetSystemPowerStatus(out status);
+        if (_aggregate is null)
+            Watch();
+        var hasStatus = Win32.GetSystemPowerStatus(out var status);
         // Bit 128 of BatteryFlag: "no system battery".
         var noSystemBattery = hasStatus && (status.BatteryFlag & 128) != 0;
 
@@ -119,8 +175,7 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
             ];
         }
 
-        var onBattery = aggregate.IsPresent && (PowerSupplyNotPresent() ?? (hasStatus && status.ACLineStatus == 0));
-        return Task.FromResult(new PowerSnapshot(true, aggregate, devices, onBattery));
+        return new PowerSnapshot(true, aggregate, devices, PowerSupply.OnBattery());
     }
 
     private static PowerDeviceInfo ReadAggregate(SYSTEM_POWER_STATUS status, bool hasStatus, bool noSystemBattery)
@@ -169,18 +224,6 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         return Describe(report, "", "", remainingTime);
     }
 
-    private static bool? PowerSupplyNotPresent()
-    {
-        try
-        {
-            return PowerManager.PowerSupplyStatus == PowerSupplyStatus.NotPresent;
-        }
-        catch (COMException)
-        {
-            return null;
-        }
-    }
-
     /// <summary>A battery report. Capacities are watt-hours and the charge rate is watts.</summary>
     private static PowerDeviceInfo Describe(WinBatteryReport report, string nativePath, string model,
         double? timeToEmptyHint)
@@ -223,5 +266,29 @@ internal sealed partial class PowerBackend : SnapshotSource<PowerSnapshot>
         return new PowerDeviceInfo(nativePath, model, PowerDeviceType.Battery, true, true, state, percentage,
             remaining ?? 0, full ?? 0, rate,
             Math.Round(timeToEmpty), Math.Round(timeToFull), health);
+    }
+}
+
+/// <summary>Which supply powers the PC.</summary>
+internal static class PowerSupply
+{
+    /// <summary>
+    /// Whether the PC runs on its battery: it has one, and no power supply is plugged in. Windows' power supply status
+    /// decides, and the AC line status when that does not answer.
+    /// </summary>
+    public static bool OnBattery()
+    {
+        var hasStatus = Win32.GetSystemPowerStatus(out var status);
+        // Bit 128 of BatteryFlag: "no system battery".
+        if (hasStatus && (status.BatteryFlag & 128) != 0)
+            return false;
+        try
+        {
+            return PowerManager.PowerSupplyStatus == PowerSupplyStatus.NotPresent;
+        }
+        catch (COMException)
+        {
+            return hasStatus && status.ACLineStatus == 0;
+        }
     }
 }

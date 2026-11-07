@@ -105,6 +105,7 @@ PowerGetUserConfiguredDCPowerMode
 PowerSetUserConfiguredACPowerMode
 PowerSetUserConfiguredDCPowerMode
 PowerRegisterForEffectivePowerModeNotifications
+PowerUnregisterFromEffectivePowerModeNotifications
 EFFECTIVE_POWER_MODE_V2
 
 // Screens
