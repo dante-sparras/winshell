@@ -26,18 +26,17 @@ internal sealed class InstanceLog : IDisposable
     private readonly string _path;
     private readonly long _cap;
     private readonly object _gate = new();
-    private readonly TimeSpan _delay;
+    private static readonly TimeSpan Delay = TimeSpan.FromMilliseconds(500);
     private readonly ITimer _timer;
     private StreamWriter? _writer;
     private readonly StringBuilder _pending = new();
     private bool _closed;
 
-    public InstanceLog(string path, long cap = DefaultCap, TimeSpan? flushAfter = null, TimeProvider? time = null)
+    public InstanceLog(string path, long cap = DefaultCap, TimeProvider? time = null)
     {
         _path = path;
         _cap = cap;
         _writer = Open();
-        _delay = flushAfter ?? TimeSpan.FromMilliseconds(500);
         _timer = (time ?? TimeProvider.System).CreateTimer(_ => FlushFromTimer(), null, Timeout.InfiniteTimeSpan,
             Timeout.InfiniteTimeSpan);
     }
@@ -59,7 +58,7 @@ internal sealed class InstanceLog : IDisposable
             finally
             {
                 if (!waiting && _pending.Length > 0)
-                    _timer.Change(_delay, Timeout.InfiniteTimeSpan);
+                    _timer.Change(Delay, Timeout.InfiniteTimeSpan);
             }
         }
     }

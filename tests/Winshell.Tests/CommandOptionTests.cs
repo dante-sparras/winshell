@@ -26,6 +26,43 @@ public class CommandOptionTests
         Assert.Equal(message, e.Message);
     }
 
+    // '' stands for an empty argument.
+    [Theory]
+    [InlineData("run -p missing --pth", "Unknown option \"--pth\".")]
+    [InlineData("run -p missing --log-times", "Unknown option \"--log-times\".")]
+    [InlineData("run -p missing --any-display", "Unknown option \"--any-display\".")]
+    [InlineData("run -p missing --newest", "Unknown option \"--newest\".")]
+    [InlineData("run -p missing --log-rules x", "Unknown option \"--log-rules\".")]
+    [InlineData("run -p missing -m MyShell.exe", "Unknown option \"-m\".")]
+    [InlineData("run -p missing --manifest MyShell.exe", "Unknown option \"--manifest\".")]
+    [InlineData("run -p missing --debug 1", "Unknown option \"--debug\".")]
+    [InlineData("list -a", "Unknown option \"-a\".")]
+    [InlineData("list --all", "Unknown option \"--all\".")]
+    [InlineData("reload --pid 0 --hard", "Unknown option \"--hard\".")]
+    [InlineData("list extra", "Unexpected argument \"extra\".")]
+    [InlineData("kill --pid 0 extra", "Unexpected argument \"extra\".")]
+    [InlineData("run -p missing extra", "Unexpected argument \"extra\".")]
+    [InlineData("doctor extra", "Unexpected argument \"extra\".")]
+    [InlineData("log one two", "Unexpected argument \"two\".")]
+    [InlineData("kill --pid abc", "--pid needs a whole number.")]
+    [InlineData("kill --pid 1.5", "--pid needs a whole number.")]
+    [InlineData("kill --pid 999999999999", "--pid needs a whole number.")]
+    [InlineData("kill --pid -1", "--pid needs a whole number.")]
+    [InlineData("kill --pid ''", "--pid needs a whole number.")]
+    [InlineData("log --tail ten", "--tail needs a whole number.")]
+    [InlineData("log --tail -5", "--tail needs a whole number.")]
+    [InlineData("log -t ten", "-t needs a whole number.")]
+    [InlineData("kill --pid", "--pid needs a value.")]
+    [InlineData("log --tail", "--tail needs a value.")]
+    public void A_bad_option_argument_or_number_is_named(string line, string message)
+    {
+        var args = line.Split(' ').Select(word => word == "''" ? "" : word).ToArray();
+
+        var e = Assert.Throws<ArgumentException>(() => CliParser.Parse(args));
+
+        Assert.Equal(message, e.Message);
+    }
+
     [Theory]
     [InlineData("run -p dir", "path", "dir")]
     [InlineData("run -c work", "config", "work")]
@@ -50,6 +87,15 @@ public class CommandOptionTests
 
         Assert.Equal(line.Split(' ')[0], parsed.Command);
         Assert.Equal(value, Field(parsed, field));
+    }
+
+    [Fact]
+    public void An_option_before_the_command_is_that_command_s()
+    {
+        var parsed = CliParser.Parse(["--pid", "4", "kill"]);
+
+        Assert.Equal("kill", parsed.Command);
+        Assert.Equal("4", Field(parsed, "pid"));
     }
 
     [Theory]

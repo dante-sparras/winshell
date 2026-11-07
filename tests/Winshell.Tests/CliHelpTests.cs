@@ -22,7 +22,6 @@ public class CliHelpTests
 
         result.AssertExitCode(0);
         Assert.Contains(expected, result.Output, StringComparison.Ordinal);
-        Assert.DoesNotContain("No running instances", result.Error, StringComparison.Ordinal);
         Assert.DoesNotContain("No running instances", result.Output, StringComparison.Ordinal);
         Assert.Equal("", result.Error);
     }

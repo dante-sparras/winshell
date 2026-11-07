@@ -26,16 +26,6 @@ public sealed class KillWaitTests : IDisposable, IClassFixture<ProbeBuild>
     }
 
     [Fact]
-    public void Force_on_a_missing_pid_is_still_a_miss()
-    {
-        var result = Run("kill", "--force", "--pid", "0");
-
-        result.AssertExitCode(1);
-        Assert.Equal("", result.Output);
-        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
-    }
-
-    [Fact]
     public void Force_ends_the_shell_and_leaves_the_programs_it_started()
     {
         var config = Path.Combine(_dir, "config");

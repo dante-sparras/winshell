@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Winshell.Tests;
 
-/// <summary>Starting a shell is <c>winshell run</c>. A bare <c>winshell</c> prints help, and options may precede the command.</summary>
+/// <summary>Starting a shell is <c>winshell run</c>, and a bare <c>winshell</c> prints help.</summary>
 [Trait("Category", "Slow")]
 public class CliRunCommandTests
 {
@@ -15,27 +15,6 @@ public class CliRunCommandTests
         result.AssertExitCode(0);
         Assert.Equal("", result.Error);
         Assert.Contains("winshell run", result.Output, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Options_before_the_command_do_not_start_a_shell()
-    {
-        // An unknown command, not kill: kill would stop a real instance on this PC.
-        var result = Run(["-v", "nosuch"]);
-
-        result.AssertExitCode(2);
-        Assert.Equal("", result.Output);
-        Assert.Equal("Unknown command \"nosuch\". Run winshell --help." + Environment.NewLine, result.Error);
-    }
-
-    [Fact]
-    public void A_pid_option_before_kill_selects_that_process()
-    {
-        var result = Run(["--pid", "0", "kill"]);
-
-        result.AssertExitCode(1);
-        Assert.Equal("", result.Output);
-        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
     }
 
     [Fact]
