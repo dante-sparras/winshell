@@ -64,8 +64,9 @@ internal static class DevSession
         start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
         start.Environment["DOTNET_WATCH_SUPPRESS_EMOJIS"] = "1";
         start.Environment[Shell.DevProjectVariable] = project.Folder;
+        // Auto-reset, so a request wakes one wait once.
         using var buildRequest =
-            new EventWaitHandle(false, EventResetMode.ManualReset, XamlReload.BuildRequest(project.Folder));
+            new EventWaitHandle(false, EventResetMode.AutoReset, XamlReload.BuildRequest(project.Folder));
         using var process = Start(start);
         if (process is null)
         {
@@ -96,6 +97,9 @@ internal static class DevSession
             {
                 if (line is null)
                 {
+                    // What the shell printed before it asked, such as why, may still be on its way.
+                    while (lines.Reader.TryRead(out var waiting) && waiting is not null)
+                        Console.WriteLine(waiting);
                     StopShellAndWatch(project, process, false);
                     await process.WaitForExitAsync();
                     return null;

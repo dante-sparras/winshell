@@ -28,13 +28,13 @@ internal static partial class XamlReload
     private static IDisposable? _waiting;
 
     /// <summary>
-    /// The event that asks <c>winshell dev</c> to build its project and start the shell again. It makes the event for the
-    /// folder it gives the shell in <see cref="Shell.DevProjectVariable"/>, and the shell sets it.
+    /// The event that asks <c>winshell dev</c> to build its project and start the shell again. <c>winshell dev</c> makes
+    /// it for the folder it gives the shell in <see cref="Shell.DevProjectVariable"/>, and the shell sets it.
     /// </summary>
     internal static string BuildRequest(string projectFolder)
     {
-        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectFolder)).ToUpperInvariant();
-        return @"Local\winshell-dev-build-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(folder)));
+        return @"Local\winshell-dev-build-" +
+               Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(projectFolder)));
     }
 
     /// <summary>Follows the <c>.xaml</c> files under a project's folder, for the life of the process.</summary>
