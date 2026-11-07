@@ -25,7 +25,8 @@ public sealed class AppsService : ObservableObject, IDisposable
     {
         _loop = loop;
         _log = log;
-        _backend = backend ?? AppCatalog.Shared;
+        _backend = backend ?? new AppCatalog(log, AppCatalog.ProgramsFolders(), () => PackagedApps.Read(log),
+            AppUsageReader.Read);
         _time = time ?? TimeProvider.System;
         _backend.Changed += OnChanged;
         _backend.Start();
@@ -123,8 +124,11 @@ public sealed class AppsService : ObservableObject, IDisposable
     /// <summary>Stops following changes to the Start menu and the installed apps.</summary>
     public void Dispose()
     {
+        if (_disposed)
+            return;
         _disposed = true;
         _backend.Changed -= OnChanged;
+        _backend.Dispose();
     }
 }
 
@@ -161,7 +165,7 @@ public sealed class AppEntry : ObservableObject
     public string Description => _entry.Description;
 
     /// <summary>A path an icon is read from: the shortcut, or <c>shell:AppsFolder\&lt;id&gt;</c> for a packaged app.</summary>
-    public string Icon => _entry.Icon;
+    public string Icon => _entry.Path;
 
     /// <summary>The program the shortcut opens, or <c>shell:AppsFolder\&lt;id&gt;</c> for a packaged app.</summary>
     public string Target => _entry.Target;
@@ -208,7 +212,7 @@ public sealed class AppEntry : ObservableObject
 
         if (!entry.Packaged)
         {
-            if (_backend.OpenShortcut(entry.LaunchPath, entry.StartIn) is { } error)
+            if (_backend.OpenShortcut(entry.Path, entry.StartIn) is { } error)
                 Warn(error);
             else
                 Launched?.Invoke(entry);
@@ -244,13 +248,13 @@ public sealed class AppEntry : ObservableObject
         _usage = usage;
         Changed(old.Name != entry.Name, nameof(Name));
         Changed(old.Description != entry.Description, nameof(Description));
-        Changed(old.Icon != entry.Icon, nameof(Icon));
+        Changed(old.Path != entry.Path, nameof(Icon));
         Changed(old.Target != entry.Target, nameof(Target));
         Changed(old.Arguments != entry.Arguments, nameof(Arguments));
         Changed(old.CommandLine != entry.CommandLine, nameof(CommandLine));
         Changed(old.StartIn != entry.StartIn, nameof(StartIn));
         Changed(old.AppId != entry.AppId, nameof(AppId));
-        Changed(!old.Folders.SequenceEqual(entry.Folders), nameof(Folders));
+        Changed(old.Folder != entry.Folder, nameof(Folders));
         Changed(old.Hidden != entry.Hidden, nameof(Hidden));
         Changed(old.Packaged != entry.Packaged, nameof(Packaged));
         Changed(oldUsage.RunCount != usage.RunCount, nameof(RunCount));

@@ -1,7 +1,10 @@
 namespace Winshell.Apps;
 
-/// <summary>The Start menu's apps and their usage as Windows records them, and how Windows opens an app.</summary>
-internal interface IAppsBackend
+/// <summary>
+/// The Start menu's apps and their usage as Windows records them, and how Windows opens an app. Disposing it stops
+/// following changes.
+/// </summary>
+internal interface IAppsBackend : IDisposable
 {
     /// <summary>Raised on any thread after a scan changed <see cref="Snapshot"/>.</summary>
     event Action? Changed;

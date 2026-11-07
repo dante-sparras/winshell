@@ -6,12 +6,12 @@ namespace Winshell.Apps;
 /// </summary>
 public sealed class JumpListService
 {
-    private readonly IJumpListReader _reader;
+    private readonly IJumpListBackend _backend;
     private readonly Dictionary<string, AppJumpList> _byId = new(StringComparer.OrdinalIgnoreCase);
 
-    internal JumpListService(IJumpListReader? reader = null)
+    internal JumpListService(IJumpListBackend? backend = null)
     {
-        _reader = reader ?? WindowsJumpListReader.Instance;
+        _backend = backend ?? new WindowsJumpListBackend();
     }
 
     /// <summary>
@@ -28,7 +28,7 @@ public sealed class JumpListService
         }
         else
         {
-            var read = _reader.Read(appId);
+            var read = _backend.Read(appId);
             list.Apply(read.Available, read.Names);
         }
 

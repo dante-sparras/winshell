@@ -2,21 +2,37 @@ using Winshell.Native;
 
 namespace Winshell.Apps;
 
-/// <summary>One app the Start menu lists: a shortcut or a packaged app.</summary>
+/// <summary>
+/// One app the Start menu lists: a shortcut or a packaged app. <see cref="Path"/> is the shortcut file, or
+/// <c>shell:AppsFolder\&lt;id&gt;</c> for a packaged app. <see cref="Folder"/> is the Start menu folders the shortcut is
+/// in, joined with <c>/</c>.
+/// </summary>
 internal sealed record AppRecord(
     string Id,
     string Name,
     string Description,
-    string Icon,
+    string Path,
     string Target,
     string Arguments,
-    string CommandLine,
     string StartIn,
     string AppId,
-    IReadOnlyList<string> Folders,
+    string Folder,
     bool Hidden,
-    bool Packaged,
-    string LaunchPath);
+    bool Packaged)
+{
+    public IReadOnlyList<string> Folders => Folder.Length == 0 ? [] : Folder.Split('/');
+
+    /// <summary>The target and its arguments, or Explorer opening a shortcut whose target is gone.</summary>
+    public string CommandLine => Target.Length > 0
+        ? Join(Target, Arguments)
+        : Join("explorer.exe", "\"" + Path + "\"");
+
+    private static string Join(string program, string arguments)
+    {
+        var quoted = program.Contains(' ') || program.Contains('\t') ? "\"" + program + "\"" : program;
+        return arguments.Length == 0 ? quoted : quoted + " " + arguments;
+    }
+}
 
 /// <summary>How <c>Apps.search</c> scores a query. A higher band always beats a lower one; usage stays inside a band.</summary>
 internal static class AppRank
@@ -169,14 +185,6 @@ internal static class AppRank
 /// <summary>Builds the Start menu index and answers find, search, recent, and frequent.</summary>
 internal static class AppIndex
 {
-    public static string CommandLine(string target, string arguments)
-    {
-        if (target.Length == 0)
-            return arguments;
-        var quoted = target.Contains(' ') || target.Contains('\t') ? "\"" + target + "\"" : target;
-        return arguments.Length == 0 ? quoted : quoted + " " + arguments;
-    }
-
     public static List<AppRecord> Shortcuts(IEnumerable<string> folders)
     {
         var byId = new Dictionary<string, AppRecord>(StringComparer.OrdinalIgnoreCase);
@@ -206,9 +214,8 @@ internal static class AppIndex
         if (display.StartsWith("ms-resource:", StringComparison.OrdinalIgnoreCase) ||
             display.StartsWith("@{", StringComparison.Ordinal))
             return null;
-        var launch = AppIdentity.AppsFolderPath(id);
-        var text = (description ?? "").Trim();
-        return new AppRecord(id, display, text, launch, launch, "", launch, "", id, [], false, true, id);
+        var path = AppIdentity.AppsFolderPath(id);
+        return new AppRecord(id, display, (description ?? "").Trim(), path, path, "", "", id, "", false, true);
     }
 
     /// <summary>
@@ -292,11 +299,6 @@ internal static class AppIndex
             .ToList();
     }
 
-    public static bool Same(AppRecord a, AppRecord b)
-    {
-        return a with { Folders = b.Folders } == b && a.Folders.SequenceEqual(b.Folders);
-    }
-
     private static IEnumerable<string> Files(string folder)
     {
         try
@@ -333,9 +335,7 @@ internal static class AppIndex
         var id = relative.Replace('\\', '/');
         var directory = Path.GetDirectoryName(path) ?? folder;
         var relativeDirectory = Path.GetRelativePath(folder, directory);
-        IReadOnlyList<string> folders = relativeDirectory == "."
-            ? []
-            : relativeDirectory.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        var folders = relativeDirectory == "." ? "" : relativeDirectory.Replace('\\', '/');
         var hasTarget = link.Target.Length > 0 && File.Exists(link.Target);
         var extension = hasTarget ? Path.GetExtension(link.Target).ToLowerInvariant() : "";
         var hidden = name.Contains("uninstall", StringComparison.OrdinalIgnoreCase)
@@ -351,9 +351,6 @@ internal static class AppIndex
             : hasTarget
                 ? Path.GetDirectoryName(link.Target) ?? ""
                 : "";
-        var command = hasTarget
-            ? CommandLine(link.Target, link.Arguments)
-            : CommandLine("explorer.exe", "\"" + path + "\"");
         return new AppRecord(
             id,
             name,
@@ -361,12 +358,10 @@ internal static class AppIndex
             path,
             hasTarget ? link.Target : "",
             link.Arguments,
-            command,
             startIn,
             appId,
             folders,
             hidden,
-            false,
-            path);
+            false);
     }
 }

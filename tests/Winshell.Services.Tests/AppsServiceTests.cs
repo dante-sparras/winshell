@@ -37,8 +37,8 @@ public sealed class AppsServiceTests : IDisposable
     private static AppRecord Shortcut(string name)
     {
         return new AppRecord(
-            $"Accessories/{name}", name, "", $@"C:\Menu\{name}.lnk", $@"C:\Tools\{name}.exe", "", $"{name}.exe",
-            @"C:\Users\Me", name.ToLowerInvariant(), ["Accessories"], false, false, $@"C:\Menu\{name}.lnk");
+            $"Accessories/{name}", name, "", $@"C:\Menu\{name}.lnk", $@"C:\Tools\{name}.exe", "", @"C:\Users\Me",
+            name.ToLowerInvariant(), "Accessories", false, false);
     }
 
     private static Dictionary<string, AppUsage> Usage(params (string Id, AppUsage Usage)[] rows)
@@ -205,7 +205,7 @@ public sealed class AppsServiceTests : IDisposable
     [Fact]
     public void A_jump_list_is_read_for_an_id_and_stays_the_same_object()
     {
-        var reader = new ScriptReader();
+        var reader = new ScriptJumpLists();
         reader.Result["Contoso.Notes"] = JumpListRead.From(["Budget.xlsx"], ["Budget.xlsx", "Notes.txt"]);
         var lists = new JumpListService(reader);
 
@@ -255,8 +255,8 @@ public sealed class AppsServiceTests : IDisposable
         Assert.Equal(["Able", "Beta"],
             documents.Search("a").Select(document => document.Name).Where(name => name is "Able" or "Beta"));
 
-        Assert.Empty(new RecentDocuments().Search(""));
-        Assert.Empty(new RecentDocuments().Search("\t"));
+        Assert.Empty(documents.Search(""));
+        Assert.Empty(documents.Search("\t"));
     }
 
     [Fact]
@@ -279,7 +279,7 @@ public sealed class AppsServiceTests : IDisposable
         File.SetLastWriteTimeUtc(path, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddDays(day));
     }
 
-    private sealed class ScriptReader : IJumpListReader
+    private sealed class ScriptJumpLists : IJumpListBackend
     {
         public List<string> Asked { get; } = [];
 
@@ -340,6 +340,10 @@ public sealed class AppsServiceTests : IDisposable
             Opened.Add($"apps folder {appUserModelId}");
             AppsFolderThread = Environment.CurrentManagedThreadId;
             return AppsFolderError;
+        }
+
+        public void Dispose()
+        {
         }
     }
 }

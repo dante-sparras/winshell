@@ -16,12 +16,7 @@ public sealed class RecentDocuments
 
     private readonly string _folder;
 
-    internal RecentDocuments()
-        : this(Environment.GetFolderPath(Environment.SpecialFolder.Recent))
-    {
-    }
-
-    /// <summary>Reads <paramref name="folder"/> instead of the real Recent folder. Tests pass a temporary one.</summary>
+    /// <summary>Reads the shortcuts in <paramref name="folder"/>, the user's Recent folder.</summary>
     internal RecentDocuments(string folder)
     {
         _folder = folder;
