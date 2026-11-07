@@ -43,6 +43,7 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     permissions:
       contents: write # uploads to the release
+      pull-requests: read # Package's changes job asks for it, though a release skips its steps
     # The pinned actionlint does not read the $/ self-repository form yet. The ./ form only loads files from this
     # commit here: nothing is checked out before a reusable workflow call.
     uses: ./.github/workflows/package.yml # zizmor: ignore[self-repository]

@@ -1,10 +1,18 @@
 #requires -Version 7.0
-# Classifies GitHub changed-file JSON from the checkout root; stdout is ready for GITHUB_OUTPUT.
+# Decides which checks a change needs, from GitHub changed-file JSON read at the checkout root. stdout is ready for
+# GITHUB_OUTPUT. pr-rules.ps1 dot-sources this file for Test-Prose.
 param(
-    [Parameter(Mandatory)][string] $Files,
-    [ValidateRange(1, 3000)][int] $MaxFiles = 3000,
-    [switch] $Draft
+    [string] $Files,
+    [ValidateRange(1, 3000)][int] $MaxFiles = 3000
 )
+
+# Prose is what no build, test or package reads.
+function Test-Prose {
+    param([string] $Path)
+    $Path -match '^docs/|\.md$'
+}
+
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 $ErrorActionPreference = 'Stop'
 $filesChanged = @(Get-Content -LiteralPath $Files -Raw | ConvertFrom-Json -AsHashtable)
@@ -16,17 +24,28 @@ $paths = @(
         if ($file['previous_filename']) { $file['previous_filename'] }
     }
 )
-$nonDocs = @($paths | Where-Object { $_ -notmatch '^docs/|\.md$' })
-$code = $unknown -or $nonDocs.Count -gt 0
+$nonProse = @($paths | Where-Object { -not (Test-Prose $_) })
+function Test-Changed {
+    param([string] $Pattern)
+    $unknown -or @($nonProse -match $Pattern).Count -gt 0
+}
 $checks = [ordered]@{
-    fast = $code
-    code = $code
+    code = $unknown -or $nonProse.Count -gt 0
     docs = $unknown
-    scripts = $unknown -or @($nonDocs | Where-Object { $_ -match '^scripts/|^tests/Scripts/|^\.github/(workflows|actions)/' }).Count -gt 0
-    workflows = $unknown -or @($nonDocs | Where-Object { $_ -match '^\.github/(workflows|actions)/' }).Count -gt 0
+    scripts = Test-Changed '^scripts/|^tests/Scripts/|^\.github/(workflows|actions)/'
+    workflows = Test-Changed '^\.github/(workflows|actions)/'
+    # What package.yml's jobs read: the release files, the template, the library's project and build files, and the
+    # scripts and actions that pack, package and test them.
+    package = Test-Changed (
+        '^(packaging|templates|src/Winshell\.Package|tests/Winshell\.Package\.Tests|scripts/lib|\.github/actions)/',
+        '^src/[^/]+/[^/]+\.csproj$',
+        '^((src|tests)/)?Directory\.',
+        '^(global\.json|nuget\.config|BannedSymbols\.Interop\.txt|release-please-config\.json|\.release-please-manifest\.json)$',
+        '^scripts/(check|pack|package|publish-release)\.ps1$',
+        '^\.github/workflows/(package|release-please)\.yml$' -join '|')
 }
 
-if (-not $code) {
+if (-not $checks.code) {
     foreach ($file in $filesChanged) {
         $names = @($file['filename'], $file['previous_filename']) | Where-Object { $_ }
         if (@($names | Where-Object { $_ -match '^docs/reference/winshell.*\.md$' }).Count -gt 0) {
@@ -48,11 +67,6 @@ if (-not $code) {
         }
         if ($checks.docs) { break }
     }
-}
-if ($Draft) {
-    $checks.fast = $false
-    $checks.code = $false
-    $checks.docs = $false
 }
 foreach ($name in $checks.Keys) {
     "$name=$($checks[$name].ToString().ToLowerInvariant())"
