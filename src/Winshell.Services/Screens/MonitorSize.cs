@@ -40,8 +40,8 @@ internal static class MonitorSize
 }
 
 /// <summary>
-/// Asks Windows once for each monitor. The screen list is read on the loop whenever a window is placed, and a
-/// monitor's size does not change, so only the first read waits, and a query that is late reports 0 until it answers.
+/// Asks Windows once for each monitor. A monitor is described each time the screen list is read or one screen is
+/// looked up, often on the loop, and a monitor's size does not change, so only the first read waits, and a query that is late reports 0 until it answers.
 /// </summary>
 internal sealed class MonitorSizeCache(Func<string, Task<(double WidthMm, double HeightMm)>> query, TimeSpan wait)
 {

@@ -167,7 +167,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
             int x, y;
             if (first)
             {
-                var area = Screens.Find(placement.Screen?.Id ?? platform.PrimaryScreenId)?.Area ?? default;
+                var monitor = placement.Screen is { } screen ? Screens.Find(screen.Id) : Screens.Primary();
+                var area = monitor?.Area ?? default;
                 x = area.Left + (area.Width - client.Width) / 2;
                 y = area.Top + (area.Height - client.Height) / 2;
             }
@@ -223,7 +224,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         Reframe();
         var monitor = Screens.Find(saved.MonitorId) ?? CurrentMonitor();
         var scale = host.Placement.Scale > 0 ? host.Placement.Scale : saved.Scale;
-        if (monitor is not null && saved.Matches(monitor.Info.Id, monitor.Bounds, scale) && saved.HasPlacement)
+        if (monitor is not null && saved.Matches(monitor.Id, monitor.Bounds, scale) && saved.HasPlacement)
         {
             var next = saved.Placement;
             next.ShowCmd = placement.StateRequested
@@ -292,7 +293,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         var normal = shown;
         if ((maximized || minimized) && hasPlacement)
         {
-            var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
+            var primary = Screens.Primary();
             var tool =
                 ((long)Win32.GetWindowLongPtr(Handle, Win32.GWL_EXSTYLE) & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0;
             normal = WindowOnScreen.Restored(
@@ -307,7 +308,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
             (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE),
             scale,
             bounds,
-            monitor?.Info.Id ?? "",
+            monitor?.Id ?? "",
             logical.X - bounds.Left,
             logical.Y - bounds.Top,
             logical.Width,
@@ -368,12 +369,12 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
                    SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED));
     }
 
-    private ConnectedMonitor? CurrentMonitor()
+    private MonitorGeometry? CurrentMonitor()
     {
         if (Handle == 0)
             return null;
         var handle = Win32.MonitorFromWindow(Handle, Win32.MONITOR_DEFAULTTONEAREST);
-        return handle == 0 ? null : Screens.Describe(handle);
+        return handle == 0 ? null : Screens.Read(handle);
     }
 
     private void ReportState()

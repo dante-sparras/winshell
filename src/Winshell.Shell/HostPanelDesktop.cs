@@ -14,8 +14,7 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
 
     public PanelMonitor? Primary()
     {
-        var id = platform.PrimaryScreenId;
-        return id.Length == 0 ? null : Find(id);
+        return Screens.Primary() is { } monitor ? Of(monitor) : null;
     }
 
     public bool FullscreenOn(string screenId)
@@ -69,8 +68,8 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
         platform.Loop.Post(action);
     }
 
-    private static PanelMonitor Of(ConnectedMonitor monitor)
+    private static PanelMonitor Of(MonitorGeometry monitor)
     {
-        return new PanelMonitor(monitor.Info.Id, monitor.Bounds, monitor.Area, monitor.Scale);
+        return new PanelMonitor(monitor.Id, monitor.Bounds, monitor.Area, monitor.Scale);
     }
 }

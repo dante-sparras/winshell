@@ -164,7 +164,7 @@ internal sealed class WindowBackend : IWindowBackend
 
     public ScreenInfo? Screen(string deviceName)
     {
-        return Screens.Find(deviceName)?.Info;
+        return Screens.Find(deviceName) is { } monitor ? Screens.Describe(monitor).Info : null;
     }
 
     public string DesktopId(nint hwnd)
@@ -285,9 +285,9 @@ internal sealed class WindowBackend : IWindowBackend
             || !Win32.GetWindowRect(hwnd, out var rect))
             return screens;
         var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
-        foreach (var monitor in Screens.Enumerate())
+        foreach (var monitor in Screens.List())
             if (WindowRules.CoversMonitor(style, rect, monitor.Bounds))
-                screens.Add(monitor.Info.Id);
+                screens.Add(monitor.Id);
         return screens;
     }
 
@@ -300,25 +300,22 @@ internal sealed class WindowBackend : IWindowBackend
     {
         if (deviceName.Length == 0 || !Win32.IsWindow(hwnd))
             return;
-        var monitors = Screens.Enumerate();
-        var target = monitors.FirstOrDefault(m => m.Info.Id == deviceName);
-        if (target is null)
+        if (Screens.Find(deviceName) is not { } target)
             return;
         var sourceHandle = Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST);
-        var source = sourceHandle == 0 ? null : Screens.Describe(sourceHandle);
-        if (source is null || source.Info.Id == target.Info.Id)
+        var source = sourceHandle == 0 ? null : Screens.Read(sourceHandle);
+        if (source is null || source.Id == target.Id)
             return;
         if (!Win32.GetWindowRect(hwnd, out var current))
             return;
         var hasPlacement = TopLevelWindows.TryPlacement(hwnd, out var placement);
         var minimized = Win32.IsIconic(hwnd);
         var maximized = !minimized && Win32.IsZoomed(hwnd);
-        var primary = monitors.FirstOrDefault(m => m.Info.IsPrimary);
+        var primary = Screens.Primary();
         var window = new WindowToMove(current, hasPlacement ? placement.Normal : default, hasPlacement, minimized,
             maximized,
             ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0);
-        if (!WindowOnScreen.TryMove(window, MonitorFrame.Of(source.Bounds, source.Work, source.Scale),
-                MonitorFrame.Of(target.Bounds, target.Work, target.Scale), primary?.Bounds ?? default,
+        if (!WindowOnScreen.TryMove(window, source.Frame, target.Frame, primary?.Bounds ?? default,
                 primary?.Work ?? default, out var place))
             return;
         if (hasPlacement)

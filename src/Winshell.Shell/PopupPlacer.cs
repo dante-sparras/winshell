@@ -16,11 +16,11 @@ internal sealed class PopupPlacer(HostWindow host, ShellPlatform platform) : IWi
     {
         _placement = placement;
         // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
-        var monitors = Screens.Enumerate();
+        var monitors = Screens.List();
         var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y),
-            monitors.Select(m => m.Info.Geometry).ToList());
-        var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ??
-                      (at is { } i ? monitors[i] : monitors.FirstOrDefault());
+            monitors.Select(m => m.Logical).ToList());
+        var monitor = monitors.FirstOrDefault(m => m.Id == placement.Screen?.Id) ??
+                      (at is { } i ? monitors[i] : Screens.Primary());
         if (monitor is null)
             return;
         host.Placement.Scale = monitor.Scale;
