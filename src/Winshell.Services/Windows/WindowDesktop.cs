@@ -10,7 +10,6 @@ namespace Winshell.Windows;
 internal static class WindowDesktop
 {
     private static WindowDesktopManager? _manager;
-    private static bool _loggedUnavailable;
 
     /// <summary>The id of the desktop the window is on, or empty when Windows does not say.</summary>
     public static string IdOf(nint hwnd)
@@ -19,7 +18,7 @@ internal static class WindowDesktop
             return "";
         try
         {
-            var manager = Manager();
+            var manager = Manager(out _);
             if (manager is null)
                 return "";
             if (manager.DesktopOf(hwnd, out var id) < 0 || id == Guid.Empty)
@@ -33,20 +32,24 @@ internal static class WindowDesktop
         }
     }
 
-    /// <summary>Moves the window to that desktop. False when Windows refuses or the manager is unavailable.</summary>
-    public static bool Move(nint hwnd, Guid desktop)
+    /// <summary>Moves the window to that desktop. False, with why, when Windows refuses or the manager is unavailable.</summary>
+    public static bool Move(nint hwnd, Guid desktop, out string problem)
     {
         if (hwnd == 0 || desktop == Guid.Empty)
+        {
+            problem = "MoveWindowToDesktop needs a window and a desktop.";
             return false;
+        }
+
         try
         {
-            var manager = Manager();
+            var manager = Manager(out problem);
             if (manager is null)
                 return false;
             var hr = manager.Move(hwnd, desktop);
             if (hr < 0)
             {
-                Log.Default.Warn("desktops", $"MoveWindowToDesktop failed (0x{hr:X8}).");
+                problem = $"MoveWindowToDesktop failed (0x{hr:X8}).";
                 return false;
             }
 
@@ -55,22 +58,19 @@ internal static class WindowDesktop
         catch (Exception ex) when (ex is COMException or InvalidCastException or InvalidComObjectException)
         {
             _manager = null;
-            Log.Default.Warn("desktops", $"MoveWindowToDesktop failed ({ex.GetType().Name}).");
+            problem = $"MoveWindowToDesktop failed ({ex.GetType().Name}).";
             return false;
         }
     }
 
-    private static WindowDesktopManager? Manager()
+    private static WindowDesktopManager? Manager(out string problem)
     {
+        problem = "";
         if (_manager is not null)
             return _manager;
         _manager = WindowDesktopManager.Create(out var hr);
-        if (hr < 0 && !_loggedUnavailable)
-        {
-            _loggedUnavailable = true;
-            Log.Default.Warn("desktops", $"IVirtualDesktopManager is unavailable (0x{hr:X8}).");
-        }
-
+        if (_manager is null)
+            problem = $"IVirtualDesktopManager is unavailable (0x{hr:X8}).";
         return _manager;
     }
 }

@@ -23,7 +23,12 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
 
     public bool FailRead { get; set; }
 
-    public event Action? Switched;
+    private readonly Listeners<Action> _switched = new();
+
+    public IDisposable ListenSwitched(Action handler, Action<Exception> failed)
+    {
+        return _switched.Add(handler, failed);
+    }
 
     public bool StartWatching()
     {
@@ -33,7 +38,7 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
     /// <summary>Reports a switch the way Windows does, without changing <see cref="Current"/>.</summary>
     public void Switch()
     {
-        Switched?.Invoke();
+        _switched.Raise(0, static (handler, _) => handler());
     }
 
     public string ListStamp => string.Join(",", Items.Select(item => item.Id));
@@ -55,25 +60,29 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
         return true;
     }
 
-    public bool SwitchTo(Guid id)
+    public bool SwitchTo(Guid id, out string problem)
     {
         Calls.Add($"switch:{id:D}");
+        problem = "";
         if (Items.All(item => item.Id != id))
             return false;
+
         Current = id;
         return true;
     }
 
-    public Guid? Create()
+    public Guid? Create(out string problem)
     {
+        problem = "";
         var id = Guid.NewGuid();
         Items.Add(new DesktopRecord(id, ""));
         Calls.Add($"create:{id:D}");
         return id;
     }
 
-    public bool Remove(Guid id, Guid fallback)
+    public bool Remove(Guid id, Guid fallback, out string problem)
     {
+        problem = "";
         Calls.Add($"remove:{id:D}:{fallback:D}");
         Items.RemoveAll(item => item.Id == id);
         if (Current == id)

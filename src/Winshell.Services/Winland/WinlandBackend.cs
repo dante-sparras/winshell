@@ -22,15 +22,15 @@ internal sealed class WinlandBackend : IWinlandBackend
 
     public static readonly WinlandBackend Instance = new();
 
-    private readonly List<Log> _logs = [];
+    private readonly Listeners<Handlers> _listeners = new();
     private int _started;
     private volatile string? _pipeName;
     private volatile int _processId;
     private volatile bool _connected;
 
-    public event Action<bool>? ConnectionChanged;
-
-    public event Action<string>? EventReceived;
+    private WinlandBackend()
+    {
+    }
 
     public bool IsConnected => _connected;
 
@@ -38,29 +38,12 @@ internal sealed class WinlandBackend : IWinlandBackend
 
     public string PipePath => @"\\.\pipe\" + (_pipeName ?? Candidates[0]);
 
-    public void Start(Log log)
+    public IDisposable Listen(Action<bool> connectionChanged, Action<string> eventReceived, Action<Exception> failed)
     {
-        RegisterLog(log);
+        var listening = _listeners.Add(new Handlers(connectionChanged, eventReceived), failed);
         if (Interlocked.Exchange(ref _started, 1) == 0)
             _ = Task.Run(FollowEvents);
-    }
-
-    public void Stop(Log log)
-    {
-        lock (_logs)
-        {
-            _logs.Remove(log);
-        }
-    }
-
-    /// <summary>An engine's log. A listener that throws is written there, not only to a debugger.</summary>
-    internal void RegisterLog(Log log)
-    {
-        lock (_logs)
-        {
-            if (!_logs.Contains(log))
-                _logs.Add(log);
-        }
+        return listening;
     }
 
     private async Task FollowEvents()
@@ -81,11 +64,11 @@ internal sealed class WinlandBackend : IWinlandBackend
                     await pipe.WriteAsync(Encoding.UTF8.GetBytes("events\n")).ConfigureAwait(false);
                     await pipe.FlushAsync().ConfigureAwait(false);
                     _connected = true;
-                    Raise(ConnectionChanged, true);
+                    _listeners.Raise(true, static (handlers, connected) => handlers.ConnectionChanged(connected));
                     var reader = new WinlandReader(pipe);
                     while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
                         if (line.Length > 0)
-                            Raise(EventReceived, line);
+                            _listeners.Raise(line, static (handlers, received) => handlers.EventReceived(received));
                 }
                 catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidDataException
                                               or InvalidOperationException)
@@ -98,7 +81,7 @@ internal sealed class WinlandBackend : IWinlandBackend
                     if (_connected)
                     {
                         _connected = false;
-                        Raise(ConnectionChanged, false);
+                        _listeners.Raise(false, static (handlers, connected) => handlers.ConnectionChanged(connected));
                     }
                 }
 
@@ -173,30 +156,5 @@ internal sealed class WinlandBackend : IWinlandBackend
         return Win32.GetNamedPipeServerProcessId(pipe.SafePipeHandle.DangerousGetHandle(), out var pid) ? pid : null;
     }
 
-    /// <summary>Calls each handler in turn. One that throws is logged, and the others still run.</summary>
-    internal void Raise<T>(Action<T>? handlers, T value)
-    {
-        if (handlers is null)
-            return;
-        foreach (var handler in handlers.GetInvocationList().Cast<Action<T>>())
-            try
-            {
-                handler(value);
-            }
-            catch (Exception e)
-            {
-                var message = e.ToString();
-                Log[] logs;
-                lock (_logs)
-                {
-                    logs = _logs.ToArray();
-                }
-
-                if (logs.Length == 0)
-                    Log.Default.Warn("winland", message);
-                else
-                    foreach (var log in logs)
-                        log.Warn("winland", message);
-            }
-    }
+    private sealed record Handlers(Action<bool> ConnectionChanged, Action<string> EventReceived);
 }

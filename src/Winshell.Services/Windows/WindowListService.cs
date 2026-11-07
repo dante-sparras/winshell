@@ -31,7 +31,10 @@ internal readonly record struct WindowIdentity(
 public sealed class WindowListService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
+    private readonly Log _log;
     private readonly IWindowBackend _backend;
+    private readonly IDisposable _winEvents;
+    private readonly IDisposable _flashes;
     private readonly VirtualDesktopsService? _desktops;
     private readonly Dictionary<nint, AppWindow> _byHwnd = [];
     private readonly Dictionary<nint, WindowIdentity> _identities = [];
@@ -44,18 +47,20 @@ public sealed class WindowListService : ObservableObject, IDisposable
     private bool _disposed;
 
     /// <param name="loop">The loop of the thread the windows are read on. That thread must pump messages.</param>
-    /// <param name="log">Where a hook that cannot be set is reported.</param>
+    /// <param name="log">Where a hook that cannot be set, a failed event and a failed move are reported.</param>
     /// <param name="desktops">Gives <see cref="AppWindow.Desktop"/> its value. Without it, that stays null.</param>
     /// <param name="backend">The windows, for a test.</param>
     internal WindowListService(IEventLoop loop, Log log, VirtualDesktopsService? desktops = null,
         IWindowBackend? backend = null)
     {
         _loop = loop;
+        _log = log;
         _desktops = desktops;
         _backend = backend ?? WindowBackend.Shared;
-        _backend.WinEvent += OnWinEvent;
-        _backend.Flashed += OnFlashed;
-        _backend.Start(log);
+        _winEvents = _backend.ListenWinEvents(OnWinEvent, Failed);
+        _flashes = _backend.ListenFlashes(OnFlashed, Failed);
+        foreach (var refused in _backend.Start())
+            log.Warn("windows", refused);
         if (_desktops is not null)
             _desktops.Refreshed += OnDesktopsRefreshed;
         foreach (var hwnd in _backend.TopLevel())
@@ -94,6 +99,11 @@ public sealed class WindowListService : ObservableObject, IDisposable
         PostFlush();
     }
 
+    private void Failed(Exception e)
+    {
+        _log.Warn("windows", e.Message);
+    }
+
     private void OnFlashed(nint hwnd)
     {
         _flashed.Add(hwnd);
@@ -130,7 +140,7 @@ public sealed class WindowListService : ObservableObject, IDisposable
             }
             else if (window is null)
             {
-                window = new AppWindow(info, _backend, _desktops);
+                window = new AppWindow(info, _backend, _desktops, _log);
                 _byHwnd[hwnd] = window;
                 added.Add(window);
             }
@@ -245,8 +255,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _backend.WinEvent -= OnWinEvent;
-        _backend.Flashed -= OnFlashed;
+        _winEvents.Dispose();
+        _flashes.Dispose();
         if (_desktops is not null)
             _desktops.Refreshed -= OnDesktopsRefreshed;
     }
@@ -257,16 +267,18 @@ public sealed class AppWindow : ObservableObject
 {
     private readonly IWindowBackend _backend;
     private readonly VirtualDesktopsService? _desktops;
+    private readonly Log _log;
     private WindowInfo _info;
     private AppWindow? _parent;
     private bool _activated;
     private bool _attention;
 
-    internal AppWindow(WindowInfo info, IWindowBackend backend, VirtualDesktopsService? desktops)
+    internal AppWindow(WindowInfo info, IWindowBackend backend, VirtualDesktopsService? desktops, Log log)
     {
         _info = info;
         _backend = backend;
         _desktops = desktops;
+        _log = log;
     }
 
     internal nint Hwnd => _info.Hwnd;
@@ -349,8 +361,10 @@ public sealed class AppWindow : ObservableObject
     {
         if (desktop is null || !Guid.TryParse(desktop.Id, out var id) || id == Guid.Empty)
             return;
-        if (_backend.MoveToDesktop(Hwnd, id))
+        if (_backend.MoveToDesktop(Hwnd, id, out var problem))
             NotifyDesktop();
+        else
+            _log.Warn("desktops", problem);
     }
 
     internal void NotifyDesktop()

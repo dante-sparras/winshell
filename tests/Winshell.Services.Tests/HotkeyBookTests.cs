@@ -188,7 +188,8 @@ public sealed class HotkeyBookTests
     public void Ctrl_Alt_Delete_is_not_registered()
     {
         var loop = new ManualEventLoop();
-        using var hotkey = new Hotkey(loop);
+        using var registrar = new HotkeyRegistrar(loop, Log.Default);
+        using var hotkey = new Hotkey(loop, Log.Default, registrar);
         hotkey.Sequence = "Ctrl+Alt+Delete";
 
         Assert.False(hotkey.Active);
@@ -202,8 +203,12 @@ public sealed class HotkeyBookTests
     [Fact]
     public void A_second_windows_key_hotkey_waits_until_the_hook_is_free()
     {
-        using var first = new Hotkey(new ManualEventLoop());
-        using var second = new Hotkey(new ManualEventLoop());
+        var firstLoop = new ManualEventLoop();
+        var secondLoop = new ManualEventLoop();
+        using var firstRegistrar = new HotkeyRegistrar(firstLoop, Log.Default);
+        using var secondRegistrar = new HotkeyRegistrar(secondLoop, Log.Default);
+        using var first = new Hotkey(firstLoop, Log.Default, firstRegistrar);
+        using var second = new Hotkey(secondLoop, Log.Default, secondRegistrar);
         first.Sequence = "Win";
         Assert.True(first.Active);
 

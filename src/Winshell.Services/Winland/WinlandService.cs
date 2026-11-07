@@ -17,6 +17,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly IWinlandBackend _backend;
+    private readonly IDisposable _listening;
     private readonly List<WinlandMonitor> _monitorList = [];
     private readonly List<WinlandWorkspace> _workspaceList = [];
     private readonly List<WinlandWindow> _windowList = [];
@@ -36,9 +37,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
         _loop = loop;
         _log = log;
         _backend = backend ?? WinlandBackend.Instance;
-        _backend.ConnectionChanged += OnConnectionChanged;
-        _backend.EventReceived += OnEventReceived;
-        _backend.Start(log);
+        _listening = _backend.Listen(OnConnectionChanged, OnEventReceived, e => _log.Warn("winland", e.ToString()));
         if (_backend.IsConnected)
             RefreshAll();
     }
@@ -703,8 +702,6 @@ public sealed class WinlandService : ObservableObject, IDisposable
             return;
         _disposed = true;
         Attach(null);
-        _backend.ConnectionChanged -= OnConnectionChanged;
-        _backend.EventReceived -= OnEventReceived;
-        _backend.Stop(_log);
+        _listening.Dispose();
     }
 }

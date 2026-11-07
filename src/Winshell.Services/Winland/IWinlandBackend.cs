@@ -12,17 +12,14 @@ internal interface IWinlandBackend
     /// <summary>The process that answers on the pipe, or 0 while none does.</summary>
     int ProcessId { get; }
 
-    /// <summary>Raised when the event stream connects (true) or is lost (false). Raised on any thread.</summary>
-    event Action<bool>? ConnectionChanged;
-
-    /// <summary>Raised for each line of the event stream, in order. Raised on any thread.</summary>
-    event Action<string>? EventReceived;
-
-    /// <summary>Follows the event stream, when it does not already, and writes a listener that throws to <paramref name="log"/>.</summary>
-    void Start(Log log);
-
-    /// <summary>Stops writing to <paramref name="log"/>. The stream goes on for other services.</summary>
-    void Stop(Log log);
+    /// <summary>
+    /// Follows the event stream, when it does not already, and calls the handlers until disposed. They run on any
+    /// thread.
+    /// </summary>
+    /// <param name="connectionChanged">Gets true when the event stream connects, and false when it is lost.</param>
+    /// <param name="eventReceived">Gets each line of the event stream, in order.</param>
+    /// <param name="failed">Gets each exception a handler throws.</param>
+    IDisposable Listen(Action<bool> connectionChanged, Action<string> eventReceived, Action<Exception> failed);
 
     /// <summary>Sends one request and reads its reply. Null when Winland is not running or does not answer.</summary>
     Task<string?> RequestAsync(string command);

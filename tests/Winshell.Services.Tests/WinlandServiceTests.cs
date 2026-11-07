@@ -465,7 +465,6 @@ public sealed class WinlandServiceTests
         _loop.Process();
 
         Assert.Equal(title, service.Windows[0].Title);
-        Assert.Same(Log.Default, Assert.Single(_backend.Stopped));
         Assert.Equal(0, _backend.Listeners);
     }
 
@@ -479,10 +478,9 @@ public sealed class WinlandServiceTests
 
         public TaskCompletionSource<string?>? Pending { get; set; }
 
-        public List<Log> Stopped { get; } = [];
+        private readonly List<(Action<bool> Connection, Action<string> Event)> _listeners = [];
 
-        public int Listeners => (ConnectionChanged?.GetInvocationList().Length ?? 0) +
-                                (EventReceived?.GetInvocationList().Length ?? 0);
+        public int Listeners => _listeners.Count;
 
         public bool IsConnected => Connected;
 
@@ -490,12 +488,12 @@ public sealed class WinlandServiceTests
 
         public int ProcessId { get; set; }
 
-        public event Action<bool>? ConnectionChanged;
-
-        public event Action<string>? EventReceived;
-
-        public void Start(Log log)
+        public IDisposable Listen(Action<bool> connectionChanged, Action<string> eventReceived,
+            Action<Exception> failed)
         {
+            var listener = (connectionChanged, eventReceived);
+            _listeners.Add(listener);
+            return new DisposeAction(() => _listeners.Remove(listener));
         }
 
         public Task<string?> RequestAsync(string command)
@@ -506,18 +504,15 @@ public sealed class WinlandServiceTests
 
         public void Raise(string line)
         {
-            EventReceived?.Invoke(line);
+            foreach (var listener in _listeners.ToList())
+                listener.Event(line);
         }
 
         public void RaiseConnection(bool connected)
         {
             Connected = connected;
-            ConnectionChanged?.Invoke(connected);
-        }
-
-        public void Stop(Log log)
-        {
-            Stopped.Add(log);
+            foreach (var listener in _listeners.ToList())
+                listener.Connection(connected);
         }
     }
 }
