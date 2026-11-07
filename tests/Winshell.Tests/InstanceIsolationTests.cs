@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Xunit.Sdk;
 
 namespace Winshell.Tests;
@@ -60,7 +59,7 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
     }
 
     /// <summary>
-    /// A killed instance leaves its file, and Windows can give that process id to the next winshell.
+    /// A killed instance leaves its file, and Windows can give that process id to the next shell.
     /// The list then has to name the process that is running, not the file the dead one left.
     /// </summary>
     [Fact]
@@ -69,21 +68,6 @@ public sealed class InstanceIsolationTests : IDisposable, IClassFixture<ProbeBui
         var process = Start(Config("once"));
         var live = Info(process);
         var liveId = live.GetProperty("id").GetString()!;
-        var staleId = Instances.NewId();
-        var dir = RunDir(staleId);
-        Directory.CreateDirectory(dir);
-        // The shape left on disk before processStart was recorded: same pid, earlier launch, no processStart.
-        var legacy = File.ReadAllText(Path.Combine(RunDir(liveId), "instance.json"));
-        legacy = legacy.Replace($"\"id\": \"{liveId}\"", $"\"id\": \"{staleId}\"", StringComparison.Ordinal);
-        legacy = legacy.Replace($"\"pipe\": \"winshell-{liveId}\"", $"\"pipe\": \"winshell-{staleId}\"",
-            StringComparison.Ordinal);
-        var launched = live.GetProperty("launchTime").GetDateTime().AddHours(-3);
-        legacy = Regex.Replace(
-            legacy,
-            "\"launchTime\": \"[^\"]+\"",
-            "\"launchTime\": \"" + launched.ToString("o", CultureInfo.InvariantCulture) + "\"");
-        legacy = Regex.Replace(legacy, ",\\s*\"processStart\": \\d+", "");
-        File.WriteAllText(Path.Combine(dir, "instance.json"), legacy);
         var reusedId = Instances.NewId();
         var reusedDir = RunDir(reusedId);
         Directory.CreateDirectory(reusedDir);

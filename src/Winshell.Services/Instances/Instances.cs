@@ -18,13 +18,12 @@ internal sealed record InstanceInfo(
     [property: JsonPropertyName("pipe")] string Pipe,
     [property: JsonPropertyName("log")] string Log,
     // UTC ticks of Process.StartTime. Windows reuses process ids, so the pid alone is not this process.
-    // Files written before this field existed leave it at 0.
     [property: JsonPropertyName("processStart")]
     long ProcessStart = 0,
     // Set when the shell exits cleanly. The folder stays so `winshell log` can still find it.
     [property: JsonPropertyName("exitedAt")]
     DateTime? ExitedAt = null,
-    // The process's name, since a configuration's program can have any. Files from winshell.exe alone leave it out.
+    // The process's name, since a configuration's program can have any.
     [property: JsonPropertyName("processName")]
     string? ProcessName = null);
 
@@ -34,11 +33,13 @@ internal sealed record InstanceInfo(
 internal sealed partial class InstanceJson : JsonSerializerContext;
 
 /// <summary>
-/// The instances in one folder, <see cref="ShellLocations.RunRoot"/>, each in a folder of its own. The log is
-/// log.txt in that folder.
+/// The instances in one folder, <see cref="ShellLocations.RunRoot"/>, each in a folder of its own that holds its
+/// record, <see cref="RecordName"/>, and its log, <see cref="InstanceLog.FileName"/>.
 /// </summary>
 internal sealed class Instances(string folder)
 {
+    public const string RecordName = "instance.json";
+
     public static string NewId()
     {
         return Convert.ToHexStringLower(Guid.NewGuid().ToByteArray())[..12];
@@ -53,7 +54,7 @@ internal sealed class Instances(string folder)
     {
         var dir = DirOf(info.Id);
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "instance.json"),
+        File.WriteAllText(Path.Combine(dir, RecordName),
             JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
     }
 
@@ -63,19 +64,13 @@ internal sealed class Instances(string folder)
     /// </summary>
     public void Remove(string id)
     {
-        var file = Path.Combine(DirOf(id), "instance.json");
+        if (Read(DirOf(id)) is not { ExitedAt: null } info)
+            return;
         try
         {
-            var info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
-            if (info is null)
-                return;
-            if (info.ExitedAt is not null)
-                return;
-            File.WriteAllText(file,
-                JsonSerializer.Serialize(info with { ExitedAt = TimeProvider.System.GetLocalNow().LocalDateTime },
-                    InstanceJson.Default.InstanceInfo));
+            Write(info with { ExitedAt = TimeProvider.System.GetLocalNow().LocalDateTime });
         }
-        catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
         }
     }
@@ -83,69 +78,70 @@ internal sealed class Instances(string folder)
     /// <summary>Every instance that wrote its file, newest first. Dead ones are skipped unless asked for.</summary>
     public List<(InstanceInfo Info, bool Alive)> List(bool includeDead)
     {
-        var result = new List<(InstanceInfo, bool)>();
+        var result = new List<(InstanceInfo Info, bool Alive)>();
         if (!Directory.Exists(folder))
             return result;
         foreach (var dir in Directory.EnumerateDirectories(folder))
         {
-            var file = Path.Combine(dir, "instance.json");
-            if (!File.Exists(file))
+            if (Read(dir) is not { } info)
                 continue;
-            InstanceInfo? info;
-            try
-            {
-                info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
-            }
-            catch (Exception e) when (e is JsonException or IOException)
-            {
-                continue;
-            }
-
-            if (info is null)
-                continue;
-            // A clean exit leaves the file in place, with exitedAt set, so it is not a running instance.
-            var alive = info.ExitedAt is null && IsCurrent(info);
+            var alive = IsRunning(info);
             if (alive || includeDead)
                 result.Add((info, alive));
         }
 
-        if (result.Count > 1)
-            result = OneRowPerProcess(result);
-        return result.OrderByDescending(r => r.Item1.LaunchTime).ToList();
+        // Two files can name one live process only when this user cannot read its start time. The newest is its own.
+        return result.Where(row => !row.Alive)
+            .Concat(result.Where(row => row.Alive).GroupBy(row => row.Info.Pid)
+                .Select(group => group.MaxBy(row => row.Info.LaunchTime)))
+            .OrderByDescending(row => row.Info.LaunchTime).ToList();
     }
 
-    /// <summary>
-    /// The file belongs to the shell that has this process id now. A killed instance leaves its file for a day, and
-    /// Windows can give that process id to the next shell; the old file then names the new process. This user may not
-    /// be able to open the process that has the id now, so the name is read first: reading it needs no handle.
-    /// </summary>
-    internal static bool IsCurrent(InstanceInfo info)
+    /// <summary>The record in an instance's folder, or null when it has none that can be read.</summary>
+    private static InstanceInfo? Read(string dir)
     {
         try
         {
-            using var process = Process.GetProcessById(info.Pid);
-            try
-            {
-                if (!HasRecordedName(info, process) || process.HasExited)
-                    return false;
-            }
-            catch (Win32Exception)
-            {
-                return true;
-            }
+            return JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(dir, RecordName)),
+                InstanceJson.Default.InstanceInfo);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
 
-            var started = StartTicks(process);
-            if (started == 0)
-                return true;
-            if (info.ProcessStart != 0)
-                return info.ProcessStart == started;
-            // A file from before processStart was recorded was written with DateTime.Now, after the process
-            // existed. One whose launch is earlier belongs to the previous owner of this process id.
-            return AsUtc(info.LaunchTime) >= new DateTime(started, DateTimeKind.Utc).AddMilliseconds(-250);
+    /// <summary>
+    /// The instance has not exited and its process id still names the process that wrote it. A killed instance leaves
+    /// its file for a day, and Windows can give that process id to the next shell.
+    /// </summary>
+    internal static bool IsRunning(InstanceInfo info)
+    {
+        if (info.ExitedAt is not null)
+            return false;
+        try
+        {
+            using var process = Process.GetProcessById(info.Pid);
+            return Wrote(info, process);
         }
         catch (ArgumentException)
         {
             return false;
+        }
+    }
+
+    /// <summary>
+    /// True when <paramref name="process"/> wrote the record, as far as this user can tell. This user may not be able
+    /// to open the process, so the name is read first: reading it needs no handle. A process whose start time cannot
+    /// be read is taken at its name.
+    /// </summary>
+    internal static bool Wrote(InstanceInfo info, Process process)
+    {
+        try
+        {
+            if (!string.Equals(process.ProcessName, info.ProcessName, StringComparison.OrdinalIgnoreCase) ||
+                process.HasExited)
+                return false;
         }
         catch (InvalidOperationException)
         {
@@ -155,31 +151,15 @@ internal sealed class Instances(string folder)
         {
             return true;
         }
-    }
 
-    /// <summary>True when <paramref name="process"/> wrote the record, as far as this user can tell.</summary>
-    internal static bool IsThisInstance(InstanceInfo info, Process process)
-    {
-        if (!HasRecordedName(info, process))
-            return false;
-        if (info.ProcessStart == 0)
-            return true;
         try
         {
-            var started = process.StartTime.ToUniversalTime().Ticks;
-            return started == 0 || started == info.ProcessStart;
+            return process.StartTime.ToUniversalTime().Ticks == info.ProcessStart;
         }
         catch (Exception e) when (e is InvalidOperationException or Win32Exception or ArgumentException)
         {
             return true;
         }
-    }
-
-    private static bool HasRecordedName(InstanceInfo info, Process process)
-    {
-        return info.ProcessName is { Length: > 0 } name
-            ? string.Equals(process.ProcessName, name, StringComparison.OrdinalIgnoreCase)
-            : process.ProcessName.StartsWith("winshell", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Waits for the shell a new one takes over from to let go of the taskbar, the hotkeys and the tray.</summary>
@@ -196,71 +176,11 @@ internal sealed class Instances(string folder)
         }
     }
 
-    /// <summary>One row per live process id. Two files can both name it; the one this process wrote is kept.</summary>
-    private static List<(InstanceInfo Info, bool Alive)> OneRowPerProcess(List<(InstanceInfo Info, bool Alive)> items)
-    {
-        var kept = new List<(InstanceInfo, bool)>();
-        foreach (var group in items.Where(i => i.Alive).GroupBy(i => i.Info.Pid))
-            kept.Add((Choose(group.Select(i => i.Info).ToList()), true));
-        foreach (var item in items)
-            if (!item.Alive)
-                kept.Add(item);
-        return kept;
-    }
-
-    private static InstanceInfo Choose(List<InstanceInfo> samePid)
-    {
-        var started = StartTicks(samePid[0].Pid);
-        if (started != 0)
-        {
-            var exact = samePid.Where(i => i.ProcessStart == started).ToList();
-            if (exact.Count > 0)
-                return exact.OrderByDescending(i => i.LaunchTime).First();
-        }
-
-        return samePid.OrderByDescending(i => i.LaunchTime).First();
-    }
-
-    private static long StartTicks(int pid)
-    {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return StartTicks(process);
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
-        {
-            return 0;
-        }
-    }
-
-    private static long StartTicks(Process process)
-    {
-        try
-        {
-            return process.StartTime.ToUniversalTime().Ticks;
-        }
-        catch (Exception e) when (e is InvalidOperationException or Win32Exception or ArgumentException)
-        {
-            return 0;
-        }
-    }
-
-    private static DateTime AsUtc(DateTime value)
-    {
-        return value.Kind switch
-        {
-            DateTimeKind.Utc => value,
-            DateTimeKind.Local => value.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(value, DateTimeKind.Local).ToUniversalTime()
-        };
-    }
-
     /// <summary>Removes the folders of instances that are no longer running, keeping their logs a day.</summary>
     /// <remarks>
-    /// A stopped instance's folder goes once it is a day old, measured from when it exited, or from the log's last
-    /// write when it left no exit time. A folder with no <c>instance.json</c> is deleted on the same rule, so a clean
-    /// exit from an older build does not leave a folder forever.
+    /// A stopped instance's folder goes once it is a day old, measured from when it exited, or else from the log's last
+    /// write. A folder with no record that can be read, from a start that ended before it wrote one, goes on the same
+    /// rule.
     /// </remarks>
     public void Clean()
     {
@@ -268,44 +188,22 @@ internal sealed class Instances(string folder)
             return;
         foreach (var dir in Directory.EnumerateDirectories(folder))
         {
-            var file = Path.Combine(dir, "instance.json");
-            if (!File.Exists(file))
-            {
-                var log = Path.Combine(dir, "log.txt");
-                var stamp = File.Exists(log) ? File.GetLastWriteTime(log) : Directory.GetLastWriteTime(dir);
-                if (OlderThanADay(stamp))
-                    TryDelete(dir);
+            var info = Read(dir);
+            if (info is not null && IsRunning(info))
                 continue;
-            }
-
-            InstanceInfo? info;
-            try
-            {
-                info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
-            }
-            catch (Exception e) when (e is JsonException or IOException)
-            {
-                continue;
-            }
-
-            if (info is null || (info.ExitedAt is null && IsCurrent(info)))
-                continue;
-            if (OlderThanADay(AgeOf(dir, info)))
+            if (TimeProvider.System.GetLocalNow().LocalDateTime - LastUsed(dir, info) > TimeSpan.FromDays(1))
                 TryDelete(dir);
         }
     }
 
-    private static DateTime AgeOf(string dir, InstanceInfo info)
+    private static DateTime LastUsed(string dir, InstanceInfo? info)
     {
-        if (info.ExitedAt is { } exited)
+        if (info?.ExitedAt is { } exited)
             return exited;
-        var log = Path.Combine(dir, "log.txt");
-        return File.Exists(log) ? File.GetLastWriteTime(log) : info.LaunchTime;
-    }
-
-    private static bool OlderThanADay(DateTime stamp)
-    {
-        return TimeProvider.System.GetLocalNow().LocalDateTime - stamp > TimeSpan.FromDays(1);
+        var log = Path.Combine(dir, InstanceLog.FileName);
+        if (File.Exists(log))
+            return File.GetLastWriteTime(log);
+        return info?.LaunchTime ?? Directory.GetLastWriteTime(dir);
     }
 
     private static void TryDelete(string dir)

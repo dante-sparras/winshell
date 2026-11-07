@@ -39,6 +39,26 @@ public sealed class InstanceLogTests : IDisposable
         }
     }
 
+    /// <summary><c>winshell log -f</c> holds the log open while the shell rolls it.</summary>
+    [Fact]
+    public async Task A_follower_reads_on_after_the_log_rolls()
+    {
+        var path = Path.Combine(_dir, "log.txt");
+        var cancel = TestContext.Current.CancellationToken;
+        using var log = new InstanceLog(path, 10, Timeout.InfiniteTimeSpan);
+        log.Write(LogLevel.Warn, "before-the-roll");
+        await using var stream = InstanceLog.OpenToRead(path);
+        using var reader = new StreamReader(stream);
+        Assert.Equal("before-the-roll", await reader.ReadLineAsync(cancel));
+        await using var lines = InstanceLog.Follow(reader, cancel).GetAsyncEnumerator(cancel);
+
+        log.Write(LogLevel.Warn, "after-the-roll");
+
+        Assert.Equal("before-the-roll\n", Read(Path.Combine(_dir, "log.1.txt")));
+        Assert.True(await lines.MoveNextAsync());
+        Assert.Equal("after-the-roll", lines.Current);
+    }
+
     [Fact]
     public void An_ordinary_line_lands_a_moment_after_it_is_written()
     {

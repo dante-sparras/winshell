@@ -143,7 +143,7 @@ internal static class ShellExit
         try
         {
             process = Process.GetProcessById(info.Pid);
-            if (!process.HasExited && Instances.IsThisInstance(info, process))
+            if (Instances.Wrote(info, process))
                 return process;
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)
@@ -180,7 +180,7 @@ internal static class ShellExit
         {
             // The id was free to take while the instance was asked. A different process that owns it now is not ended.
             process.Refresh();
-            if (info is not null && !Instances.IsThisInstance(info, process))
+            if (info is not null && !Instances.Wrote(info, process))
                 return true;
             // Not the tree: the apps the user opened from this shell are its children, and they are not hung.
             process.Kill();
