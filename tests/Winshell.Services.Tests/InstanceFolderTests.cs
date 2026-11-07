@@ -1,18 +1,31 @@
 using System.Text.Json;
 
-namespace Winshell.Tests;
+namespace Winshell.Services.Tests;
 
-/// <summary>A clean exit keeps the instance folder, and a later start deletes it once it is a day old.</summary>
-public sealed class InstanceExitFolderTests : IDisposable
+/// <summary>
+/// An instance's file keeps what <c>winshell list</c> leaves out. A clean exit keeps the instance folder, and a later
+/// start deletes it once it is a day old.
+/// </summary>
+public sealed class InstanceFolderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
 
-    public InstanceExitFolderTests()
+    public InstanceFolderTests()
     {
         Directory.CreateDirectory(_root);
     }
 
     private Instances Instances => new(_root);
+
+    [Fact]
+    public void The_instance_file_keeps_process_start_and_exited_at()
+    {
+        var info = new InstanceInfo("id", 1, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "C:\\log.txt", 42,
+            DateTime.Now);
+        var file = JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo);
+        Assert.Contains("\"processStart\": 42", file, StringComparison.Ordinal);
+        Assert.Contains("\"exitedAt\":", file, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void A_clean_exit_keeps_the_folder_and_is_not_listed_as_running()

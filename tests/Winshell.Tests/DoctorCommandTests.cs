@@ -93,19 +93,31 @@ public sealed class DoctorCommandTests : IDisposable
     }
 
     [Fact]
-    public void Without_a_config_it_warns_that_nothing_runs_and_writes_nothing()
+    public void Without_a_config_it_warns_that_nothing_runs_checks_this_PC_and_writes_nothing()
     {
         var empty = Path.Combine(_root, "none");
+        var local = Path.Combine(_root, "local");
         Directory.CreateDirectory(empty);
 
-        var (_, output, _) = RunIn(empty, "doctor", "--json");
+        var (_, output, _) = WinshellCli.Run(["doctor", "--json"], (ShellLocations.ConfigVariable, empty),
+            (ShellLocations.LocalVariable, local));
 
         using var json = JsonDocument.Parse(output);
-        var project = json.RootElement.GetProperty("checks").EnumerateArray()
-            .Single(c => c.GetProperty("id").GetString() == "project");
+        var checks = json.RootElement.GetProperty("checks").EnumerateArray().ToList();
+        var project = checks.Single(c => c.GetProperty("id").GetString() == "project");
         Assert.Equal("warn", project.GetProperty("status").GetString());
         Assert.Contains("starts nothing", project.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Equal("pass", checks.Single(c => c.GetProperty("id").GetString() == "crashes").GetProperty("status")
+            .GetString());
+        // Every check runs on this PC, a problem says how to fix it, and no message names the user's folder.
+        var messages = checks.Select(c => c.GetProperty("message").GetString()!).ToList();
+        Assert.DoesNotContain(messages, m => m.StartsWith("Could not check", StringComparison.Ordinal));
+        Assert.All(checks.Where(c => c.GetProperty("status").GetString() != "pass"),
+            c => Assert.False(string.IsNullOrEmpty(c.GetProperty("fix").GetString())));
+        Assert.DoesNotContain(messages, m => m.Contains(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), StringComparison.OrdinalIgnoreCase));
         Assert.Empty(Directory.EnumerateFileSystemEntries(empty));
+        Assert.False(Directory.Exists(local));
     }
 
     [Fact]

@@ -1,4 +1,4 @@
-namespace Winshell.Tests;
+namespace Winshell.Services.Tests;
 
 /// <summary>
 /// The instance log rolls instead of growing without limit, a warning is on disk at once, and an ordinary line a
@@ -18,7 +18,7 @@ public sealed class InstanceLogTests : IDisposable
     {
         var path = Path.Combine(_dir, "log.txt");
         var previous = Path.Combine(_dir, "log.1.txt");
-        using (var log = new InstanceLog(path, 100, Timeout.InfiniteTimeSpan))
+        using (var log = new InstanceLog(path, 100, new FakeTimeProvider()))
         {
             log.Write(LogLevel.Info, "info-still-buffered");
             Assert.DoesNotContain("info-still-buffered", Read(path), StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class InstanceLogTests : IDisposable
         var path = Path.Combine(_dir, "log.txt");
         var cancel = TestContext.Current.CancellationToken;
         // 20 bytes: the second line passes the cap, so the third rolls the file.
-        using var log = new InstanceLog(path, 20, Timeout.InfiniteTimeSpan);
+        using var log = new InstanceLog(path, 20, new FakeTimeProvider());
         log.Write(LogLevel.Warn, "first-line");
         await using var stream = InstanceLog.OpenToRead(path);
         using var reader = new StreamReader(stream);
@@ -71,13 +71,17 @@ public sealed class InstanceLogTests : IDisposable
     public void An_ordinary_line_lands_a_moment_after_it_is_written()
     {
         var path = Path.Combine(_dir, "log.txt");
-        using var log = new InstanceLog(path, flushAfter: TimeSpan.FromMilliseconds(20));
+        var time = new FakeTimeProvider();
+        using var log = new InstanceLog(path, time: time);
         log.Write(LogLevel.Info, "first");
-        Wait.Until(() => Read(path).Contains("first", StringComparison.Ordinal), "the first line on disk");
+        Assert.DoesNotContain("first", Read(path), StringComparison.Ordinal);
+        time.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.Contains("first", Read(path), StringComparison.Ordinal);
 
         // Nothing was left to write, so the timer stopped. The next line starts it again.
         log.Write(LogLevel.Info, "second");
-        Wait.Until(() => Read(path).Contains("second", StringComparison.Ordinal), "the second line on disk");
+        time.Advance(TimeSpan.FromMilliseconds(500));
+        Assert.Contains("second", Read(path), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -86,7 +90,7 @@ public sealed class InstanceLogTests : IDisposable
         var path = Path.Combine(_dir, "log.txt");
         var time = new FakeTimeProvider();
         var delay = TimeSpan.FromMilliseconds(500);
-        using var log = new InstanceLog(path, 10, delay, time);
+        using var log = new InstanceLog(path, 10, time);
         log.Write(LogLevel.Warn, "fills-the-file-past-the-cap");
 
         // Move the file the log holds aside and keep a new one at its path open, so the roll can neither copy nor reopen it.

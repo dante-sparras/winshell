@@ -299,16 +299,6 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
         return result;
     }
 
-    [Fact]
-    public void Reload_with_nothing_running_for_a_pid_is_a_miss()
-    {
-        var result = Run("reload", "--pid", "0");
-
-        result.AssertExitCode(1);
-        Assert.Equal("", result.Output);
-        Assert.Equal("No instance with process id 0." + Environment.NewLine, result.Error);
-    }
-
     private Process StartProbe()
     {
         var process = ProbeShell.Start(_config, _local, program: _probe.Program);

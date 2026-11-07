@@ -6,28 +6,15 @@ namespace Winshell;
 /// <summary>
 /// A failure before a shell exists. The message always goes to standard error. A dialog shows it only when
 /// no console window is attached and nothing is reading that error, which is how the Start tile and the
-/// sign-in entry run. Tests replace <see cref="Show"/>, so a test never opens a real dialog and a run
-/// never waits on one.
+/// sign-in entry run.
 /// </summary>
 internal static class StartupError
 {
     /// <summary>
-    /// Shows the message, the first argument, and offers to open the folder, the second, when it is set. Tests replace
-    /// this.
+    /// Writes <paramref name="message"/> to standard error, then shows it in a dialog that offers to open
+    /// <paramref name="folder"/> when this process's error would otherwise be invisible.
     /// </summary>
-    internal static Action<string, string?> Show = Dialog;
-
-    /// <summary>Reads this process's console and reports <paramref name="message"/>.</summary>
     internal static void Report(string message, string? folder)
-    {
-        Report(message, folder, ProcessConsole.Window(), ProcessConsole.Target(StandardStream.Error));
-    }
-
-    /// <summary>
-    /// Writes <paramref name="message"/> to standard error, then asks <see cref="Show"/> when
-    /// <paramref name="consoleWindow"/> is zero and <paramref name="stderr"/> is not a pipe or a file.
-    /// </summary>
-    internal static void Report(string message, string? folder, nint consoleWindow, StreamTarget stderr)
     {
         try
         {
@@ -38,9 +25,8 @@ internal static class StartupError
             // A windowless start can have no standard error. The dialog is the message then.
         }
 
-        if (!NeedsDialog(consoleWindow, stderr))
-            return;
-        Show(message, folder);
+        if (NeedsDialog(ProcessConsole.Window(), ProcessConsole.Target(StandardStream.Error)))
+            Dialog(message, folder);
     }
 
     /// <summary>

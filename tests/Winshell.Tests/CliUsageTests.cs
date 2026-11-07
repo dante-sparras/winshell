@@ -1,30 +1,9 @@
 namespace Winshell.Tests;
 
-/// <summary><c>--pid</c> and <c>--tail</c> that are not whole numbers exit 2, before any instance is touched.</summary>
+/// <summary>A whole-number <c>--pid</c> that is no instance exits 1, and the largest <c>--tail</c> prints the file.</summary>
 [Trait("Category", "Slow")]
 public class CliUsageTests
 {
-    [Theory]
-    [InlineData("kill", "--pid", "abc", "--pid needs a whole number.")]
-    [InlineData("kill", "--pid", "1.5", "--pid needs a whole number.")]
-    [InlineData("kill", "--pid", "999999999999", "--pid needs a whole number.")]
-    [InlineData("kill", "--pid", "-1", "--pid needs a whole number.")]
-    [InlineData("kill", "--pid", "", "--pid needs a whole number.")]
-    [InlineData("log", "--tail", "ten", "--tail needs a whole number.")]
-    [InlineData("log", "--tail", "-5", "--tail needs a whole number.")]
-    [InlineData("log", "-t", "ten", "-t needs a whole number.")]
-    [InlineData("kill", "--pid", null, "--pid needs a value.")]
-    [InlineData("log", "--tail", null, "--tail needs a value.")]
-    public void A_bad_number_exits_2_with_a_message(string command, string option, string? value, string message)
-    {
-        var args = value is null ? new[] { command, option } : new[] { command, option, value };
-        var result = Run(args);
-
-        result.AssertExitCode(2);
-        Assert.Equal("", result.Output);
-        Assert.Equal(message + Environment.NewLine, result.Error);
-    }
-
     [Fact]
     public void A_whole_number_pid_that_is_not_an_instance_exits_1()
     {

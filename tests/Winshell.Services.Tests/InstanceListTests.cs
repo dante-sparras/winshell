@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace Winshell.Tests;
+namespace Winshell.Services.Tests;
 
 [Trait("Category", "Slow")]
 public class InstanceListTests
