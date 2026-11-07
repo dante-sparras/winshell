@@ -14,7 +14,6 @@ internal sealed class IpcServer : IDisposable
     private readonly IEventLoop _loop;
     private readonly IInstanceControl _control;
     private readonly Func<SafePipeHandle, string?> _refusal;
-    private readonly TimeProvider _time;
     private readonly CancellationTokenSource _cancel = new();
 
     private const int WaitingInstances = 2;
@@ -44,17 +43,15 @@ internal sealed class IpcServer : IDisposable
     /// The pipe instance <see cref="OpenFirst"/> or <see cref="OpenAvailable"/> opened, which the server now owns.
     /// </param>
     /// <param name="pipe">The pipe's name, for the instances opened after the first.</param>
-    /// <param name="loop">The UI thread's loop, which requests run on.</param>
+    /// <param name="loop">The UI thread's loop, which requests run on, and whose clock times <see cref="RequestTimeout"/>.</param>
     /// <param name="control">What requests do to the shell.</param>
     /// <param name="refusal">
     /// Why a connected client is refused, or null. Tests replace the integrity check: a client below the shell's
     /// integrity is a process a test can't start.
     /// </param>
-    /// <param name="time">The clock for <see cref="RequestTimeout"/>. Tests replace it.</param>
     public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control,
-        Func<SafePipeHandle, string?>? refusal = null, TimeProvider? time = null)
+        Func<SafePipeHandle, string?>? refusal = null)
     {
-        _time = time ?? TimeProvider.System;
         _pipe = pipe;
         _first = first;
         _loop = loop;
@@ -231,7 +228,7 @@ internal sealed class IpcServer : IDisposable
             // Only the request line is timed: a listener holds its client for as long as it runs.
             string? line;
             bool tooLong;
-            using (var idle = new CancellationTokenSource(RequestTimeout, _time))
+            using (var idle = new CancellationTokenSource(RequestTimeout, _loop.Time))
             using (var reading = CancellationTokenSource.CreateLinkedTokenSource(_cancel.Token, idle.Token))
             {
                 (line, tooLong) = await ReadRequest(stream, reading.Token).ConfigureAwait(false);

@@ -12,8 +12,7 @@ internal sealed class SmtcSessionLink(
     IEventLoop loop,
     Log log,
     SmtcSession target,
-    GlobalSystemMediaTransportControlsSession session,
-    TimeProvider time) : ISmtcLink
+    GlobalSystemMediaTransportControlsSession session) : ISmtcLink
 {
     private readonly NewestRead _media = new();
     private bool _released;
@@ -182,7 +181,7 @@ internal sealed class SmtcSessionLink(
         try
         {
             var timeline = sender.GetTimelineProperties();
-            var received = time.GetUtcNow();
+            var received = loop.Time.GetUtcNow();
             loop.Post(() => ApplyTimeline(timeline, received));
         }
         // Windows throws COMException for a session whose app has closed. The next SessionsChanged lists without it.

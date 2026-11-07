@@ -32,10 +32,9 @@ public sealed class MediaServiceTests
     }
 
     /// <summary>A session with no Windows behind it. Its commands land on the link.</summary>
-    private SmtcSession Native(RecordingLink link, string appId = "test", TimeProvider? time = null)
+    private SmtcSession Native(RecordingLink link, string appId = "test")
     {
-        return new SmtcSession(new ManualEventLoop(), _log, 0, appId, appId, time ?? TimeProvider.System,
-            _ => link);
+        return new SmtcSession(_loop, _log, 0, appId, appId, _ => link);
     }
 
     private sealed class RecordingLink : ISmtcLink
@@ -422,19 +421,18 @@ public sealed class MediaServiceTests
     [Fact]
     public void Position_moves_while_playing_and_holds_while_paused()
     {
-        var time = new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
-        var native = Native(new RecordingLink(), time: time);
+        var native = Native(new RecordingLink());
         native.ApplyPlayback(new SmtcPlayback(Playing));
-        native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(10), time.GetUtcNow(),
-            time.GetUtcNow());
+        var now = _loop.Time.GetUtcNow();
+        native.ApplyTimeline(TimeSpan.Zero, TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(10), now, now);
         var session = new MediaSession(native, _loop, _log);
         Assert.Equal(10, session.Position);
 
-        time.Advance(TimeSpan.FromSeconds(5));
+        _loop.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(15, session.Position);
 
         native.ApplyPlayback(new SmtcPlayback(Paused));
-        time.Advance(TimeSpan.FromSeconds(5));
+        _loop.Advance(TimeSpan.FromSeconds(5));
         Assert.Equal(15, session.Position);
     }
 

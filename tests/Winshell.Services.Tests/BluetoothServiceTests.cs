@@ -48,10 +48,9 @@ public sealed class BluetoothServiceTests
         return messages;
     }
 
-    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null,
-        TimeProvider? time = null)
+    private static BluetoothService Monitored(IBluetoothBackend backend, ManualEventLoop loop, Log? log = null)
     {
-        var service = new BluetoothService(loop, log ?? new Log(), backend, time);
+        var service = new BluetoothService(loop, log ?? new Log(), backend);
         service.StartMonitoring();
         return service;
     }
@@ -562,24 +561,24 @@ public sealed class BluetoothServiceTests
     public void A_slow_read_covers_what_Windows_does_not_announce_and_stops_with_monitoring()
     {
         var backend = new FakeBackend { Snapshot = Snapshot(Device()) };
-        var time = new FakeTimeProvider();
-        using var service = Monitored(backend, new ManualEventLoop(), time: time);
+        var loop = new ManualEventLoop();
+        using var service = Monitored(backend, loop);
         Assert.Equal(1, backend.Reads);
 
-        time.Advance(TimeSpan.FromSeconds(29));
+        loop.Advance(TimeSpan.FromSeconds(29));
         Assert.Equal(1, backend.Reads);
-        time.Advance(TimeSpan.FromSeconds(1));
+        loop.Advance(TimeSpan.FromSeconds(1));
         Assert.Equal(2, backend.Reads);
 
         service.StopMonitoring();
         Assert.False(backend.Watching);
-        time.Advance(TimeSpan.FromMinutes(5));
+        loop.Advance(TimeSpan.FromMinutes(5));
         Assert.Equal(2, backend.Reads);
 
         service.StartMonitoring();
         Assert.True(backend.Watching);
         Assert.Equal(3, backend.Reads);
-        time.Advance(TimeSpan.FromSeconds(30));
+        loop.Advance(TimeSpan.FromSeconds(30));
         Assert.Equal(4, backend.Reads);
     }
 
@@ -656,7 +655,7 @@ public sealed class BluetoothServiceTests
     {
         private Session(IRadioAccess? radioAccess)
         {
-            Service = new BluetoothService(Loop, new Log(), Backend, radioAccess: radioAccess);
+            Service = new BluetoothService(Loop, new Log(), Backend, radioAccess);
         }
 
         public FakeBackend Backend { get; } = new();

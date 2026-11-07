@@ -13,7 +13,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
 
     private readonly IEventLoop _loop;
-    private readonly TimeProvider _time;
     private readonly IRadioAccess _radioAccess;
 
     private readonly MonitorWarning _warning;
@@ -26,23 +25,22 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     // One radio change and one visibility change run at a time.
     private readonly DeviceAction _radioChange;
     private readonly DeviceAction _visibilityChange;
-    private ITimer? _poll;
+    private IDisposable? _poll;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
 
     private string _error = "";
     private volatile bool _disposed;
 
-    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null,
+    internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null,
         IRadioAccess? radioAccess = null)
     {
         _loop = loop;
-        _time = time ?? TimeProvider.System;
         _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
         _warning = new MonitorWarning(() => log, "bluetooth");
         _radioChange = new DeviceAction(Post);
         _visibilityChange = new DeviceAction(Post);
-        Backend = backend ?? new BluetoothBackend();
+        Backend = backend ?? new BluetoothBackend(loop.Time);
         _reader = new StateReader<BluetoothSnapshot>(ReadAsync, Apply, loop, _warning);
         Backend.Changed += Refresh;
     }
@@ -96,16 +94,34 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
         lock (_gate)
         {
-            _poll ??= _time.CreateTimer(_ => Refresh(), null, PollInterval, PollInterval);
+            _poll ??= SchedulePoll();
         }
 
         Refresh();
     }
 
+    // Called under the gate. A tick of a timer that was stopped, or replaced, does nothing.
+    private IDisposable SchedulePoll()
+    {
+        IDisposable? timer = null;
+        timer = _loop.Schedule(PollInterval, () =>
+        {
+            lock (_gate)
+            {
+                if (_poll != timer)
+                    return;
+                _poll = SchedulePoll();
+            }
+
+            Refresh();
+        });
+        return timer;
+    }
+
     /// <summary>Stops watching Windows. A later <see cref="StartMonitoring"/> starts again.</summary>
     public void StopMonitoring()
     {
-        ITimer? poll;
+        IDisposable? poll;
         lock (_gate)
         {
             poll = _poll;

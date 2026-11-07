@@ -183,16 +183,17 @@ public sealed class AppIndexTests
         Assert.Equal("notepad.exe", AppUsageReader.Rot13(AppUsageReader.Rot13("notepad.exe")));
 
         var when = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero);
+        var now = when.AddDays(1);
         var data = Assist(14, when);
         var legacy = new byte[16];
         BitConverter.TryWriteBytes(legacy.AsSpan(0), 3);
         BitConverter.TryWriteBytes(legacy.AsSpan(8), when.ToFileTime());
-        Assert.True(AppUsageReader.TryParse(data, out var parsed));
+        Assert.True(AppUsageReader.TryParse(data, now, out var parsed));
         Assert.Equal(14, parsed.RunCount);
         Assert.Equal(when.ToUnixTimeMilliseconds(), parsed.LastUsedUnixMilliseconds);
-        Assert.True(AppUsageReader.TryParse(legacy, out var old));
+        Assert.True(AppUsageReader.TryParse(legacy, now, out var old));
         Assert.Equal(3, old.RunCount);
-        Assert.False(AppUsageReader.TryParse(new byte[72], out _));
+        Assert.False(AppUsageReader.TryParse(new byte[72], now, out _));
 
         var path = @"C:\Windows\System32\notepad.exe";
         var folder = AppUsageReader.ExpandKnownFolder(@" {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe".Trim());
@@ -206,7 +207,7 @@ public sealed class AppIndexTests
                 (AppUsageReader.Rot13(path), data),
                 (AppUsageReader.Rot13(@" {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe".Trim()), data),
                 (AppUsageReader.Rot13("UEME_CTLCUACount:ctor"), data)
-            ]);
+            ], now);
 
         Assert.Equal(14, usage[path].RunCount);
         Assert.Equal(when.ToUnixTimeMilliseconds(), usage[path].LastUsedUnixMilliseconds);
@@ -217,7 +218,7 @@ public sealed class AppIndexTests
         var notepad = Entry("Notepad", appId: "notepad", target: path);
         Assert.Equal(14, AppUsage.Lookup(usage, notepad).RunCount);
 
-        var live = AppUsageReader.Read();
+        var live = AppUsageReader.Read(DateTimeOffset.UtcNow);
         Assert.All(live.Values, row =>
         {
             Assert.InRange(row.RunCount, 0, 1_000_000);

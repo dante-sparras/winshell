@@ -57,11 +57,11 @@ Has the members of [ShellWindow](#shellwindow).
 
 ## IEventLoop
 
-The thread the shell's objects live on. Work from other threads is posted to it.
+The thread the shell's objects live on, and their clock. Work from other threads is posted to it.
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `Now` | TimeSpan, read-only | Time since the loop started, for timers and animations. |
+| `Time` | TimeProvider, read-only | The clock the shell's objects read. A timer it creates runs on another thread: use Schedule for work on the loop. |
 | `Post(Action action)` | void | Runs the action on the loop's thread. Safe to call from any thread. |
 | `Schedule(TimeSpan delay, Action action)` | IDisposable | Runs the action once after the delay, on the loop's thread. Dispose to cancel. |
 
