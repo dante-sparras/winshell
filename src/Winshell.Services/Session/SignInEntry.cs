@@ -181,12 +181,6 @@ internal static class SignInEntry
         return sb.ToString();
     }
 
-    /// <summary>The program <see cref="Read"/> found, or null when the command is blank.</summary>
-    internal static string? ProgramOf(string command)
-    {
-        return Read(command).Program;
-    }
-
     /// <summary>
     /// Whether <paramref name="program"/> and <paramref name="thisExe"/> are one install, once <paramref name="resolve"/>
     /// has followed links. <c>winshell.exe</c> and <c>winshellw.exe</c> in the same folder are one install.

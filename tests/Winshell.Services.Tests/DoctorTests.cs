@@ -2,6 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
 using Winshell.Diagnostics;
+using Winshell.Session;
 using StartupTaskState = Windows.ApplicationModel.StartupTaskState;
 using static Winshell.Diagnostics.Doctor;
 using static Winshell.Diagnostics.DoctorCrashes;
@@ -120,7 +121,8 @@ public sealed class DoctorTests : IDisposable
         IReadOnlyList<DoctorCheck> checks;
         try
         {
-            checks = DoctorProject.Configuration(unreadable);
+            var project = ConfigurationProject.Find(null, null, unreadable, out var problem);
+            checks = DoctorProject.Configuration(project, problem);
         }
         finally
         {
@@ -309,8 +311,8 @@ public sealed class DoctorTests : IDisposable
             Exists);
         Assert.Equal(CheckStatus.Fail, gone.Status);
         Assert.Equal(@"The sign-in entry starts C:\Gone\winshell.exe, which is not there.", gone.Message);
-        Assert.Equal(Here, ExeOf($@"""{Here}"" -p ""C:\my config"""));
-        Assert.Null(ExeOf("  "));
+        Assert.Equal(CheckStatus.Pass, SignIn($@"""{Here}"" -p ""C:\my config""", false, Here, _dir, Exists).Status);
+        Assert.Equal(CheckStatus.Fail, SignIn("  ", false, Here, _dir, Exists).Status);
     }
 
     [Fact]
@@ -331,7 +333,7 @@ public sealed class DoctorTests : IDisposable
 
         var target = Path.Combine(_dir, "target.exe");
         File.WriteAllText(target, "");
-        Assert.Equal(target, DoctorProbe.ResolveLinks(target));
+        Assert.Equal(target, SignInEntry.Resolve(target));
     }
 
     [Fact]

@@ -6,12 +6,6 @@ namespace Winshell.Diagnostics;
 /// <summary>The doctor's check of the sign-in entry, or of a packaged Winshell's startup task.</summary>
 internal static class DoctorSignIn
 {
-    /// <summary>The <c>winshell.exe</c> a sign-in command starts: after <c>conhost.exe --headless</c>, as Winshell writes it, or first.</summary>
-    internal static string? ExeOf(string command)
-    {
-        return SignInEntry.ProgramOf(command);
-    }
-
     /// <param name="command">The command line of the sign-in entry, or null when there is none.</param>
     /// <param name="turnedOff">Whether Startup apps in Windows turned the entry off.</param>
     /// <param name="thisExe">The path of the running <c>winshell.exe</c>.</param>
@@ -26,7 +20,8 @@ internal static class DoctorSignIn
         if (command is null)
             return new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass,
                 "Winshell does not start when you sign in. install.ps1 -AutoStart turns that on.");
-        var exe = ExeOf(command);
+        var launch = SignInEntry.Read(command);
+        var exe = launch.Program;
         if (exe is null || !exists(exe))
             return new DoctorCheck("signIn", "Sign-in", CheckStatus.Fail,
                 $"The sign-in entry starts {exe ?? command}, which is not there.",
@@ -37,7 +32,7 @@ internal static class DoctorSignIn
                 $"The sign-in entry starts another winshell.exe: {exe}.",
                 "Install Winshell again with -AutoStart, so the entry starts the one you use.");
         if (projectFolder is not null &&
-            !SignInEntry.Starts(SignInEntry.Read(command), projectFolder, configRoot))
+            !SignInEntry.Starts(launch, projectFolder, configRoot))
             return new DoctorCheck("signIn", "Sign-in", CheckStatus.Warn,
                 "The sign-in entry does not start this configuration.",
                 "Turn on Run at sign-in for this configuration, so the entry starts it.");

@@ -106,7 +106,7 @@ public class CommandWordTests
         var summary = CliParser.Help(null);
         var doctor = CliParser.Help("doctor");
 
-        Assert.Contains(CliMetadata.Version, summary, StringComparison.Ordinal);
+        Assert.Contains(Shell.Version, summary, StringComparison.Ordinal);
         Assert.Contains(ShellLocations.Current.ConfigRoot, summary, StringComparison.Ordinal);
         Assert.Contains(ShellLocations.ConfigVariable, summary, StringComparison.Ordinal);
         Assert.Contains(ShellLocations.Current.ConfigRoot, doctor, StringComparison.Ordinal);

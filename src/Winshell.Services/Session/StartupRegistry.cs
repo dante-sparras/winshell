@@ -14,10 +14,7 @@ internal interface IStartupRegistry
     bool IsRegistered();
 
     /// <summary>Whether the entry starts something other than this command.</summary>
-    bool PointsElsewhere()
-    {
-        return false;
-    }
+    bool PointsElsewhere();
 
     bool TurnedOffInWindows();
 

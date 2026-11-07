@@ -10,7 +10,6 @@ namespace Winshell;
 internal sealed partial class DevOutput(string projectFolder)
 {
     private const string Prefix = "dotnet watch : ";
-    private const int MostErrors = 5;
     private readonly List<string> _errors = [];
 
     public string? Read(string line)
@@ -19,7 +18,7 @@ internal sealed partial class DevOutput(string projectFolder)
         if (ConfigurationProject.IsErrorLine(text))
         {
             var error = ConfigurationProject.ErrorLine(text, projectFolder);
-            if (_errors.Contains(error) || _errors.Count == MostErrors)
+            if (_errors.Contains(error) || _errors.Count == ConfigurationProject.MostErrors)
                 return null;
             _errors.Add(error);
             return string.Join('\n', _errors);

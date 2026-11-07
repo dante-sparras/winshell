@@ -10,13 +10,13 @@ internal static class DoctorCommand
         var checks = Doctor.Run(new DoctorContext(ShellLocations.Current, options.Path, options.Config));
         if (options.Json)
         {
-            Console.WriteLine(DoctorReport.ToJson(checks, CliMetadata.Version));
+            Console.WriteLine(DoctorReport.ToJson(checks, Shell.Version));
         }
         else
         {
             var color = !options.NoColor && !Console.IsOutputRedirected &&
                         string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NO_COLOR"));
-            Console.Write(DoctorReport.Format(checks, CliMetadata.Version, color));
+            Console.Write(DoctorReport.Format(checks, Shell.Version, color));
         }
 
         return checks.Any(c => c.Status == CheckStatus.Fail) ? 1 : 0;

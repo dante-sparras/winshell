@@ -141,7 +141,7 @@ public static class Doctor
                     : WinshellHost.Supervising();
                 return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),
                     SignInEntry.TurnedOffInWindows(), context.Locations.ConfigRoot, File.Exists,
-                    DoctorProbe.ResolveLinks, project);
+                    SignInEntry.Resolve, project);
             }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(instances)),
