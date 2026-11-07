@@ -142,6 +142,7 @@ internal static class InstanceStart
         launch.Log.Info("shell",
             $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{launch.Program}\"");
         launch.Log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
+        identity.CarryOver(launch.Log);
         launch.Log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
         if (instance.OpenPipe() is { } pipeError)
         {
