@@ -53,9 +53,8 @@ public sealed partial class Shell
     public BrightnessService Brightness => Own(ref _brightness, () => new BrightnessService(Loop, Log));
 
     /// <summary>Whether Explorer's taskbar is hidden. Winshell shows it again when it exits.</summary>
-    public ExplorerTaskbarService ExplorerTaskbar => Own(ref _explorerTaskbar, () =>
-        new ExplorerTaskbarService(whenTaskbarMayHaveChanged: listen =>
-            Platform.TaskbarMayHaveChanged += () => RehideTaskbar(listen)));
+    public ExplorerTaskbarService ExplorerTaskbar =>
+        Own(ref _explorerTaskbar, () => new ExplorerTaskbarService(Loop, Log));
 
     /// <summary>The recent and frequent documents of an app, as its jump list shows them.</summary>
     public JumpListService JumpLists => _jumpLists ??= new JumpListService();
@@ -123,24 +122,6 @@ public sealed partial class Shell
     public IdleMonitor NewIdleMonitor()
     {
         return new IdleMonitor(Loop);
-    }
-
-    /// <summary>
-    /// Hides a new Explorer taskbar window. A panel's message or the loop raises this, and a failure here must fail
-    /// neither: the loop reports one as a crash.
-    /// </summary>
-    private void RehideTaskbar(Action rehide)
-    {
-        try
-        {
-            rehide();
-        }
-#pragma warning disable CA1031 // Reported, and the panel or loop that noticed the taskbar goes on.
-        catch (Exception e)
-#pragma warning restore CA1031
-        {
-            Log.Warn("explorer-taskbar", e.Message);
-        }
     }
 
     private T Own<T>(ref T? field, Func<T> make)

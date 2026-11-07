@@ -7,20 +7,21 @@ namespace Winshell.ExplorerTaskbar;
 public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
 {
     private readonly object _gate = new();
+    private readonly IEventLoop _loop;
+    private readonly Log _log;
     private IExplorerTaskbarBackend? _backend;
     private bool _hidden;
 
     /// <summary>
     /// <paramref name="backend"/> is the Windows adapter, or a fake in a test. Left out, the real adapter is made the
-    /// first time the taskbar is touched, so leaving it shown never looks at Explorer's windows.
-    /// <paramref name="whenTaskbarMayHaveChanged"/> hears that Explorer may have made a taskbar window. This module
-    /// decides that a hidden taskbar is hidden again.
+    /// first time the taskbar is hidden, so leaving it shown never looks at Explorer's windows.
     /// </summary>
-    internal ExplorerTaskbarService(IExplorerTaskbarBackend? backend = null,
-        Action<Action>? whenTaskbarMayHaveChanged = null)
+    internal ExplorerTaskbarService(IEventLoop loop, Log log, IExplorerTaskbarBackend? backend = null)
     {
-        _backend = backend;
-        whenTaskbarMayHaveChanged?.Invoke(Rehide);
+        _loop = loop;
+        _log = log;
+        if (backend is not null)
+            _backend = Listen(backend);
     }
 
     /// <summary>Whether Explorer's taskbar is hidden and its screen edge is released.</summary>
@@ -45,37 +46,6 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
         }
     }
 
-    /// <summary>Whether a taskbar window of Explorer's is hidden. This does not say that this shell hid it.</summary>
-    internal bool AnyHidden()
-    {
-        lock (_gate)
-        {
-            return Backend.AnyHidden();
-        }
-    }
-
-    /// <summary>
-    /// Shows every hidden taskbar window and reserves its edge again, for a process that did not hide it. A window
-    /// that still reserves its edge keeps it.
-    /// </summary>
-    internal void RestoreHidden()
-    {
-        lock (_gate)
-        {
-            Backend.RestoreHidden();
-        }
-    }
-
-    /// <summary>Takes a taskbar window Explorer made since <see cref="Hidden"/> was set. Does nothing unless it is hidden.</summary>
-    internal void Rehide()
-    {
-        lock (_gate)
-        {
-            if (_hidden)
-                Backend.Hide();
-        }
-    }
-
     /// <summary>
     /// Puts back what this shell hid. Does nothing otherwise. Safe from any thread, and it reports no change: a crash
     /// can call it, and the process is already ending.
@@ -95,6 +65,10 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
     public void Dispose()
     {
         Restore();
+        lock (_gate)
+        {
+            _backend?.Dispose();
+        }
     }
 
     private void Hide()
@@ -103,7 +77,7 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
         {
             if (_hidden)
                 return;
-            var taskbar = Backend;
+            var taskbar = _backend ??= Listen(new ExplorerTaskbarBackend(_loop, _log));
             _hidden = true;
             try
             {
@@ -118,6 +92,9 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
                 }
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
+                    // The hide's own failure is the one thrown. Exit tries the restore again.
+                    _log.Warn("explorer-taskbar",
+                        $"Could not put the taskbar back after hiding it failed: {e.Message}");
                 }
 
                 throw;
@@ -125,5 +102,19 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
         }
     }
 
-    private IExplorerTaskbarBackend Backend => _backend ??= new ExplorerTaskbarBackend();
+    /// <summary>Takes a taskbar window Explorer made since the taskbar was hidden. Does nothing unless it is hidden.</summary>
+    private void Rehide()
+    {
+        lock (_gate)
+        {
+            if (_hidden)
+                _backend?.Hide();
+        }
+    }
+
+    private IExplorerTaskbarBackend Listen(IExplorerTaskbarBackend backend)
+    {
+        backend.TaskbarMayHaveChanged += Rehide;
+        return backend;
+    }
 }

@@ -13,7 +13,6 @@ namespace Winshell.Tray;
 internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : ITrayBackend
 {
     private const uint WM_COPYDATA = 0x004A;
-    private static readonly uint TaskbarCreatedMessage = Win32.RegisterWindowMessageW("TaskbarCreated");
 
     // Apps send their icons to one window, so one instance in the session at a time is the notification area. The
     // others wait, and the first to notice takes over when it exits, even if it crashed.
@@ -78,7 +77,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
             return false;
         // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
         // start, and an app at a lower level can still add its icon.
-        _window.AllowFromAnyLevel(TaskbarCreatedMessage);
+        _window.AllowFromAnyLevel(TaskbarWindows.Created);
         _window.AllowFromAnyLevel(WM_COPYDATA);
         _settingsWatch = TrayIconSettings.Watch(loop, () => SettingsChanged?.Invoke());
         foreach (var eventType in new uint[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_REORDER })
@@ -130,10 +129,10 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
 
     public void Broadcast()
     {
-        Win32.PostMessageW(HWND_BROADCAST, TaskbarCreatedMessage, 0, 0);
+        Win32.PostMessageW(HWND_BROADCAST, TaskbarWindows.Created, 0, 0);
         // A broadcast reaches only top-level windows, and some apps, such as Hex, keep their icons on a message-only window.
         foreach (var window in MessageOnlyWindows())
-            Win32.PostMessageW(window, TaskbarCreatedMessage, 0, 0);
+            Win32.PostMessageW(window, TaskbarWindows.Created, 0, 0);
     }
 
     public IReadOnlyList<TrayIconSetting> ReadSettings()
@@ -244,7 +243,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
 
     private bool OnMessage(uint msg, nint wParam, nint lParam)
     {
-        if (msg == TaskbarCreatedMessage)
+        if (msg == TaskbarWindows.Created)
         {
             TaskbarCreated?.Invoke();
             return true;

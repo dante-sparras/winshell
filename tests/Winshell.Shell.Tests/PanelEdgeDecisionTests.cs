@@ -36,8 +36,6 @@ public class PanelEdgeDecisionTests
 
         public double Scale { get; private set; }
 
-        public int TaskbarNotes { get; private set; }
-
         public List<Action> Posted { get; } = [];
 
         public PanelMonitor? Find(string id)
@@ -99,11 +97,6 @@ public class PanelEdgeDecisionTests
         public void Post(Action action)
         {
             Posted.Add(action);
-        }
-
-        public void TaskbarCreated()
-        {
-            TaskbarNotes++;
         }
 
         private sealed class Noop : IDisposable
@@ -234,7 +227,6 @@ public class PanelEdgeDecisionTests
         edge.ExplorerRestarted();
 
         Assert.Equal(1, desktop.Removes);
-        Assert.Equal(1, desktop.TaskbarNotes);
         Assert.Equal(1, desktop.Reserves);
         desktop.Posted.Single()();
         Assert.Equal(2, desktop.Registers);

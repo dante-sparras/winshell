@@ -1,4 +1,5 @@
 using System.Globalization;
+using Winshell.Native;
 
 namespace Winshell.Diagnostics;
 
@@ -23,8 +24,8 @@ internal static class DoctorScreens
     /// <summary>A visible top-level window: its class, its bounds in physical pixels, and its program.</summary>
     internal sealed record WindowFacts(string ClassName, int Left, int Top, int Right, int Bottom, string Program);
 
-    internal const string TaskbarClass = "Shell_TrayWnd";
-    internal const string SecondaryTaskbarClass = "Shell_SecondaryTrayWnd";
+    internal const string TaskbarClass = TaskbarWindows.PrimaryClass;
+    internal const string SecondaryTaskbarClass = TaskbarWindows.SecondaryClass;
     internal const string WinshellClass = "WinshellHostWindow";
 
     /// <summary>How thick a window must be to be named as an app bar beside a Winshell panel; thinner ones are borders and edge helpers.</summary>
