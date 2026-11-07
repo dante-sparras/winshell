@@ -3,17 +3,19 @@ using System.Runtime.InteropServices;
 
 namespace Winshell;
 
-/// <summary>The exceptions a Windows API that refuses or fails is turned into.</summary>
+/// <summary>Tells a Windows API that refused or failed apart from a bug.</summary>
 internal static class WindowsFailure
 {
     /// <summary>
-    /// Whether <paramref name="e"/> is Windows saying no rather than a bug. WinRT turns <c>E_INVALIDARG</c> into
-    /// <see cref="ArgumentException"/> and <c>E_ILLEGAL_METHOD_CALL</c> into <see cref="InvalidOperationException"/>,
-    /// and a missing device or file into an <see cref="IOException"/>.
+    /// Whether <paramref name="e"/> is what a failure <c>HRESULT</c> or Win32 error becomes. WinRT maps
+    /// <c>E_ACCESSDENIED</c>, <c>E_INVALIDARG</c>, <c>E_ILLEGAL_METHOD_CALL</c> and missing-file codes to their .NET
+    /// exceptions and most other codes to <see cref="COMException"/>, and a failed Win32 call reports a
+    /// <see cref="Win32Exception"/>. Services throw <see cref="NotSupportedException"/> and
+    /// <see cref="InvalidOperationException"/> themselves when Windows refuses without an exception.
     /// </summary>
     public static bool IsExpected(Exception e)
     {
-        return e is UnauthorizedAccessException or COMException or Win32Exception or IOException
-            or InvalidOperationException or NotSupportedException or ArgumentException;
+        return e is UnauthorizedAccessException or ArgumentException or InvalidOperationException
+            or NotSupportedException or IOException or COMException or Win32Exception;
     }
 }

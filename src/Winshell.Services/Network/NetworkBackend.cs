@@ -222,7 +222,6 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         };
     }
 
-
     protected override async Task<NetworkSnapshot> ReadAsync()
     {
         try

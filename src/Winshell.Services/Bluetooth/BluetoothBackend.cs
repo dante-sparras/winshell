@@ -597,7 +597,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
         return any;
     }
 
-
     public void Dispose()
     {
         lock (_lock)

@@ -11,9 +11,10 @@ internal sealed class DeviceAction(Action<Action> post)
     public bool Running => Volatile.Read(ref _running) != 0;
 
     /// <summary>
-    /// Calls <paramref name="start"/>, then <paramref name="work"/>, unless an action is running. On the loop,
-    /// <see cref="Running"/> ends and <paramref name="done"/> gets the error: what the work returned or the text of an
-    /// expected Windows failure, else empty. Any other exception still reaches the task this returns.
+    /// Calls <paramref name="start"/>, then <paramref name="work"/>, unless an action is running. When
+    /// <c>post</c> runs its callback, <see cref="Running"/> ends and <paramref name="done"/> gets the error: what the
+    /// work returned, or the text of an expected Windows failure. It is empty after success, and after any other
+    /// exception, which still faults the task this returns.
     /// </summary>
     public async Task RunAsync(Action start, Func<Task<string?>> work, Action<string> done)
     {
