@@ -82,6 +82,7 @@ Describe 'Selecting CI checks from GitHub changed files' {
         @{ Name = 'packs a library project file change'; Path = 'src/Winshell.Shell/Winshell.Shell.csproj'; Package = $true },
         @{ Name = 'packs a central package version change'; Path = 'Directory.Packages.props'; Package = $true },
         @{ Name = 'packs a change to the script that runs the package tests'; Path = 'scripts/lib/Tests.ps1'; Package = $true },
+        @{ Name = 'packs a change to the support the package tests compile'; Path = 'tests/TestSupport/WinshellCli.cs'; Package = $true },
         @{ Name = 'packs a release workflow change'; Path = '.github/workflows/release-please.yml'; Package = $true },
         @{ Name = 'packs a change to an action the package jobs use'; Path = '.github/actions/prepare/action.yml'; Package = $true },
         @{ Name = 'leaves library source to the main checks'; Path = 'src/Winshell.Shell/Panel.cs'; Package = $false },

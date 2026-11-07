@@ -241,7 +241,8 @@ public sealed class PackedTemplates : IDisposable
         var packageFile = Path.Combine(Repo.Root, "src", "Winshell.Package", "Winshell.Package.csproj");
         var packageProject = XDocument.Load(packageFile);
         var packageDir = Path.GetDirectoryName(packageFile)!;
-        var lib = "lib/" + packageProject.Descendants("TargetFramework").Single().Value + "/";
+        var build = XDocument.Load(Path.Combine(Repo.Root, "Directory.Build.props"));
+        var lib = "lib/" + build.Descendants("TargetFramework").Single().Value + "/";
         var referenced = packageProject.Descendants("ProjectReference").Select(reference =>
         {
             var include = reference.Attribute("Include")!.Value;
