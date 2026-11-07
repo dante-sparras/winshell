@@ -10,6 +10,8 @@ param(
     [string] $Path
 )
 
+. (Join-Path $PSScriptRoot 'ci-changes.ps1')
+
 # Whether the body gives a before and an after with what $Value matches: on **Before:** and **After:** lines, or anywhere in
 # the rows of a table with those headings.
 function Test-BeforeAfter {
@@ -28,7 +30,7 @@ function Get-PrProblem {
     $Body = $Body -replace '(?s)<!--.*?-->', ''
     $changed = @($Files | Where-Object { $_ })
     $type = ($Title -split '[(:!]', 2)[0]
-    $code = @($changed | Where-Object { $_ -notmatch '^docs/|\.md$' })
+    $code = @($changed | Where-Object { -not (Test-Prose $_) })
     $tests = @($changed | Where-Object { $_ -match '^tests/.*\.cs$|^tests/Scripts/.*\.Tests\.ps1$' })
     if ($type -eq 'fix' -and $code.Count -gt 0 -and $Body -notmatch '\*\*No test:\*\*[ \t]*\S') {
         if ($tests.Count -eq 0) {

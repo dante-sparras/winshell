@@ -28,40 +28,17 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ steps.files.outputs.code }}
-      fast: ${{ steps.files.outputs.fast }}
-      docs: ${{ steps.files.outputs.docs }}
-      scripts: ${{ steps.files.outputs.scripts }}
-      workflows: ${{ steps.files.outputs.workflows }}
+      code: ${{ steps.changes.outputs.code }}
+      docs: ${{ steps.changes.outputs.docs }}
+      scripts: ${{ steps.changes.outputs.scripts }}
+      workflows: ${{ steps.changes.outputs.workflows }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Look at the changed files
-        id: files
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.number }}
-          DRAFT: ${{ github.event.pull_request.draft }}
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $files = Join-Path $env:RUNNER_TEMP 'changed-files.json'
-          if ($env:PR) {
-            $rows = @(gh api --paginate "repos/$env:REPO/pulls/$env:PR/files?per_page=100" --jq '.[] | @json')
-            $limit = 3000
-          } else {
-            $rows = @(gh api "repos/$env:REPO/compare/$env:BEFORE...$env:AFTER" --jq '.files[] | @json')
-            $limit = 300
-          }
-          if ($LASTEXITCODE -ne 0) { throw 'Could not read changed files.' }
-          $changed = @($rows | ForEach-Object { $_ | ConvertFrom-Json })
-          ConvertTo-Json -InputObject $changed -Depth 10 | Set-Content -LiteralPath $files
-          ./scripts/ci-changes.ps1 -Files $files -MaxFiles $limit -Draft:($env:DRAFT -eq 'true') |
-            Out-File -LiteralPath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/changes # zizmor: ignore[self-repository]
+        id: changes
 
   ci:
     # The ruleset requires this job by name. Rename it there too if you rename it here.
@@ -98,23 +75,23 @@ jobs:
           exit $LASTEXITCODE
       # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
       - uses: ./.github/actions/prepare # zizmor: ignore[self-repository]
-        if: needs.changes.outputs.fast != 'false' || needs.changes.outputs.docs == 'true'
+        if: needs.changes.outputs.code != 'false' || needs.changes.outputs.docs == 'true'
       - uses: ./.github/actions/powershell # zizmor: ignore[self-repository]
-        if: needs.changes.outputs.fast != 'false'
+        if: needs.changes.outputs.code != 'false'
       - name: Build
         id: build
-        if: needs.changes.outputs.fast != 'false'
+        if: needs.changes.outputs.code != 'false'
         shell: pwsh
         run: dotnet build .\winshell.slnx -warnaserror --nologo
       - name: Check
-        if: needs.changes.outputs.fast != 'false'
+        if: needs.changes.outputs.code != 'false'
         timeout-minutes: 15
         shell: pwsh
         run: |
           $env:PSModulePath = "$(Join-Path $env:RUNNER_TEMP 'psmodules');$env:PSModulePath"
           ./scripts/check.ps1 -NoBuild
       - name: Check compiled documentation
-        if: needs.changes.outputs.fast == 'false' && needs.changes.outputs.docs == 'true'
+        if: needs.changes.outputs.code == 'false' && needs.changes.outputs.docs == 'true'
         shell: pwsh
         run: ./scripts/check.ps1 -Tier Docs
   stop:
@@ -139,7 +116,7 @@ jobs:
     # The tests that start winshell.exe or open a real window. The ruleset requires this job by name.
     name: slow
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    if: ${{ !cancelled() && github.event.pull_request.draft != true && needs.changes.outputs.code != 'false' }}
     runs-on: windows-2025
     timeout-minutes: 15
     steps:

@@ -1,46 +1,17 @@
 name: Package
 
-# Builds and verifies what a release ships with scripts/package.ps1: on PRs that change packaging or the release
-# workflow (excluding Markdown-only changes), and on a push to main that is not only docs or Markdown.
-# release-please.yml calls it for a new draft release, and it can be run by hand to resume a draft; both publish only
-# after its assets are verified. A docs-only push does not start this workflow. A release still does, through workflow_call.
-# The upload also includes scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
-# A pull request or a push to main also runs the packed template tests (Category=Package), so a new project that
-# cannot restore shows before a release. The pull request filter lists each library project file. A push to main
-# already includes those files, because it ignores only docs and Markdown. A release passes a tag. The called
-# workflow sees the caller's event name, so these tests stay off when that tag is set.
+# Builds and verifies what a release ships with scripts/package.ps1. release-please.yml calls it for a new draft release,
+# and it can be run by hand to resume a draft; both publish only after its assets are verified. The upload also includes
+# scripts/install.ps1 and scripts/uninstall.ps1, copied from the tagged commit.
+#
+# Every pull request and push to main starts it. Its changes job builds a pull request that scripts/ci-changes.ps1 flags
+# package, and a push to main that is more than prose. Those runs also run the packed template tests (Category=Package),
+# so a new project that cannot restore shows before a release.
 on:
   pull_request:
-    paths:
-      - ".github/workflows/package.yml"
-      - ".github/workflows/release-please.yml"
-      - ".release-please-manifest.json"
-      - "release-please-config.json"
-      - "scripts/package.ps1"
-      - "scripts/publish-release.ps1"
-      - "tests/Scripts/PublishRelease.Tests.ps1"
-      - "tests/Scripts/Package.Tests.ps1"
-      - "packaging/**"
-      - "templates/**"
-      - "src/Winshell.Package/**"
-      - "tests/Winshell.Package.Tests/**"
-      - "src/Winshell.Native/Winshell.Native.csproj"
-      - "src/Winshell.Core/Winshell.Core.csproj"
-      - "src/Winshell.Services/Winshell.Services.csproj"
-      - "src/Winshell.Shell/Winshell.Shell.csproj"
-      - "src/Winshell/Winshell.csproj"
-      - "Directory.Build.props"
-      - "Directory.Build.targets"
-      - "BannedSymbols.Interop.txt"
-      - "Directory.Packages.props"
-      - "global.json"
-      - "!**/*.md"
   push:
     branches:
       - main
-    paths-ignore:
-      - "docs/**"
-      - "**/*.md"
   workflow_call:
     inputs:
       tag:
@@ -71,9 +42,33 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    # A release passes a tag and always builds. The called workflow sees the caller's event name, so the tag is what
+    # tells a release from a push. This job still runs for a release, because a job whose ancestor was skipped is
+    # skipped too.
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      build: ${{ inputs.tag != '' || (github.event_name == 'push' && steps.changes.outputs.code || steps.changes.outputs.package) == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: ${{ inputs.tag == '' }}
+        with:
+          persist-credentials: false
+      # The pinned actionlint cannot parse self-repository syntax; local actions use this checkout.
+      - uses: ./.github/actions/changes # zizmor: ignore[self-repository]
+        if: ${{ inputs.tag == '' }}
+        id: changes
+
   publish:
     # One job per architecture, each on its own runner, so neither waits for the other. package takes both from here.
     name: publish (${{ matrix.runtime }})
+    needs: changes
+    if: ${{ needs.changes.outputs.build == 'true' }}
     strategy:
       matrix:
         include:
@@ -119,11 +114,11 @@ jobs:
           retention-days: 1
 
   templates:
-    # Packs the library and the template, builds a shell from it and runs it. A pull request or a push to main, and
-    # not a release: a release passes a tag, and these tests open windows. The called workflow sees the caller's
-    # event name, so the empty tag is what keeps a release off this job. A change that bumps a pin in
-    # Directory.Packages.props, or a library project file, shows here if a new project can no longer restore.
-    if: ${{ inputs.tag == '' && (github.event_name == 'pull_request' || github.event_name == 'push') }}
+    # Packs the library and the template, builds a shell from it and runs it. Not for a release, because these tests
+    # open windows. A change that bumps a pin in Directory.Packages.props, or a library project file, shows here if a
+    # new project can no longer restore.
+    needs: changes
+    if: ${{ inputs.tag == '' && needs.changes.outputs.build == 'true' }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
