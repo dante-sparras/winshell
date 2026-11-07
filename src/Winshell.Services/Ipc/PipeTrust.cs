@@ -42,12 +42,12 @@ internal static class PipeTrust
             return labeled;
         labeled?.Dispose();
         if (first && error == Win32.ERROR_ACCESS_DENIED)
-            throw new IOException("The control pipe is already taken.");
+            throw new PipeTakenException();
         var handle = NamedPipeServer.CreateServer(path, first, $"O:{sid}D:(A;;GA;;;{sid})", out error);
         if (handle is null)
-            throw new IOException(error == Win32.ERROR_ACCESS_DENIED
-                ? "The control pipe is already taken."
-                : $"The control pipe could not be created ({error}).");
+            throw error == Win32.ERROR_ACCESS_DENIED
+                ? new PipeTakenException()
+                : new IOException($"The control pipe could not be created ({error}).");
         try
         {
             if (!IsMedium(handle))
@@ -110,3 +110,9 @@ internal static class PipeTrust
         return null;
     }
 }
+
+/// <summary>
+/// Another server already has the control pipe's name: Windows denies a first instance of a name that exists, and any
+/// instance of a pipe whose descriptor shuts this process out.
+/// </summary>
+internal sealed class PipeTakenException() : IOException("The control pipe is already taken.");

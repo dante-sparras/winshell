@@ -17,51 +17,16 @@ internal static class IpcCommand
             IpcOps.Listen => IpcRequest.ForListen(args[1], args[2]),
             _ => throw new UnreachableException($"No ipc command \"{args[0]}\".")
         };
-        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Running, Instances.RunDir);
-        if (choice.Info is not { } info)
-        {
-            Console.Error.WriteLine(choice.Error);
-            return choice.Code;
-        }
-
+        if (InstanceCall.Select(options, InstanceSelection.Question.Running, out var code) is not { } info)
+            return code;
         if (request.Op != IpcOps.Listen)
-        {
-            var answer = await InstanceCall.AskAsync(info, request);
-            if (answer.Response is not { } response)
-            {
-                Console.Error.WriteLine(answer.Failure);
-                return 1;
-            }
-
-            return Print(response);
-        }
+            return await InstanceCall.PrintAsync(info, request);
 
         // A listen prints each signal, and ends without a value when the shell quits.
         await foreach (var reply in IpcClient.Request(info.Pipe, request))
-        {
-            if (reply.Failure is { } failure)
-            {
-                Console.Error.WriteLine(failure.Sentence(info.Id));
+            if (InstanceCall.Print(InstanceCall.Answer.Of(reply, info.Id)) != 0)
                 return 1;
-            }
 
-            if (reply.Response is { } response && Print(response) != 0)
-                return 1;
-        }
-
-        return 0;
-    }
-
-    private static int Print(IpcResponse response)
-    {
-        if (!response.Ok)
-        {
-            Console.Error.WriteLine(response.Error);
-            return 1;
-        }
-
-        if (!string.IsNullOrEmpty(response.Value))
-            Console.WriteLine(response.Value.TrimEnd('\n'));
         return 0;
     }
 }

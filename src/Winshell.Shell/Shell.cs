@@ -226,7 +226,7 @@ public sealed partial class Shell : IDisposable
                         TomlFile.ErrorChanged += notices.ShowConfigError;
                     if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
                         XamlReload.Watch(shell, project);
-                    session.Serve(loop, new Control(shell), notices.Hide);
+                    session.Serve(loop, new Control(shell));
                     // winshell.exe is a console program: Ctrl+C would end it with no Dispose, so it quits instead.
                     Console.CancelKeyPress += (_, e) =>
                     {
@@ -353,6 +353,11 @@ public sealed partial class Shell : IDisposable
         public void ShowBuildError(string error, string projectFile)
         {
             shell.Notices?.ShowBuildError(error, projectFile);
+        }
+
+        public void DismissNotice()
+        {
+            shell.Notices?.Hide();
         }
 
         public Task<string> Inspect(string command, IReadOnlyList<string> args)

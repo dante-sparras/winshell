@@ -93,9 +93,9 @@ internal sealed class InstanceSession
     public Exception? Failure { get; set; }
 
     /// <summary>Listens on the control pipe and publishes this instance, so <c>winshell list</c> can see it.</summary>
-    public void Serve(IEventLoop loop, IInstanceControl control, Action? dismissNotice = null)
+    public void Serve(IEventLoop loop, IInstanceControl control)
     {
-        Instance.Listen(loop, control, dismissNotice);
+        Instance.Listen(loop, control);
         Instance.Publish();
     }
 }
@@ -150,10 +150,10 @@ internal static class InstanceStart
             $"Winshell {ProductVersion.Current.Text} on Windows {Environment.OSVersion.Version}, program \"{launch.Program}\"");
         launch.Log.Info("shell", $"Shell ID: \"{identity.ShellId}\"");
         launch.Log.Info("shell", $"Saving logs to \"{instance.LogPath}\"");
-        if (!instance.TryOpenPipe())
+        if (instance.OpenPipe() is { } pipeError)
         {
             instance.Abandon();
-            return InstanceResult.Reported("The control pipe is already taken.");
+            return InstanceResult.Reported(pipeError);
         }
 
         var session = new InstanceSession(instance, identity, arguments, launch.Log, launch.Program);

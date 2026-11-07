@@ -4,12 +4,8 @@ internal static class ReloadCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        var choice = InstanceSelection.Select(options, InstanceSelection.Question.Running, Instances.RunDir);
-        if (choice.Info is not { } info)
-        {
-            Console.Error.WriteLine(choice.Error);
-            return choice.Code;
-        }
+        if (InstanceCall.Select(options, InstanceSelection.Question.Running, out var code) is not { } info)
+            return code;
 
         var project = ConfigurationProject.ForProgram(info.ConfigPath);
         if (project is not null)
@@ -70,8 +66,6 @@ internal static class ReloadCommand
 
     private static string? Failure(InstanceInfo info, InstanceCall.Answer answer)
     {
-        return answer.Response is { Ok: false } refused
-            ? $"Instance {info.Id} did not reload: {refused.Error}"
-            : answer.Failure;
+        return answer.Problem($"Instance {info.Id} did not reload");
     }
 }

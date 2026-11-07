@@ -13,7 +13,6 @@ internal sealed class IpcServer : IDisposable
     private readonly string _pipe;
     private readonly IEventLoop _loop;
     private readonly IInstanceControl _control;
-    private readonly Action? _dismissNotice;
     private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly TimeProvider _time;
     private readonly CancellationTokenSource _cancel = new();
@@ -47,21 +46,19 @@ internal sealed class IpcServer : IDisposable
     /// <param name="pipe">The pipe's name, for the instances opened after the first.</param>
     /// <param name="loop">The UI thread's loop, which requests run on.</param>
     /// <param name="control">What requests do to the shell.</param>
-    /// <param name="refusal">Why a connected client is refused, or null. Tests replace the integrity check.</param>
-    /// <param name="time">The clock for <see cref="RequestTimeout"/>. Tests replace it.</param>
-    /// <param name="dismissNotice">
-    /// Closes Winshell's own notice. <c>ipc call notice dismiss</c> uses it, including when the configuration did not
-    /// build and has registered nothing to call.
+    /// <param name="refusal">
+    /// Why a connected client is refused, or null. Tests replace the integrity check: a client below the shell's
+    /// integrity is a process a test can't start.
     /// </param>
+    /// <param name="time">The clock for <see cref="RequestTimeout"/>. Tests replace it.</param>
     public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control,
-        Func<SafePipeHandle, string?>? refusal = null, Action? dismissNotice = null, TimeProvider? time = null)
+        Func<SafePipeHandle, string?>? refusal = null, TimeProvider? time = null)
     {
         _time = time ?? TimeProvider.System;
         _pipe = pipe;
         _first = first;
         _loop = loop;
         _control = control;
-        _dismissNotice = dismissNotice;
         _refusal = refusal ?? PipeTrust.ClientRefusal;
         _ = Task.Run(AcceptLoop);
     }
@@ -72,6 +69,7 @@ internal sealed class IpcServer : IDisposable
         return Create(pipe, true);
     }
 
+    /// <summary>Creates another instance of a pipe this process already serves.</summary>
     internal static NamedPipeServerStream OpenNext(string pipe)
     {
         return Create(pipe, false);
@@ -89,23 +87,25 @@ internal sealed class IpcServer : IDisposable
         return names;
     }
 
-    /// <summary>Opens the first free name from <see cref="Candidates"/>. The chosen name is written back to <paramref name="pipe"/>.</summary>
+    /// <summary>
+    /// Opens the first free name from <see cref="Candidates"/>. The chosen name is written back to <paramref name="pipe"/>.
+    /// Only a taken name moves on to the next: any other failure fails on every name.
+    /// </summary>
     internal static NamedPipeServerStream OpenAvailable(ref string pipe)
     {
         var names = Candidates(pipe);
-        for (var attempt = 0; attempt < names.Count; attempt++)
-        {
-            pipe = names[attempt];
+        for (var attempt = 0; attempt < names.Count - 1; attempt++)
             try
             {
+                pipe = names[attempt];
                 return OpenFirst(pipe);
             }
-            catch (IOException) when (attempt < names.Count - 1)
+            catch (PipeTakenException)
             {
             }
-        }
 
-        throw new IOException("The control pipe is already taken.");
+        pipe = names[^1];
+        return OpenFirst(pipe);
     }
 
     private static NamedPipeServerStream Create(string pipe, bool first)
@@ -195,7 +195,7 @@ internal sealed class IpcServer : IDisposable
         while (waiting.Count < WaitingInstances && failures < OpenAttempts)
             try
             {
-                if (!StartWaiting(Create(_pipe, false), waiting))
+                if (!StartWaiting(OpenNext(_pipe), waiting))
                     failures++;
             }
             catch (IOException e)
@@ -290,9 +290,7 @@ internal sealed class IpcServer : IDisposable
                 return;
             }
 
-            var response = request.Op == IpcOps.Inspect
-                ? await Inspect(request).ConfigureAwait(false)
-                : await OnUiThread(() => Handle(request)).ConfigureAwait(false);
+            var response = await OnUiThread(() => Handle(request)).ConfigureAwait(false);
             try
             {
                 await Send(writer, response, _cancel.Token).ConfigureAwait(false);
@@ -316,36 +314,25 @@ internal sealed class IpcServer : IDisposable
         }
     }
 
-    private IpcResponse Handle(IpcRequest request)
+    /// <summary>Every request but a listen. A screenshot awaits WinUI, so inspect ends where the shell's work does.</summary>
+    private async Task<IpcResponse> Handle(IpcRequest request)
     {
-        // Before the configuration's handlers: there is no handler when the configuration did not load.
-        if (_dismissNotice is not null && request is { Op: IpcOps.Call, Target: "notice", Name: "dismiss" })
-            return DismissNotice(request.Args);
         var ipc = _control.Ipc;
-        try
+        return request.Op switch
         {
-            return request.Op switch
-            {
-                IpcOps.Show when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
-                IpcOps.Show => new IpcResponse(true, ipc.Show()),
-                IpcOps.Call => new IpcResponse(true,
-                    ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
-                IpcOps.Prop => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
-                IpcOps.Kill => Kill(),
-                IpcOps.Reload => Reload(request),
-                IpcOps.Build => Build(request),
-                _ => new IpcResponse(false, Error: $"Unknown request {request.Op}.")
-            };
-        }
-        catch (IpcException e)
-        {
-            return new IpcResponse(false, Error: e.Message);
-        }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            // A script error is a failed call, not a crash report from an unobserved task.
-            return new IpcResponse(false, Error: _control.Describe(e));
-        }
+            IpcOps.Show when request.Json => new IpcResponse(true, CliJson.IpcShow(ipc.Describe())),
+            IpcOps.Show => new IpcResponse(true, ipc.Show()),
+            IpcOps.Call when request is { Target: "notice", Name: "dismiss" } => DismissNotice(request.Args),
+            IpcOps.Call => new IpcResponse(true,
+                ipc.Call(request.Target ?? "", request.Name ?? "", request.Args ?? [])),
+            IpcOps.Prop => new IpcResponse(true, ipc.GetProperty(request.Target ?? "", request.Name ?? "")),
+            IpcOps.Kill => Kill(),
+            IpcOps.Reload => Reload(request),
+            IpcOps.Build => Build(request),
+            IpcOps.Inspect => new IpcResponse(true,
+                await _control.Inspect(request.Target ?? "", request.Args ?? [])),
+            _ => new IpcResponse(false, Error: $"Unknown request {request.Op}.")
+        };
     }
 
     /// <summary><c>winshell ipc call notice dismiss</c>. It takes no arguments and closes whichever notice is showing.</summary>
@@ -353,7 +340,7 @@ internal sealed class IpcServer : IDisposable
     {
         if (args is { Count: > 0 })
             return new IpcResponse(false, Error: IpcValues.WrongCount("notice", "dismiss", 0, args.Count));
-        _dismissNotice!();
+        _control.DismissNotice();
         return new IpcResponse(true);
     }
 
@@ -391,26 +378,15 @@ internal sealed class IpcServer : IDisposable
             SingleWriter = false
         });
         IDisposable? subscription = null;
-        var error = await OnUiThread(() =>
+        var subscribed = await OnUiThread(() =>
         {
-            try
-            {
-                subscription = _control.Ipc.Listen(request.Target ?? "", request.Name ?? "",
-                    value => channel.Writer.TryWrite(value));
-                return null;
-            }
-            catch (IpcException e)
-            {
-                return e.Message;
-            }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-                return _control.Describe(e);
-            }
+            subscription = _control.Ipc.Listen(request.Target ?? "", request.Name ?? "",
+                value => channel.Writer.TryWrite(value));
+            return Task.FromResult(new IpcResponse(true));
         }).ConfigureAwait(false);
-        if (error is not null)
+        if (!subscribed.Ok)
         {
-            await Send(writer, new IpcResponse(false, Error: error), _cancel.Token).ConfigureAwait(false);
+            await Send(writer, subscribed, _cancel.Token).ConfigureAwait(false);
             return;
         }
 
@@ -555,8 +531,11 @@ internal sealed class IpcServer : IDisposable
         }
     }
 
-    /// <summary>Starts on the shell's thread and ends where the shell's work does, since a screenshot awaits WinUI.</summary>
-    private Task<IpcResponse> Inspect(IpcRequest request)
+    /// <summary>
+    /// Starts <paramref name="work"/> on the shell's thread. What it throws is a failed response: a script error is a
+    /// failed request, not a crash report from an unobserved task.
+    /// </summary>
+    private Task<IpcResponse> OnUiThread(Func<Task<IpcResponse>> work)
     {
         var tcs = new TaskCompletionSource<IpcResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
         _loop.Post(() => _ = Run());
@@ -566,7 +545,7 @@ internal sealed class IpcServer : IDisposable
         {
             try
             {
-                tcs.SetResult(new IpcResponse(true, await _control.Inspect(request.Target ?? "", request.Args ?? [])));
+                tcs.SetResult(await work());
             }
             catch (IpcException e)
             {
@@ -574,26 +553,13 @@ internal sealed class IpcServer : IDisposable
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
-                tcs.SetResult(new IpcResponse(false, Error: _control.Describe(e)));
-            }
-        }
-    }
-
-    private Task<T> OnUiThread<T>(Func<T> work)
-    {
-        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _loop.Post(() =>
-        {
-            try
-            {
-                tcs.SetResult(work());
+                tcs.SetResult(new IpcResponse(false, Error: $"ipc: {e.GetType().Name}: {e.Message}"));
             }
             catch (Exception e)
             {
                 tcs.SetException(e);
             }
-        });
-        return tcs.Task;
+        }
     }
 
     private static Task Send(StreamWriter writer, IpcResponse response, CancellationToken cancel)

@@ -14,7 +14,7 @@ public class IpcBoundsTests
     {
         var name = PipeName();
         var loop = new EventQueue();
-        var control = new Control();
+        var control = new FakeInstanceControl();
         using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, control);
         await using var client = await Connect(name);
 
@@ -60,7 +60,7 @@ public class IpcBoundsTests
         }
 
         loop.RunDue();
-        Assert.False(control.Killed);
+        Assert.Equal(0, control.Quits);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public class IpcBoundsTests
         var name = PipeName();
         var time = new FakeTimeProvider();
         var loop = new ManualEventLoop();
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new Control(), time: time);
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new FakeInstanceControl(), time: time);
         var idle = new List<NamedPipeClientStream>();
         try
         {
@@ -339,16 +339,15 @@ public class IpcBoundsTests
     }
 
     /// <summary>One signal and its control pipe, in this process. Nothing is installed or replaced.</summary>
-    private sealed class Probe : IInstanceControl, IDisposable
+    private sealed class Probe : IDisposable
     {
-        private readonly ShellIpc _ipc = new(Log.Default);
-
         public Probe()
         {
-            Ping = _ipc.Signal("probe", "ping");
+            var control = new FakeInstanceControl();
+            Ping = control.Ipc.Signal("probe", "ping");
             Loop = new ManualEventLoop();
             Pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
-            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, this);
+            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, control);
         }
 
         public ManualEventLoop Loop { get; }
@@ -359,17 +358,6 @@ public class IpcBoundsTests
 
         public IpcSignal Ping { get; }
 
-        public ShellIpc Ipc => _ipc;
-
-        public string? Reload(string? program)
-        {
-            return null;
-        }
-
-        public void Quit()
-        {
-        }
-
         public Task WaitUntil(Func<bool> ready, string why)
         {
             return Wait.UntilAsync(ready, why, Loop.Process);
@@ -379,23 +367,6 @@ public class IpcBoundsTests
         {
             Server.Dispose();
             Loop.Process();
-        }
-    }
-
-    private sealed class Control : IInstanceControl
-    {
-        public bool Killed { get; private set; }
-
-        public ShellIpc Ipc { get; } = new(Log.Default);
-
-        public string? Reload(string? program)
-        {
-            return null;
-        }
-
-        public void Quit()
-        {
-            Killed = true;
         }
     }
 }

@@ -7,15 +7,8 @@ internal static class LogCommand
         var path = options.Positional.FirstOrDefault();
         if (path is null)
         {
-            var choice = InstanceSelection.Select(options, InstanceSelection.Question.Log, Instances.RunDir);
-            if (choice.Info is not { } info)
-            {
-                Console.Error.WriteLine(choice.Error);
-                return choice.Code;
-            }
-
-            if (choice.Notice is not null)
-                Console.Error.WriteLine(choice.Notice);
+            if (InstanceCall.Select(options, InstanceSelection.Question.Log, out var code) is not { } info)
+                return code;
             path = info.Log;
         }
 

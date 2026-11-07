@@ -32,7 +32,7 @@ public class PipeTrustTests
         var label = NamedPipeServer.MandatoryLabel(first.SafePipeHandle);
         Assert.Contains("ME", label, StringComparison.Ordinal);
         Assert.Contains("NW", label, StringComparison.Ordinal);
-        Assert.Throws<IOException>(() => IpcServer.OpenFirst(name));
+        Assert.Throws<PipeTakenException>(() => IpcServer.OpenFirst(name));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class PipeTrustTests
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         var loop = new EventQueue();
-        var control = new Control();
+        var control = new FakeInstanceControl();
         using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, control, _ => "refused for the test");
 
         var line = await Ask(name, """{"op":"kill"}""");
@@ -102,14 +102,14 @@ public class PipeTrustTests
         Assert.False(response.Ok);
         Assert.Equal("refused for the test", response.Error);
         loop.RunDue();
-        Assert.False(control.Killed);
+        Assert.Equal(0, control.Quits);
     }
 
     [Fact]
     public async Task The_name_keeps_an_instance_after_clients_come_and_go()
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), new Control(),
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), new FakeInstanceControl(),
             _ => "refused for the test");
         for (var i = 0; i < 20; i++)
         {
@@ -125,7 +125,7 @@ public class PipeTrustTests
                 await quick.ConnectAsync(3000, TestContext.Current.CancellationToken);
             }
 
-            Assert.Throws<IOException>(() => IpcServer.OpenFirst(name).Dispose());
+            Assert.Throws<PipeTakenException>(() => IpcServer.OpenFirst(name).Dispose());
         }
     }
 
@@ -137,22 +137,5 @@ public class PipeTrustTests
         await using var writer = new StreamWriter(client, new UTF8Encoding(false)) { AutoFlush = true };
         await writer.WriteLineAsync(request);
         return await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
-    }
-
-    private sealed class Control : IInstanceControl
-    {
-        public bool Killed { get; private set; }
-
-        public ShellIpc Ipc { get; } = new(Log.Default);
-
-        public string? Reload(string? program)
-        {
-            return null;
-        }
-
-        public void Quit()
-        {
-            Killed = true;
-        }
     }
 }
