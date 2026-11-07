@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
@@ -14,19 +16,26 @@ namespace Winshell;
 /// Under <c>winshell dev</c>, puts a saved <c>.xaml</c> file into the running panels of its class. <c>dotnet watch</c> does
 /// not read XAML, and the XAML compiler takes seconds. So this loads the markup as it is and moves what it made into the
 /// live control, which keeps its C# state. A control of that class made later gets the same markup. Markup only the
-/// compiler can read asks <c>winshell dev</c> for a build instead, by logging <see cref="NeedsBuild"/>.
+/// compiler can read asks <c>winshell dev</c> for a build instead, through <see cref="BuildRequest"/>.
 /// </summary>
 internal static partial class XamlReload
 {
-    /// <summary>What <c>winshell dev</c> looks for in a shell's output, to build and start it again.</summary>
-    internal const string NeedsBuild = "This XAML needs a build";
-
     private const BindingFlags Members = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     private static readonly XNamespace X = "http://schemas.microsoft.com/winfx/2006/xaml";
     private static readonly TimeSpan Settle = TimeSpan.FromMilliseconds(50);
     private static readonly Dictionary<string, string> Saved = [];
     private static DirectoryWatch? _watch;
     private static IDisposable? _waiting;
+
+    /// <summary>
+    /// The event that asks <c>winshell dev</c> to build its project and start the shell again. It makes the event for the
+    /// folder it gives the shell in <see cref="Shell.DevProjectVariable"/>, and the shell sets it.
+    /// </summary>
+    internal static string BuildRequest(string projectFolder)
+    {
+        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectFolder)).ToUpperInvariant();
+        return @"Local\winshell-dev-build-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(folder)));
+    }
 
     /// <summary>Follows the <c>.xaml</c> files under a project's folder, for the life of the process.</summary>
     public static void Watch(Shell shell, string folder)
@@ -37,7 +46,7 @@ internal static partial class XamlReload
             name =>
             {
                 if (name.EndsWith(".xaml", StringComparison.OrdinalIgnoreCase) && !IsBuildOutput(name))
-                    shell.Loop.Post(() => Changed(shell, Path.Combine(folder, name)));
+                    shell.Loop.Post(() => Changed(shell, folder, Path.Combine(folder, name)));
             },
             () => { },
             true);
@@ -50,14 +59,17 @@ internal static partial class XamlReload
     }
 
     /// <summary>An editor writes a file more than once, so the last write of a moment is the one to read.</summary>
-    private static void Changed(Shell shell, string file)
+    private static void Changed(Shell shell, string project, string file)
     {
         _waiting?.Dispose();
-        _waiting = shell.Loop.Schedule(Settle, () => shell.Notices.ShowConfigError(file, Apply(shell, file) ?? ""));
+        _waiting = shell.Loop.Schedule(Settle,
+            () => shell.Notices.ShowConfigError(file, Apply(shell, project, file) ?? ""));
     }
 
-    /// <summary>Applies a file to the panels of its class, and gives what is wrong with it, or null.</summary>
-    internal static string? Apply(Shell shell, string file)
+    /// <summary>
+    /// Applies a file of <paramref name="project"/> to the panels of its class, and gives what is wrong with it, or null.
+    /// </summary>
+    internal static string? Apply(Shell shell, string project, string file)
     {
         string text;
         XDocument document;
@@ -78,7 +90,13 @@ internal static partial class XamlReload
 
         if (document.Root?.Attribute(X + "Class")?.Value is not { } name || CompilerOnly().IsMatch(text))
         {
-            shell.Log.Warn("dev", $"{NeedsBuild}: {Path.GetFileName(file)}");
+            shell.Log.Warn("dev", $"This XAML needs a build: {Path.GetFileName(file)}");
+            if (EventWaitHandle.TryOpenExisting(BuildRequest(project), out var request))
+                using (request)
+                {
+                    request.Set();
+                }
+
             return null;
         }
 
