@@ -55,15 +55,24 @@ internal sealed record NetworkSnapshot(
     bool Ready,
     IReadOnlyList<NetworkDeviceInfo> Devices,
     NetworkConnectivity Connectivity,
-    bool WifiEnabled,
-    bool WifiHardwareEnabled,
+    RadioReading Wifi,
     IReadOnlyList<NetworkProfileInfo>? Profiles = null,
     NetworkAccessStatus Access = NetworkAccessStatus.Unspecified,
     AirplaneModeState AirplaneMode = AirplaneModeState.Unknown,
-    string Error = "",
-    WifiRadioState WifiState = WifiRadioState.Unknown)
+    string Error = "")
 {
-    public static readonly NetworkSnapshot Initial = new(false, [], NetworkConnectivity.Unknown, false, false);
+    public static readonly NetworkSnapshot Initial = new(false, [], NetworkConnectivity.Unknown, RadioReading.None);
+
+    public bool WifiEnabled => Wifi.State == RadioState.On;
+    public bool WifiHardwareEnabled => Wifi.State is RadioState.On or RadioState.Off;
+
+    public WifiRadioState WifiState => Wifi.State switch
+    {
+        RadioState.On => WifiRadioState.On,
+        RadioState.Off => WifiRadioState.Off,
+        RadioState.Disabled => WifiRadioState.Disabled,
+        _ => WifiRadioState.Unknown
+    };
 }
 
 /// <summary>
@@ -83,7 +92,6 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private IReadOnlySet<Guid>? _wifiIds;
     private readonly ProfileWriteQueue _profileWrites = new();
     private readonly IWlanProfileApi _profiles = WlanProfileApi.Instance;
-
 
     private NetworkBackend()
         : base(NetworkSnapshot.Initial)
@@ -119,8 +127,10 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         {
             radios.AddRange((await Radio.GetRadiosAsync()).Where(r => r.Kind == RadioKind.WiFi));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException e)
         {
+            Log.Default.Warn("network",
+                "Windows would not list the radios, so the Wi-Fi state is unknown: " + e.Message);
         }
 
         bool allowed;
@@ -303,15 +313,10 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
             MapConnectivity(WinNetworkInformation.GetInternetConnectionProfile()?.GetNetworkConnectivityLevel() ??
                             NetworkConnectivityLevel.None);
 
-        bool wifiEnabled, wifiHardware;
-        WifiRadioState wifiState;
+        RadioReading wifi;
         lock (_lock)
         {
-            wifiEnabled = _radios.Any(r => r.State == RadioState.On);
-            wifiHardware = _radios.Any(r => r.State is RadioState.On or RadioState.Off);
-            wifiState = wifiEnabled ? WifiRadioState.On :
-                _radios.Count == 0 ? WifiRadioState.Unknown :
-                _radios.All(r => r.State == RadioState.Disabled) ? WifiRadioState.Disabled : WifiRadioState.Off;
+            wifi = RadioReading.Read([.. _radios.Select(static radio => new WindowsRadio(radio))]);
         }
 
         var connectionProfiles = profiles.Select(p =>
@@ -322,8 +327,8 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                 MapCost(cost.NetworkCostType), cost.Roaming, cost.OverDataLimit,
                 p.GetSignalBars() is { } bars ? bars / 5.0 : null);
         }).ToArray();
-        return new NetworkSnapshot(true, devices, connectivity, wifiEnabled, wifiHardware,
-            connectionProfiles, _access, ReadAirplaneMode(), WifiState: wifiState);
+        return new NetworkSnapshot(true, devices, connectivity, wifi, connectionProfiles, _access,
+            ReadAirplaneMode());
     }
 
     private List<NetworkInfo> ReadWifiNetworks(Guid id, ConnectionState deviceState, ConnectionProfile? profile)

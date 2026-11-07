@@ -19,23 +19,9 @@ internal interface IBluetoothBackend : IDisposable
     Task<string?> UnpairAsync(string id);
     Task<bool> SetAudioConnectionAsync(Guid container, bool connect);
 
-    /// <summary>
-    /// The default adapter's own radio. Null when that adapter has none, so a change must not touch another radio.
-    /// </summary>
-    Task<IDeviceRadio?> GetRadioAsync()
-    {
-        return Task.FromResult<IDeviceRadio?>(null);
-    }
+    /// <summary>Asks Windows to change discovery. Null when it reports <paramref name="discoverable"/>.</summary>
+    Task<string?> SetDiscoverableAsync(bool discoverable);
 
-    /// <summary>Asks Windows to change discovery. Null when it reports <paramref name="discoverable"/>. Tests use a fake.</summary>
-    Task<string?> SetDiscoverableAsync(bool discoverable)
-    {
-        throw new NotSupportedException("This Bluetooth backend does not change discovery.");
-    }
-
-    /// <summary>Asks Windows to change incoming connections, exposed as pairable. Null when it reports <paramref name="pairable"/>. Tests use a fake.</summary>
-    Task<string?> SetPairableAsync(bool pairable)
-    {
-        throw new NotSupportedException("This Bluetooth backend does not change incoming connections.");
-    }
+    /// <summary>Asks Windows to change incoming connections, exposed as pairable. Null when it reports <paramref name="pairable"/>.</summary>
+    Task<string?> SetPairableAsync(bool pairable);
 }

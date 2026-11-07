@@ -155,7 +155,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Profiles` | ObservableCollection of [NetworkProfile](#networkprofile), read-only | The Windows connection profiles that are on an adapter now. |
 | `Ready` | bool, read-only | Whether the first read has finished. False again while the last read failed, and Error says why. |
 | `RequestingAccess` | bool, read-only | Whether an access request is waiting for Windows. RequestAccess does nothing until it ends. |
-| `WifiEnabled` | bool | Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn every Wi-Fi radio on or off, and the value stays what Windows last reported until a later read shows the radios changed. |
+| `WifiEnabled` | bool | Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn on or off every Wi-Fi radio the last read found, and the value stays what Windows last reported until a later read shows the radios changed. |
 | `WifiHardwareEnabled` | bool, read-only | Whether at least one Wi-Fi radio is on or off, not disabled, so software can turn it on. |
 | `WifiState` | [WifiRadioState](#wifiradiostate), read-only | The state of the Wi-Fi radios, taken together. |
 | `OperationFailed` | Action of string | An access request or a radio change failed. |

@@ -11,7 +11,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly INetworkBackend _backend;
-    private readonly IRadioSource _radios;
+    private readonly IRadioAccess _radioAccess;
     private readonly IDisposable _subscription;
     private readonly DeviceAction _access;
     private readonly DeviceAction _wifiSwitch;
@@ -20,11 +20,11 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private string _radioError = "";
     private bool _disposed;
 
-    internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioSource? radios = null)
+    internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioAccess? radioAccess = null)
     {
         _loop = loop;
         _backend = backend ?? NetworkBackend.Instance;
-        _radios = radios ?? WindowsRadioSource.Instance;
+        _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
         _access = new DeviceAction(loop.Post);
         _wifiSwitch = new DeviceAction(loop.Post);
         Apply(_backend.Current);
@@ -46,8 +46,8 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     public bool Ready => _snapshot.Ready;
 
     /// <summary>
-    /// Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn every Wi-Fi radio on or off, and the
-    /// value stays what Windows last reported until a later read shows the radios changed.
+    /// Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn on or off every Wi-Fi radio the last read
+    /// found, and the value stays what Windows last reported until a later read shows the radios changed.
     /// </summary>
     public bool WifiEnabled
     {
@@ -122,9 +122,11 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     {
         if (_disposed || _snapshot.WifiEnabled == enabled)
             return Task.CompletedTask;
+        var radios = _snapshot.Wifi.Radios;
         return _wifiSwitch.RunAsync(static () => { }, async () =>
         {
-            var error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, enabled, _radios).ConfigureAwait(false);
+            var error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, radios, enabled, _radioAccess)
+                .ConfigureAwait(false);
             if (error is null)
                 await _backend.RefreshNowAsync().ConfigureAwait(false);
             return error;

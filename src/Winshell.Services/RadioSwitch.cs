@@ -2,7 +2,7 @@ using Windows.Devices.Radios;
 
 namespace Winshell;
 
-/// <summary>A radio <see cref="RadioSwitch"/> can read and ask Windows to change.</summary>
+/// <summary>A radio a backend read. <see cref="RadioSwitch"/> asks Windows to change it.</summary>
 internal interface IDeviceRadio
 {
     RadioKind Kind { get; }
@@ -10,53 +10,69 @@ internal interface IDeviceRadio
     Task<RadioAccessStatus> SetStateAsync(RadioState state);
 }
 
-/// <summary>
-/// The machine's radios. <see cref="GetRadiosAsync"/> does not request control.
-/// <see cref="RequestAccessAsync"/> can show Windows' consent UI, so callers use it only when a change is needed.
-/// </summary>
-internal interface IRadioSource
+/// <summary>Asks for radio control. It can show Windows' consent UI, so callers use it only when a change is needed.</summary>
+internal interface IRadioAccess
 {
-    Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync();
     Task<RadioAccessStatus> RequestAccessAsync();
 }
 
 /// <summary>
-/// <see cref="Radio"/> for Wi-Fi and Bluetooth. The only production caller of <see cref="Radio.SetStateAsync"/>.
+/// The radios a backend read for one device, and their state at that read. Two readings are equal when their states
+/// are: Windows hands out new radio objects on every read, and they are only how to change that state.
 /// </summary>
-internal sealed class WindowsRadioSource : IRadioSource
+internal sealed record RadioReading(IReadOnlyList<IDeviceRadio> Radios, RadioState State)
 {
-    public static readonly WindowsRadioSource Instance = new();
+    public static readonly RadioReading None = new([], RadioState.Unknown);
 
-    private WindowsRadioSource()
+    public bool Equals(RadioReading? other)
     {
+        return other is not null && State == other.State;
     }
 
-    /// <summary>One <see cref="Radio"/> the caller already holds, rather than every radio from <see cref="GetRadiosAsync"/>.</summary>
-    internal static IDeviceRadio Wrap(Radio radio)
+    public override int GetHashCode()
     {
-        return new WindowsRadio(radio);
+        return State.GetHashCode();
     }
 
-    public async Task<IReadOnlyList<IDeviceRadio>> GetRadiosAsync()
+    /// <summary>
+    /// The radios taken together: <see cref="RadioState.On"/> when any is on, else <see cref="RadioState.Off"/> when
+    /// any can be turned on, else <see cref="RadioState.Disabled"/> when any is held off, else
+    /// <see cref="RadioState.Unknown"/>.
+    /// </summary>
+    public static RadioReading Read(IReadOnlyList<IDeviceRadio> radios)
     {
-        var radios = await Radio.GetRadiosAsync();
-        return radios.Select(static radio => (IDeviceRadio)new WindowsRadio(radio)).ToList();
+        var states = radios.Select(static radio => radio.State).ToHashSet();
+        var state = states.Contains(RadioState.On) ? RadioState.On
+            : states.Contains(RadioState.Off) ? RadioState.Off
+            : states.Contains(RadioState.Disabled) ? RadioState.Disabled
+            : RadioState.Unknown;
+        return new RadioReading(radios, state);
+    }
+}
+
+/// <summary>A Windows <see cref="Radio"/>. The only production caller of <see cref="Radio.SetStateAsync"/>.</summary>
+internal sealed class WindowsRadio(Radio radio) : IDeviceRadio
+{
+    public RadioKind Kind => radio.Kind;
+    public RadioState State => radio.State;
+
+    public Task<RadioAccessStatus> SetStateAsync(RadioState state)
+    {
+        return radio.SetStateAsync(state).AsTask();
+    }
+}
+
+internal sealed class WindowsRadioAccess : IRadioAccess
+{
+    public static readonly WindowsRadioAccess Instance = new();
+
+    private WindowsRadioAccess()
+    {
     }
 
     public async Task<RadioAccessStatus> RequestAccessAsync()
     {
         return await Radio.RequestAccessAsync();
-    }
-
-    private sealed class WindowsRadio(Radio radio) : IDeviceRadio
-    {
-        public RadioKind Kind => radio.Kind;
-        public RadioState State => radio.State;
-
-        public Task<RadioAccessStatus> SetStateAsync(RadioState state)
-        {
-            return radio.SetStateAsync(state).AsTask();
-        }
     }
 }
 
@@ -64,43 +80,31 @@ internal sealed class WindowsRadioSource : IRadioSource
 /// Asks Windows to turn radios on or off: <see cref="Radio.RequestAccessAsync"/>, then
 /// <see cref="Radio.SetStateAsync"/>. An allowed request can still leave a radio where hardware or policy put it.
 /// The result is an error message, or null when every radio it asked reports the requested state.
-/// One method asks every radio of a kind. The other asks the single radio it is given.
 /// </summary>
 internal static class RadioSwitch
 {
-    internal const string NoAdapterRadio = "Windows reports no Bluetooth radio for this adapter.";
     internal const string Unchanged = "Windows did not change the radio.";
 
-    /// <summary>Every radio of <paramref name="kind"/>. Null when each of them reports <paramref name="enabled"/>.</summary>
-    public static async Task<string?> SetEnabledAsync(RadioKind kind, bool enabled, IRadioSource source)
+    /// <summary>
+    /// The radios of <paramref name="kind"/> among <paramref name="radios"/>, leaving every other radio alone.
+    /// Null when each of them reports <paramref name="enabled"/>.
+    /// </summary>
+    public static async Task<string?> SetEnabledAsync(RadioKind kind, IReadOnlyList<IDeviceRadio> radios,
+        bool enabled, IRadioAccess access)
     {
-        var radios = (await source.GetRadiosAsync().ConfigureAwait(false)).Where(radio => radio.Kind == kind).ToList();
-        if (radios.Count == 0)
+        var asked = radios.Where(radio => radio.Kind == kind).ToList();
+        if (asked.Count == 0)
             return Missing(kind);
-        return await SetListedAsync(radios, enabled, source).ConfigureAwait(false);
-    }
-
-    /// <summary>One radio, leaving every other radio alone. Null when it reports <paramref name="enabled"/>.</summary>
-    public static Task<string?> SetEnabledAsync(IDeviceRadio radio, bool enabled, IRadioSource source)
-    {
-        return SetListedAsync([radio], enabled, source);
-    }
-
-    // Already there: do not request access. That call can prompt, and nothing would change.
-    // Turning off skips a radio that is not on. Disabled is not a state an app can request.
-    // Turning on asks every radio that is not on, including a disabled one, which may refuse.
-    private static async Task<string?> SetListedAsync(IReadOnlyList<IDeviceRadio> radios, bool enabled,
-        IRadioSource source)
-    {
-        if (!radios.Any(radio => NeedsChange(radio, enabled)))
+        // Already there: do not request access. That call can prompt, and nothing would change.
+        if (!asked.Any(radio => NeedsChange(radio, enabled)))
             return null;
 
-        var access = await source.RequestAccessAsync().ConfigureAwait(false);
-        if (access != RadioAccessStatus.Allowed)
-            return AccessError(access);
+        var allowed = await access.RequestAccessAsync().ConfigureAwait(false);
+        if (allowed != RadioAccessStatus.Allowed)
+            return AccessError(allowed);
 
         var desired = enabled ? RadioState.On : RadioState.Off;
-        foreach (var radio in radios)
+        foreach (var radio in asked)
         {
             if (!NeedsChange(radio, enabled))
                 continue;
@@ -120,7 +124,7 @@ internal static class RadioSwitch
         return kind switch
         {
             RadioKind.WiFi => "Windows reports no Wi-Fi radio.",
-            RadioKind.Bluetooth => "Windows reports no Bluetooth radio.",
+            RadioKind.Bluetooth => "Windows reports no Bluetooth radio for this adapter.",
             _ => "Windows reports no radio."
         };
     }
@@ -135,6 +139,8 @@ internal static class RadioSwitch
         };
     }
 
+    // Turning off skips a radio that is not on. Disabled is not a state an app can request.
+    // Turning on asks every radio that is not on, including a disabled one, which may refuse.
     private static bool NeedsChange(IDeviceRadio radio, bool turnOn)
     {
         return turnOn ? radio.State != RadioState.On : radio.State == RadioState.On;

@@ -11,9 +11,18 @@ internal sealed record BluetoothAdapterInfo(
     string Id,
     string Name,
     string Address,
-    BluetoothAdapterState State,
+    RadioReading Radio,
     bool Discoverable = false,
-    bool Pairable = false);
+    bool Pairable = false)
+{
+    public BluetoothAdapterState State => Radio.State switch
+    {
+        RadioState.On => BluetoothAdapterState.On,
+        RadioState.Off => BluetoothAdapterState.Off,
+        RadioState.Disabled => BluetoothAdapterState.Disabled,
+        _ => BluetoothAdapterState.Unknown
+    };
+}
 
 internal sealed record BluetoothEndpointInfo(
     string Id,
@@ -203,7 +212,8 @@ internal sealed class BluetoothBackend : IBluetoothBackend
                 Discoverable: BluetoothRadios.IsDiscoverable(),
                 Pairable: BluetoothRadios.IsConnectable())).ConfigureAwait(false);
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
-                ServiceSupport.FormatMac(adapter.BluetoothAddress), MapRadioState(radio?.State),
+                ServiceSupport.FormatMac(adapter.BluetoothAddress),
+                RadioReading.Read(radio is null ? [] : [new WindowsRadio(radio)]),
                 visibility.Discoverable, visibility.Pairable);
             if ((_adapterId is not null && _adapterId != adapter.DeviceId) ||
                 adapterInfo.State is BluetoothAdapterState.Off or BluetoothAdapterState.Disabled)
@@ -275,17 +285,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             BluetoothIcon.Read(info.Properties));
     }
 
-    internal static BluetoothAdapterState MapRadioState(RadioState? state)
-    {
-        return state switch
-        {
-            RadioState.On => BluetoothAdapterState.On,
-            RadioState.Off => BluetoothAdapterState.Off,
-            RadioState.Disabled => BluetoothAdapterState.Disabled,
-            _ => BluetoothAdapterState.Unknown
-        };
-    }
-
     internal static IReadOnlyList<BluetoothDeviceInfo> MergeEndpoints(IEnumerable<BluetoothEndpointInfo> endpoints)
     {
         // Prefer the fresh paired snapshot to a stale discovery event for the same endpoint.
@@ -341,21 +340,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
 
         _batteries[container] = (level, TimeProvider.System.GetUtcNow());
         return level;
-    }
-
-    /// <summary>The default adapter's own radio. Null when that adapter has none.</summary>
-    public async Task<IDeviceRadio?> GetRadioAsync()
-    {
-        lock (_lock)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-        }
-
-        var adapter = await WinAdapter.GetDefaultAsync().AsTask().ConfigureAwait(false);
-        if (adapter is null)
-            return null;
-        var radio = await adapter.GetRadioAsync().AsTask().ConfigureAwait(false);
-        return radio is null ? null : WindowsRadioSource.Wrap(radio);
     }
 
     /// <summary>

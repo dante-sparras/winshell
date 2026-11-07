@@ -1,5 +1,4 @@
 using Windows.Devices.Enumeration;
-using Windows.Devices.Radios;
 using Winshell.Bluetooth;
 
 namespace Winshell.Services.Tests;
@@ -7,17 +6,6 @@ namespace Winshell.Services.Tests;
 public sealed class BluetoothIconTests
 {
     private static readonly Guid Container = Guid.Parse("71886561-73c1-4d67-a4a0-5077c90859d0");
-
-    [Theory]
-    [InlineData(null, BluetoothAdapterState.Unknown)]
-    [InlineData(RadioState.Unknown, BluetoothAdapterState.Unknown)]
-    [InlineData(RadioState.On, BluetoothAdapterState.On)]
-    [InlineData(RadioState.Off, BluetoothAdapterState.Off)]
-    [InlineData(RadioState.Disabled, BluetoothAdapterState.Disabled)]
-    public void Radio_state_does_not_guess_when_unavailable(RadioState? state, BluetoothAdapterState expected)
-    {
-        Assert.Equal(expected, BluetoothBackend.MapRadioState(state));
-    }
 
     [Theory]
     [InlineData(null, null)]
