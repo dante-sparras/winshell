@@ -78,11 +78,10 @@ public sealed class BrightnessMonitor : ObservableObject
 public sealed class BrightnessService : ObservableObject, IDisposable
 {
     private readonly IBrightnessBackend _backend;
-    private readonly ObservableCollection<ScreenInfo> _screens;
+    private readonly INotifyCollectionChanged _screens;
     private readonly StateReader<BrightnessSnapshot> _reader;
     private readonly BrightnessWriter _writer;
     private readonly Log _log;
-    private List<ScreenInfo> _monitorsRead;
     private bool _ready;
 
     /// <param name="loop">The loop readings are applied on.</param>
@@ -92,12 +91,11 @@ public sealed class BrightnessService : ObservableObject, IDisposable
     /// moves with every panel and app bar, and reads nothing.
     /// </param>
     /// <param name="backend">Windows, or a fake in tests.</param>
-    internal BrightnessService(IEventLoop loop, Log log, ObservableCollection<ScreenInfo> screens,
+    internal BrightnessService(IEventLoop loop, Log log, INotifyCollectionChanged screens,
         IBrightnessBackend? backend = null)
     {
         _log = log;
         _screens = screens;
-        _monitorsRead = MonitorsOf(screens);
         _backend = backend ?? new BrightnessBackend(log);
         _reader = new StateReader<BrightnessSnapshot>(_backend.ReadAsync, Apply, loop,
             new MonitorWarning(log, "power"));
@@ -123,16 +121,11 @@ public sealed class BrightnessService : ObservableObject, IDisposable
 
     private void OnScreensChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        var monitors = MonitorsOf(_screens);
-        if (monitors.SequenceEqual(_monitorsRead))
-            return;
-        _monitorsRead = monitors;
-        _reader.Request();
-    }
-
-    private static List<ScreenInfo> MonitorsOf(IEnumerable<ScreenInfo> screens)
-    {
-        return [.. screens.Select(s => s with { WorkArea = default })];
+        var workAreaOnly = e is { Action: NotifyCollectionChangedAction.Replace, OldItems: [ScreenInfo old] }
+                           && e.NewItems is [ScreenInfo now]
+                           && old with { WorkArea = now.WorkArea } == now;
+        if (!workAreaOnly)
+            _reader.Request();
     }
 
     /// <summary>Stops following brightness changes.</summary>

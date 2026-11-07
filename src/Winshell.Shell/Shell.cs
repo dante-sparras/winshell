@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using WinRT;
@@ -349,10 +350,34 @@ public sealed partial class Shell : IDisposable
         _disposed = true;
         // A service goes before the ones it reads: Winland reads the window list, which reads the virtual desktops.
         // Explorer's taskbar may go before or after the tray: its restore moves the tray out of the way itself.
+        // The platform goes last, closing every window that is left.
         DisposeEach([
             Notices, _winland, _windows, _virtualDesktops, _apps, _audio, _bluetooth, _brightness, _explorerTaskbar,
             _media, _networking, _notifications, _power, _powerMode, _systemTray, _hotkeys, Platform
         ]);
+    }
+
+    /// <summary>
+    /// Disposes each part in order. One that throws doesn't stop the rest; its exception is thrown once all are
+    /// disposed, or an <see cref="AggregateException"/> when several threw.
+    /// </summary>
+    internal static void DisposeEach(IEnumerable<IDisposable?> parts)
+    {
+        List<Exception> failures = [];
+        foreach (var part in parts)
+            try
+            {
+                part?.Dispose();
+            }
+            catch (Exception e)
+            {
+                failures.Add(e);
+            }
+
+        if (failures.Count == 1)
+            ExceptionDispatchInfo.Throw(failures[0]);
+        if (failures.Count > 1)
+            throw new AggregateException(failures);
     }
 
     /// <summary>The control pipe's way into this shell. A reload ends the process, so that waits for the client's answer.</summary>

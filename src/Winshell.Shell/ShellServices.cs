@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using Winshell.Apps;
 using Winshell.Audio;
 using Winshell.Bluetooth;
@@ -113,28 +112,5 @@ public sealed partial class Shell
     {
         _winland?.Attach(_windows);
         return made;
-    }
-
-    /// <summary>
-    /// Disposes each part in order. One that throws doesn't stop the rest; its exception is thrown once all are
-    /// disposed, or an <see cref="AggregateException"/> when several threw.
-    /// </summary>
-    internal static void DisposeEach(IEnumerable<IDisposable?> parts)
-    {
-        List<Exception> failures = [];
-        foreach (var part in parts)
-            try
-            {
-                part?.Dispose();
-            }
-            catch (Exception e)
-            {
-                failures.Add(e);
-            }
-
-        if (failures.Count == 1)
-            ExceptionDispatchInfo.Throw(failures[0]);
-        if (failures.Count > 1)
-            throw new AggregateException(failures);
     }
 }
