@@ -45,11 +45,31 @@ public sealed class NotificationWatchTests
             };
         }
 
-        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
+        public Task<IReadOnlyList<ListedToast>> ListToastsAsync(CancellationToken cancellation)
         {
             (Interlocked.Increment(ref _reads) == 1 ? FirstRead : SecondRead).TrySetResult();
-            return Task.FromResult(new NotificationSnapshot(NotificationAccessStatus.Allowed, [], NotificationState.Off,
-                NotificationMode.Unrestricted));
+            return Task.FromResult<IReadOnlyList<ListedToast>>([]);
+        }
+
+        /// <summary>The same stamp every time, so only the toast change makes the second read due.</summary>
+        public string ToastStamp()
+        {
+            return "unchanged";
+        }
+
+        public NotificationAccessStatus ReadAccess()
+        {
+            return NotificationAccessStatus.Allowed;
+        }
+
+        public NotificationState ReadFocus()
+        {
+            return NotificationState.Off;
+        }
+
+        public NotificationMode ReadMode()
+        {
+            return NotificationMode.Unrestricted;
         }
 
         public Task<NotificationAccessStatus> RequestAccessAsync()
@@ -58,6 +78,10 @@ public sealed class NotificationWatchTests
         }
 
         public void Dismiss(uint id)
+        {
+        }
+
+        public void Show(string appId, string xml, string tag, string group, Action<string> failed)
         {
         }
     }

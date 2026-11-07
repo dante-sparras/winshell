@@ -1,7 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Xml.Linq;
-using Windows.Data.Xml.Dom;
-using Windows.UI.Notifications;
 
 namespace Winshell.Notifications;
 
@@ -9,7 +7,7 @@ namespace Winshell.Notifications;
 public sealed class ToastMessage : ObservableObject
 {
     private readonly IEventLoop _loop;
-    private readonly Action<string, string, string, string, Action<string>> _send;
+    private readonly INotificationBackend _backend;
     private string _appId = "";
     private string _title = "";
     private string _body = "";
@@ -21,14 +19,14 @@ public sealed class ToastMessage : ObservableObject
 
     /// <summary>Creates an empty toast whose <see cref="Failed"/> event is raised on the given event loop.</summary>
     public ToastMessage(IEventLoop loop)
-        : this(loop, SendNative)
+        : this(loop, new WindowsNotificationBackend())
     {
     }
 
-    internal ToastMessage(IEventLoop loop, Action<string, string, string, string, Action<string>> send)
+    internal ToastMessage(IEventLoop loop, INotificationBackend backend)
     {
         _loop = loop;
-        _send = send;
+        _backend = backend;
     }
 
     /// <summary>A send failed, at once or when Windows later rejected the toast. The text is <see cref="Error"/>.</summary>
@@ -92,18 +90,16 @@ public sealed class ToastMessage : ObservableObject
     /// <summary>Sends the toast. Returns whether validation and submission succeeded; Windows can still hold back the banner.</summary>
     public bool Send()
     {
+        if (Invalid() is { } problem)
+        {
+            ReportFailure(problem);
+            return false;
+        }
+
+        Set(ref _error, "", nameof(Error));
         try
         {
-            if (string.IsNullOrWhiteSpace(AppId))
-                throw new ArgumentException("toast.appId must be an installed Windows AppUserModelID.");
-            if (string.IsNullOrWhiteSpace(Title))
-                throw new ArgumentException("toast.title must not be empty.");
-            if (Tag.Length > 64 || Group.Length > 64)
-                throw new ArgumentException("Toast tag and group must be at most 64 characters.");
-            if (Group.Length > 0 && Tag.Length == 0)
-                throw new ArgumentException("A toast group requires a tag.");
-            Set(ref _error, "", nameof(Error));
-            _send(AppId, BuildXml(), Tag, Group, ReportFailure);
+            _backend.Show(AppId, BuildXml(), Tag, Group, ReportFailure);
             return true;
         }
         catch (Exception e) when (WindowsFailure.IsExpected(e))
@@ -113,43 +109,44 @@ public sealed class ToastMessage : ObservableObject
         }
     }
 
-    internal string BuildXml()
+    private string? Invalid()
+    {
+        if (string.IsNullOrWhiteSpace(AppId))
+            return "toast.appId must be an installed Windows AppUserModelID.";
+        if (string.IsNullOrWhiteSpace(Title))
+            return "toast.title must not be empty.";
+        if (Tag.Length > 64 || Group.Length > 64)
+            return "Toast tag and group must be at most 64 characters.";
+        if (Group.Length > 0 && Tag.Length == 0)
+            return "A toast group requires a tag.";
+        if (Actions.Count > 5)
+            return "Windows toasts support at most five actions.";
+        if (Actions.Any(a => string.IsNullOrWhiteSpace(a.Text)))
+            return "A toast action needs text.";
+        if ((ActivationUri.Length > 0 && !IsAbsolute(ActivationUri)) || Actions.Any(a => !IsAbsolute(a.ActivationUri)))
+            return "Toast activation requires an absolute protocol URI.";
+        return null;
+    }
+
+    private static bool IsAbsolute(string uri)
+    {
+        return Uri.TryCreate(uri, UriKind.Absolute, out _);
+    }
+
+    private string BuildXml()
     {
         var root = new XElement("toast",
             new XElement("visual", new XElement("binding", new XAttribute("template", "ToastGeneric"),
                 new XElement("text", Title), new XElement("text", Body))));
         if (ActivationUri.Length > 0)
-        {
-            ValidateUri(ActivationUri);
             root.Add(new XAttribute("activationType", "protocol"), new XAttribute("launch", ActivationUri));
-        }
-
-        if (Actions.Count > 5)
-            throw new ArgumentException("Windows toasts support at most five actions.");
         if (Actions.Count > 0)
-        {
-            var actions = new XElement("actions");
-            foreach (var action in Actions)
-            {
-                if (string.IsNullOrWhiteSpace(action.Text))
-                    throw new ArgumentException("A toast action needs text.");
-                ValidateUri(action.ActivationUri);
-                actions.Add(new XElement("action", new XAttribute("content", action.Text),
-                    new XAttribute("activationType", "protocol"), new XAttribute("arguments", action.ActivationUri)));
-            }
-
-            root.Add(actions);
-        }
-
+            root.Add(new XElement("actions", Actions.Select(a => new XElement("action",
+                new XAttribute("content", a.Text), new XAttribute("activationType", "protocol"),
+                new XAttribute("arguments", a.ActivationUri)))));
         if (Silent)
             root.Add(new XElement("audio", new XAttribute("silent", "true")));
         return root.ToString(SaveOptions.DisableFormatting);
-    }
-
-    private static void ValidateUri(string uri)
-    {
-        if (!Uri.TryCreate(uri, UriKind.Absolute, out _))
-            throw new ArgumentException("Toast activation requires an absolute protocol URI.");
     }
 
     private void ReportFailure(string message)
@@ -160,23 +157,6 @@ public sealed class ToastMessage : ObservableObject
                 nameof(Error));
             Failed?.Invoke(_error);
         });
-    }
-
-    private static void SendNative(string appId, string xml, string tag, string group, Action<string> failed)
-    {
-        var content = new XmlDocument();
-        content.LoadXml(xml);
-        var toast = new ToastNotification(content);
-        toast.Failed += (_, args) => failed($"Windows rejected the toast: {args.ErrorCode.Message}");
-        if (tag.Length > 0)
-            toast.Tag = tag;
-        if (group.Length > 0)
-            toast.Group = group;
-        var notifier = ToastNotificationManager.CreateToastNotifier(appId);
-        if (notifier.Setting != NotificationSetting.Enabled)
-            throw new InvalidOperationException(
-                $"Windows disabled toast notifications for '{appId}': {notifier.Setting}.");
-        notifier.Show(toast);
     }
 }
 

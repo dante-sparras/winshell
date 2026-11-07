@@ -28,11 +28,16 @@ public sealed class NotificationMappingTests
     [Fact]
     public async Task Native_read_is_safe_without_prompting_or_changing_settings()
     {
-        var snapshot = await new WindowsNotificationBackend().ReadAsync(TestContext.Current.CancellationToken);
-        Assert.True(Enum.IsDefined(snapshot.AccessStatus));
-        Assert.True(Enum.IsDefined(snapshot.Focus));
-        Assert.True(Enum.IsDefined(snapshot.Mode));
-        if (snapshot.AccessStatus != NotificationAccessStatus.Allowed)
-            Assert.Empty(snapshot.Notifications);
+        var loop = new ManualEventLoop();
+        using var listener = new NotificationListener(loop, Log.Default, new WindowsNotificationBackend());
+
+        await listener.RefreshAsync();
+        loop.Process();
+
+        Assert.True(Enum.IsDefined(listener.AccessStatus));
+        Assert.True(Enum.IsDefined(listener.FocusState));
+        Assert.True(Enum.IsDefined(listener.NotificationMode));
+        if (listener.AccessStatus != NotificationAccessStatus.Allowed)
+            Assert.Empty(listener.Notifications);
     }
 }

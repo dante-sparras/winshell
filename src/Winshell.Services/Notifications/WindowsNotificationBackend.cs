@@ -1,4 +1,6 @@
+using System.Globalization;
 using Windows.ApplicationModel;
+using Windows.Data.Xml.Dom;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
 using Windows.Storage.Streams;
@@ -8,91 +10,113 @@ using Windows.UI.Shell;
 
 namespace Winshell.Notifications;
 
+/// <summary>Notification Center and toast sending, as Windows offers them. Holds no state.</summary>
 internal interface INotificationBackend
 {
     Task<NotificationAccessStatus> RequestAccessAsync();
-    Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation);
+
+    /// <summary>Whether the shell may read the toasts, without a prompt. Throws when Windows cannot answer.</summary>
+    NotificationAccessStatus ReadAccess();
+
+    NotificationState ReadFocus();
+
+    NotificationMode ReadMode();
+
+    /// <summary>Changes when the toasts may have changed. Null when it cannot tell, which counts as a change.</summary>
+    string? ToastStamp();
+
+    /// <summary>The toasts in Notification Center. Each toast's content is read only when asked.</summary>
+    Task<IReadOnlyList<ListedToast>> ListToastsAsync(CancellationToken cancellation);
+
     void Dismiss(uint id);
 
-    Action? WatchToasts(Action changed)
-    {
-        return null;
-    }
+    /// <summary>
+    /// Calls <paramref name="changed"/> when a toast arrives or goes, and returns the call that stops it. Null where
+    /// Windows does not raise the event.
+    /// </summary>
+    Action? WatchToasts(Action changed);
+
+    /// <summary>
+    /// Shows a toast under <paramref name="appId"/>. Throws when Windows refuses it at once; <paramref name="failed"/>
+    /// hears when Windows rejects it later, on any thread.
+    /// </summary>
+    void Show(string appId, string xml, string tag, string group, Action<string> failed);
 }
+
+/// <summary>A toast in Notification Center, before its content is read.</summary>
+internal sealed record ListedToast(uint Id, DateTimeOffset CreatedAt, Func<IncomingToast> Read);
 
 internal sealed class WindowsNotificationBackend : INotificationBackend
 {
-    /// <summary>
-    /// The toasts of the last read. A poll sees the same toasts, each of which costs Windows milliseconds to name its
-    /// app, and an app that changes a toast replaces it, which gives it a new creation time.
-    /// </summary>
-    private Dictionary<(uint Id, DateTimeOffset Created), IncomingToast> _read = [];
-
-    private readonly ToastChanges _changes = new(ToastChanges.DatabaseStamp, TimeProvider.System);
-    private IReadOnlyList<IncomingToast> _toasts = [];
+    private static readonly string Database =
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "Windows",
+            "Notifications", "wpndatabase.db");
 
     public async Task<NotificationAccessStatus> RequestAccessAsync()
     {
         return NotificationListenerAccess.Map(await UserNotificationListener.Current.RequestAccessAsync());
     }
 
-    public async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
+    public NotificationAccessStatus ReadAccess()
     {
-        cancellation.ThrowIfCancellationRequested();
-        // Focus and notification restriction mode do not require listener permission.
-        var focus = ReadFocus();
-        var mode = ReadMode();
+        return NotificationListenerAccess.Map(UserNotificationListener.Current.GetAccessStatus());
+    }
+
+    public NotificationState ReadFocus()
+    {
         try
         {
-            var listener = UserNotificationListener.Current;
-            var access = NotificationListenerAccess.Map(listener.GetAccessStatus());
-            if (access != NotificationAccessStatus.Allowed)
-            {
-                _changes.Change();
-                return new NotificationSnapshot(access, [], focus, mode);
-            }
-
-            if (!_changes.Due(out var stamp))
-                return new NotificationSnapshot(access, _toasts, focus, mode);
-            var notifications = await listener.GetNotificationsAsync(NotificationKinds.Toast).AsTask(cancellation)
-                .ConfigureAwait(false);
-            cancellation.ThrowIfCancellationRequested();
-            // Access may be revoked while the asynchronous read is in progress.
-            access = NotificationListenerAccess.Map(listener.GetAccessStatus());
-            if (access != NotificationAccessStatus.Allowed)
-            {
-                _changes.Change();
-                return new NotificationSnapshot(access, [], focus, mode);
-            }
-
-            var known = _read;
-            Dictionary<(uint, DateTimeOffset), IncomingToast> read = [];
-            List<IncomingToast> toasts = [];
-            foreach (var notification in notifications)
-                try
-                {
-                    var key = (notification.Id, notification.CreationTime);
-                    if (!known.TryGetValue(key, out var toast))
-                        toast = ReadToast(notification);
-                    read[key] = toast;
-                    toasts.Add(toast);
-                }
-                catch (Exception e) when (WindowsFailure.IsExpected(e))
-                {
-                    // An app can disappear between enumeration and reading its toast.
-                    Log.Default.Warn("notifications", e.Message);
-                }
-
-            _read = read;
-            _toasts = toasts;
-            _changes.Read(stamp);
-            return new NotificationSnapshot(access, toasts, focus, mode);
+            if (ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager") && FocusSessionManager.IsSupported)
+                return FocusSessionManager.GetDefault().IsFocusActive ? NotificationState.On : NotificationState.Off;
         }
         catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
-            return new NotificationSnapshot(NotificationAccessStatus.Unavailable, [], focus, mode,
-                $"Windows notification access is unavailable: {e.Message} Check package identity and the userNotificationListener capability.");
         }
+
+        return NotificationState.Unknown;
+    }
+
+    public NotificationMode ReadMode()
+    {
+        try
+        {
+            if (ApiInformation.IsPropertyPresent("Windows.UI.Notifications.ToastNotificationManagerForUser",
+                    "NotificationMode"))
+                return MapMode((int)ToastNotificationManager.GetDefault().NotificationMode);
+        }
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
+        {
+        }
+
+        return NotificationMode.Unknown;
+    }
+
+    /// <summary>
+    /// The sizes and write times of the database Windows keeps the toasts in, and of its write-ahead log. The database
+    /// is undocumented, so this is only a hint.
+    /// </summary>
+    public string? ToastStamp()
+    {
+        try
+        {
+            var database = new FileInfo(Database);
+            var log = new FileInfo(Database + "-wal");
+            if (!database.Exists)
+                return null;
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{database.Length} {database.LastWriteTimeUtc.Ticks} {(log.Exists ? log.Length : -1)} {(log.Exists ? log.LastWriteTimeUtc.Ticks : 0)}");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<ListedToast>> ListToastsAsync(CancellationToken cancellation)
+    {
+        var notifications = await UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast)
+            .AsTask(cancellation).ConfigureAwait(false);
+        return [.. notifications.Select(n => new ListedToast(n.Id, n.CreationTime, () => ReadToast(n)))];
     }
 
     public void Dismiss(uint id)
@@ -101,13 +125,9 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
             throw new UnauthorizedAccessException("Windows notification listener access is no longer allowed.");
         listener.RemoveNotification(id);
-        _changes.Change();
     }
 
-    /// <summary>
-    /// Calls <paramref name="changed"/> when a toast arrives or goes, and returns the call that stops it. Null without
-    /// package identity or access, where Windows does not raise the event.
-    /// </summary>
+    /// <remarks>Windows raises the event only with package identity and access.</remarks>
     public Action? WatchToasts(Action changed)
     {
         if (!Packaging.IsPackaged)
@@ -117,11 +137,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             var listener = UserNotificationListener.Current;
             if (listener.GetAccessStatus() != UserNotificationListenerAccessStatus.Allowed)
                 return null;
-            TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs> handler = (_, _) =>
-            {
-                _changes.Change();
-                changed();
-            };
+            TypedEventHandler<UserNotificationListener, UserNotificationChangedEventArgs> handler = (_, _) => changed();
             listener.NotificationChanged += handler;
             return () => listener.NotificationChanged -= handler;
         }
@@ -131,7 +147,24 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         }
     }
 
-    internal static IncomingToast ReadToast(UserNotification notification)
+    public void Show(string appId, string xml, string tag, string group, Action<string> failed)
+    {
+        var content = new XmlDocument();
+        content.LoadXml(xml);
+        var toast = new ToastNotification(content);
+        toast.Failed += (_, args) => failed($"Windows rejected the toast: {args.ErrorCode.Message}");
+        if (tag.Length > 0)
+            toast.Tag = tag;
+        if (group.Length > 0)
+            toast.Group = group;
+        var notifier = ToastNotificationManager.CreateToastNotifier(appId);
+        if (notifier.Setting != NotificationSetting.Enabled)
+            throw new InvalidOperationException(
+                $"Windows disabled toast notifications for '{appId}': {notifier.Setting}.");
+        notifier.Show(toast);
+    }
+
+    private static IncomingToast ReadToast(UserNotification notification)
     {
         var binding = notification.Notification.Visual.GetBinding(KnownNotificationBindings.ToastGeneric)
                       ?? notification.Notification.Visual.Bindings.FirstOrDefault();
@@ -155,35 +188,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
         return new IncomingToast(notification.Id, appId, appName, texts.FirstOrDefault() ?? "",
             string.Join('\n', texts.Skip(1)), notification.CreationTime, notification.Notification.ExpirationTime,
             logo);
-    }
-
-    private static NotificationState ReadFocus()
-    {
-        try
-        {
-            if (ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager") && FocusSessionManager.IsSupported)
-                return FocusSessionManager.GetDefault().IsFocusActive ? NotificationState.On : NotificationState.Off;
-        }
-        catch (Exception e) when (WindowsFailure.IsExpected(e))
-        {
-        }
-
-        return NotificationState.Unknown;
-    }
-
-    private static NotificationMode ReadMode()
-    {
-        try
-        {
-            if (ApiInformation.IsPropertyPresent("Windows.UI.Notifications.ToastNotificationManagerForUser",
-                    "NotificationMode"))
-                return MapMode((int)ToastNotificationManager.GetDefault().NotificationMode);
-        }
-        catch (Exception e) when (WindowsFailure.IsExpected(e))
-        {
-        }
-
-        return NotificationMode.Unknown;
     }
 
     internal static NotificationMode MapMode(int mode)
