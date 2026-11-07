@@ -14,7 +14,6 @@ namespace Winshell.Services.Tests;
 /// </summary>
 public sealed class TrayBackendTests : IDisposable
 {
-    private const uint WM_COPYDATA = 0x004A;
     private static readonly uint TaskbarCreated = Win32.RegisterWindowMessageW("TaskbarCreated");
     private readonly string _id = Guid.NewGuid().ToString("N");
     private readonly ManualEventLoop _loop = new();
@@ -175,7 +174,7 @@ public sealed class TrayBackendTests : IDisposable
             // Explorer here is a test window, but the commands are still ones no real taskbar acts on. It also gets
             // whatever is broadcast to every window meanwhile, which is not a command.
             Win32.PostMessageW(explorer.Window, 0x8005, 0, 0);
-            (uint, nint, nint)[] commands = [(WM_COMMAND, 0x1234, 0), (WM_SYSCOMMAND, 0xF120, 0)];
+            (uint, nint, nint)[] commands = [(PInvoke.WM_COMMAND, 0x1234, 0), (Win32.WM_SYSCOMMAND, 0xF120, 0)];
             foreach (var (message, wParam, lParam) in commands)
                 Win32.PostMessageW(host.Window, message, wParam, lParam);
             while (Win32.PeekMessageW(out var msg, host.Window, 0, 0, Win32.PM_REMOVE))
@@ -228,8 +227,6 @@ public sealed class TrayBackendTests : IDisposable
         }
     }
 
-    private const uint WM_COMMAND = 0x0111, WM_SYSCOMMAND = 0x0112;
-
     private TrayNames ExplorerNames => new(ExplorerClass, $"WinshellTestNone-{_id}",
         $@"Local\winshell-test-explorer-{Guid.NewGuid():N}");
 
@@ -257,7 +254,7 @@ public sealed class TrayBackendTests : IDisposable
                     {
                         // Only the commands a host forwards. Any shell that takes the tray, a test's included, broadcasts
                         // TaskbarCreated to every window, this one too.
-                        if (msg.hwnd == Window && msg.message is WM_COMMAND or WM_SYSCOMMAND)
+                        if (msg.hwnd == Window && msg.message is PInvoke.WM_COMMAND or Win32.WM_SYSCOMMAND)
                             Posted.Add((msg.message, msg.wParam, msg.lParam));
                         Win32.DispatchMessageW(msg);
                     }
@@ -292,7 +289,8 @@ public sealed class TrayBackendTests : IDisposable
         host.Backend.ExplorerInFront += () => signals++;
 
         Win32.SetWindowPos(explorer.Window, Win32.HWND_TOPMOST, 0, 0, 0, 0,
-            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                   SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
         Wait.Until(() => signals > 0, "the host to hear that Explorer is in front", () =>
         {
             while (Win32.PeekMessageW(out var msg, 0, 0, 0, Win32.PM_REMOVE))
@@ -411,7 +409,7 @@ public sealed class TrayBackendTests : IDisposable
             Marshal.WriteIntPtr(copy, 0, (nint)data);
             Marshal.WriteInt32(copy, IntPtr.Size, payload.Length);
             Marshal.WriteIntPtr(copy, IntPtr.Size * 2, bytes);
-            return Win32.SendMessageW(window, WM_COPYDATA, 0, copy);
+            return Win32.SendMessageW(window, PInvoke.WM_COPYDATA, 0, copy);
         }
         finally
         {

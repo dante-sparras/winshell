@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
@@ -21,7 +22,7 @@ public sealed class FloatingWindowFullscreenTests
             {
                 var hwnd = window.Host!.Handle;
                 var before = Outer(hwnd);
-                var style = Style(hwnd) & ~Win32.WS_VISIBLE;
+                var style = Style(hwnd) & ~(uint)WINDOW_STYLE.WS_VISIBLE;
 
                 window.Fullscreen = true;
 
@@ -33,7 +34,7 @@ public sealed class FloatingWindowFullscreenTests
 
                 Assert.False(window.Fullscreen);
                 Assert.Equal(before, Outer(hwnd));
-                Assert.Equal(style, Style(hwnd) & ~Win32.WS_VISIBLE);
+                Assert.Equal(style, Style(hwnd) & ~(uint)WINDOW_STYLE.WS_VISIBLE);
                 AssertFramed(hwnd);
             }
             finally
@@ -213,7 +214,7 @@ public sealed class FloatingWindowFullscreenTests
             Assert.Equal(ownerHwnd, Win32.GetWindowLongPtr(childHwnd, Win32.GWLP_HWNDPARENT));
             Assert.Equal(ownerHwnd, Win32.GetWindow(childHwnd, Win32.GW_OWNER));
             Assert.Equal(ownerHwnd, Win32.GetWindowLongPtr(early.Host!.Handle, Win32.GWLP_HWNDPARENT));
-            Assert.Equal(0u, Style(childHwnd) & WsChild);
+            Assert.Equal(0u, Style(childHwnd) & (uint)WINDOW_STYLE.WS_CHILD);
             AssertAbove(childHwnd, ownerHwnd);
 
             owner.Owner = child;
@@ -280,7 +281,6 @@ public sealed class FloatingWindowFullscreenTests
         });
     }
 
-    private const uint WsChild = 0x40000000;
 
     private static RECT Restored(nint hwnd)
     {
@@ -311,7 +311,7 @@ public sealed class FloatingWindowFullscreenTests
         Assert.InRange(rect.Top, bounds.Top - 1, bounds.Top + 1);
         Assert.InRange(rect.Right, bounds.Right - 1, bounds.Right + 1);
         Assert.InRange(rect.Bottom, bounds.Bottom - 1, bounds.Bottom + 1);
-        Assert.Equal(0u, Style(hwnd) & (Win32.WS_CAPTION | Win32.WS_THICKFRAME));
+        Assert.Equal(0u, Style(hwnd) & (uint)(WINDOW_STYLE.WS_CAPTION | WINDOW_STYLE.WS_THICKFRAME));
         var monitor = Screens.Describe(Win32.MonitorFromWindow(hwnd, Win32.MONITOR_DEFAULTTONEAREST));
         Assert.NotNull(monitor);
         // A taskbar that is showing makes the work area smaller. The window then extends past it.
@@ -324,8 +324,8 @@ public sealed class FloatingWindowFullscreenTests
     private static void AssertFramed(nint hwnd)
     {
         var style = Style(hwnd);
-        Assert.NotEqual(0u, style & Win32.WS_CAPTION);
-        Assert.NotEqual(0u, style & Win32.WS_THICKFRAME);
+        Assert.NotEqual(0u, style & (uint)WINDOW_STYLE.WS_CAPTION);
+        Assert.NotEqual(0u, style & (uint)WINDOW_STYLE.WS_THICKFRAME);
     }
 
     private static uint Style(nint hwnd)

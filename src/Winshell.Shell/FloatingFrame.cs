@@ -117,7 +117,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         {
             // The user dragged it to another monitor, or that monitor's scale changed: Windows' rect keeps the logical size.
             Win32.SetWindowPos(Handle, 0, suggested.Left, suggested.Top, suggested.Width, suggested.Height,
-                Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+                (uint)(SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
         }
     }
 
@@ -179,7 +179,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
                 y = current.Top;
             }
 
-            Win32.SetWindowPos(Handle, 0, x, y, client.Width, client.Height, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE);
+            Win32.SetWindowPos(Handle, 0, x, y, client.Width, client.Height,
+                (uint)(SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
             _placed = true;
         }
 
@@ -293,7 +294,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         if ((maximized || minimized) && hasPlacement)
         {
             var primary = Screens.Enumerate().FirstOrDefault(m => m.Info.IsPrimary);
-            var tool = ((long)Win32.GetWindowLongPtr(Handle, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0;
+            var tool =
+                ((long)Win32.GetWindowLongPtr(Handle, Win32.GWL_EXSTYLE) & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0;
             normal = WindowOnScreen.Restored(
                 new WindowToMove(shown, placement.Normal, true, minimized, maximized, tool),
                 primary?.Bounds ?? default, primary?.Work ?? default);
@@ -320,9 +322,10 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
     private uint BorderlessStyle()
     {
         var style = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
-        var next = (style & ~Win32.WS_OVERLAPPEDWINDOW) | Win32.WS_POPUP | Win32.WS_CLIPCHILDREN;
-        if ((style & Win32.WS_VISIBLE) != 0)
-            next |= Win32.WS_VISIBLE;
+        var next = (style & ~(uint)WINDOW_STYLE.WS_OVERLAPPEDWINDOW) |
+                   (uint)(WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_CLIPCHILDREN);
+        if ((style & (uint)WINDOW_STYLE.WS_VISIBLE) != 0)
+            next |= (uint)WINDOW_STYLE.WS_VISIBLE;
         return next;
     }
 
@@ -332,10 +335,10 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
             return;
         var current = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
         // Showing and hiding go through ShowWindow. A frame change keeps whichever of those the window is in.
-        if ((current & Win32.WS_VISIBLE) != 0)
-            style |= Win32.WS_VISIBLE;
+        if ((current & (uint)WINDOW_STYLE.WS_VISIBLE) != 0)
+            style |= (uint)WINDOW_STYLE.WS_VISIBLE;
         else
-            style &= ~Win32.WS_VISIBLE;
+            style &= ~(uint)WINDOW_STYLE.WS_VISIBLE;
         if (current == style)
             return;
         Win32.SetWindowLongPtr(Handle, Win32.GWL_STYLE, (nint)style);
@@ -344,7 +347,9 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
     private void Reframe()
     {
         Win32.SetWindowPos(Handle, 0, 0, 0, 0, 0,
-            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                   SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE |
+                   SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED));
     }
 
     private void FillMonitor()
@@ -359,7 +364,9 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
 
     private void PlaceOuter(RECT rect)
     {
-        host.Placement.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
+        host.Placement.Move(rect, 0,
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE |
+                   SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED));
     }
 
     private ConnectedMonitor? CurrentMonitor()

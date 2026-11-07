@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Windows;
 
@@ -28,11 +29,11 @@ public sealed class WindowRulesTests
     }
 
     [Theory]
-    [InlineData(Win32.WS_POPUP, 0, 0, 1920, 1080, true)]
-    [InlineData(Win32.WS_POPUP | Win32.WS_THICKFRAME, -8, -8, 1928, 1088, true)]
-    [InlineData(Win32.WS_CAPTION | Win32.WS_THICKFRAME, -8, -8, 1928, 1088, false)]
-    [InlineData(Win32.WS_POPUP, 0, 0, 1920, 1079, false)]
-    [InlineData(Win32.WS_POPUP, 1, 0, 1920, 1080, false)]
+    [InlineData((uint)WINDOW_STYLE.WS_POPUP, 0, 0, 1920, 1080, true)]
+    [InlineData((uint)(WINDOW_STYLE.WS_POPUP | WINDOW_STYLE.WS_THICKFRAME), -8, -8, 1928, 1088, true)]
+    [InlineData((uint)(WINDOW_STYLE.WS_CAPTION | WINDOW_STYLE.WS_THICKFRAME), -8, -8, 1928, 1088, false)]
+    [InlineData((uint)WINDOW_STYLE.WS_POPUP, 0, 0, 1920, 1079, false)]
+    [InlineData((uint)WINDOW_STYLE.WS_POPUP, 1, 0, 1920, 1080, false)]
     public void A_window_is_fullscreen_when_it_has_no_title_bar_and_covers_the_whole_monitor(
         uint style, int left, int top, int right, int bottom, bool fullscreen)
     {

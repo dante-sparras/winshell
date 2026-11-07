@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.Shell;
 
 namespace Winshell.Native;
@@ -35,7 +37,7 @@ internal static unsafe partial class ShellItems
             }
             finally
             {
-                Win32.DeleteObject(bitmap);
+                PInvoke.DeleteObject(new HGDIOBJ(bitmap));
             }
         });
     }

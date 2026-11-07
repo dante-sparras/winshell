@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
 
@@ -19,10 +21,13 @@ internal sealed class WindowDesktopManager
     }
 
     /// <summary>The manager, or null. <paramref name="hr"/> is negative when Windows could not create it.</summary>
-    internal static WindowDesktopManager? Create(out int hr)
+    internal static unsafe WindowDesktopManager? Create(out int hr)
     {
+        var clsid = ManagerClass;
         var iid = typeof(IVirtualDesktopManager).GUID;
-        hr = Win32.CoCreateInstance(in ManagerClass, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
+        void* created;
+        hr = PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, &iid, &created).Value;
+        var pointer = (nint)created;
         if (hr < 0 || pointer == 0)
             return null;
         try

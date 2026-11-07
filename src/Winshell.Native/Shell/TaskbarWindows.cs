@@ -28,13 +28,15 @@ internal static unsafe class TaskbarWindows
     /// <param name="failed">Gets each exception <paramref name="changed"/> throws.</param>
     internal static IDisposable? Watch(Action changed, Action<Exception> failed)
     {
-        var window = NativeWindow.TryCreate("WinshellTaskbarWatch", Win32.WS_POPUP, Win32.WS_EX_TOOLWINDOW, message =>
-        {
-            if (message.Id != Created && message.Id != Win32.WM_DISPLAYCHANGE)
-                return null;
-            changed();
-            return 0;
-        }, failed, false);
+        var window = NativeWindow.TryCreate("WinshellTaskbarWatch", (uint)WINDOW_STYLE.WS_POPUP,
+            (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
+            message =>
+            {
+                if (message.Id != Created && message.Id != Win32.WM_DISPLAYCHANGE)
+                    return null;
+                changed();
+                return 0;
+            }, failed, false);
         if (window is null)
             return null;
         // Explorer lets this through from any integrity level, so an elevated shell still hears Explorer start.

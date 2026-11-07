@@ -526,7 +526,8 @@ public sealed class FocusTakeoverTests
             try
             {
                 var hwnd = Win32.CreateWindowExW(0, "STATIC", "winshell-focus-target",
-                    Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE, 0, 80, 80, 40, 0, 0, Win32.GetModuleHandleW(null), 0);
+                    (uint)(WINDOW_STYLE.WS_OVERLAPPEDWINDOW | WINDOW_STYLE.WS_VISIBLE), 0, 80, 80, 40, 0, 0,
+                    Win32.GetModuleHandleW(null), 0);
                 if (hwnd != 0)
                     Win32.ShowWindow(hwnd, (int)SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
                 Win32.PeekMessageW(out _, 0, 0, 0, 0);

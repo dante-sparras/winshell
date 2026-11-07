@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Apps;
 using Winshell.Native;
 
@@ -57,7 +58,7 @@ internal static class WindowRules
     /// <summary>Whether a window with this style and rectangle is fullscreen on a monitor: no title bar, and covering all of it.</summary>
     public static bool CoversMonitor(long style, RECT window, RECT monitor)
     {
-        return (style & Win32.WS_CAPTION) != Win32.WS_CAPTION
+        return (style & (uint)WINDOW_STYLE.WS_CAPTION) != (uint)WINDOW_STYLE.WS_CAPTION
                && window.Left <= monitor.Left && window.Top <= monitor.Top && window.Right >= monitor.Right &&
                window.Bottom >= monitor.Bottom;
     }

@@ -64,9 +64,10 @@ internal sealed unsafe class TrayWindow : IDisposable
     internal static TrayWindow? Create(string className, CopyDataHandler copyData, Func<uint, nint, nint, bool> message,
         Action<Exception> failed)
     {
-        var window = NativeWindow.TryCreate(className, Win32.WS_POPUP,
-            Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST | Win32.WS_EX_NOACTIVATE | Win32.WS_EX_LAYERED |
-            Win32.WS_EX_TRANSPARENT, OnMessage(copyData, message), failed, false);
+        var window = NativeWindow.TryCreate(className, (uint)WINDOW_STYLE.WS_POPUP,
+            (uint)(WINDOW_EX_STYLE.WS_EX_TOOLWINDOW | WINDOW_EX_STYLE.WS_EX_TOPMOST | WINDOW_EX_STYLE.WS_EX_NOACTIVATE |
+                   WINDOW_EX_STYLE.WS_EX_LAYERED | WINDOW_EX_STYLE.WS_EX_TRANSPARENT), OnMessage(copyData, message),
+            failed, false);
         if (window is null)
             return null;
         Win32.SetLayeredWindowAttributes(window.Handle, 0, 0, Win32.LWA_ALPHA);

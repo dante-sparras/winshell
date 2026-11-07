@@ -256,13 +256,15 @@ internal static class ImmersiveDesktops
         }
     }
 
-    private static bool TryInternal(out IVirtualDesktopManagerInternal? manager, out string error)
+    private static unsafe bool TryInternal(out IVirtualDesktopManagerInternal? manager, out string error)
     {
         manager = null;
         error = "";
+        var clsid = ImmersiveShellClass;
         var providerId = typeof(IServiceProvider).GUID;
-        var hr = Win32.CoCreateInstance(in ImmersiveShellClass, 0, (uint)CLSCTX.CLSCTX_LOCAL_SERVER, in providerId,
-            out var shellPointer);
+        void* created;
+        var hr = PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_LOCAL_SERVER, &providerId, &created).Value;
+        var shellPointer = (nint)created;
         if (hr < 0 || shellPointer == 0)
         {
             error = $"unavailable: immersive shell {Hex(hr)}";

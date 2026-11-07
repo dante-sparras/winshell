@@ -1,4 +1,5 @@
 using Windows.Win32;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell.Tray;
@@ -109,17 +110,19 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         if (explorer != 0 && Win32.GetWindowRect(explorer, out var r))
             // Apps that read the taskbar's position from this window get Explorer's.
             Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
-                Win32.SWP_NOACTIVATE);
+                (uint)SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE);
         else
             Win32.SetWindowPos(Window, Win32.HWND_TOPMOST, 0, 0, 0, 0,
-                Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+                (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                       SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
     }
 
     public bool Lower()
     {
         var explorer = Explorer;
         return Window != 0 && explorer != 0 && Win32.SetWindowPos(Window, explorer, 0, 0, 0, 0,
-            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                   SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
     }
 
     public void Broadcast()

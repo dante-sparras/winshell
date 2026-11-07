@@ -1,4 +1,6 @@
 using Windows.Foundation;
+using Windows.Win32;
+using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
@@ -130,7 +132,7 @@ internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
             var part = Win32.CreateRectRgn((int)Math.Floor(r.X * Scale), (int)Math.Floor(r.Y * Scale),
                 (int)Math.Ceiling(r.Right * Scale), (int)Math.Ceiling(r.Bottom * Scale));
             _ = Win32.CombineRgn(region, region, part, Win32.RGN_OR);
-            Win32.DeleteObject(part);
+            PInvoke.DeleteObject(new HGDIOBJ(part));
         }
 
         // The window owns the region once it is set.
@@ -142,7 +144,7 @@ internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
         if (_clickThrough == on)
             return;
         _clickThrough = on;
-        SetExStyle(Win32.WS_EX_TRANSPARENT | Win32.WS_EX_LAYERED, on);
+        SetExStyle((uint)(WINDOW_EX_STYLE.WS_EX_TRANSPARENT | WINDOW_EX_STYLE.WS_EX_LAYERED), on);
         if (on)
             Win32.SetLayeredWindowAttributes(Handle, 0, 255, Win32.LWA_ALPHA);
     }
@@ -150,7 +152,8 @@ internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
     public void Raise()
     {
         Win32.SetWindowPos(Handle, Win32.HWND_TOP, 0, 0, 0, 0,
-            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                   SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE));
     }
 
     public void StartSystemMove()

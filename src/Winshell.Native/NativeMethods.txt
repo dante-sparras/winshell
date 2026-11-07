@@ -1,6 +1,8 @@
 LockWorkStation
 QueryFullProcessImageNameW
 CloseHandle
+CoCreateInstance
+DeleteObject
 OpenProcess
 OpenProcessToken
 GetTokenInformation
@@ -181,6 +183,7 @@ WindowsGetStringRawBuffer
 WindowsDeleteString
 GET_ANCESTOR_FLAGS
 WINDOW_STYLE
+WINDOW_EX_STYLE
 SET_WINDOW_POS_FLAGS
 WINDOWPLACEMENT_FLAGS
 SHOW_WINDOW_CMD

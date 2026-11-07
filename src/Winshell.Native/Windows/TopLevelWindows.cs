@@ -116,14 +116,16 @@ internal static unsafe class TopLevelWindows
     internal static void Raise(nint hwnd)
     {
         Win32.SetWindowPos(hwnd, Win32.HWND_TOP, 0, 0, 0, 0,
-            Win32.SWP_NOMOVE | Win32.SWP_NOSIZE | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE |
+                   SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS));
     }
 
     /// <summary>Moves and sizes the window to <paramref name="rect"/>, in screen pixels, without activating it.</summary>
     internal static void Move(nint hwnd, RECT rect)
     {
         Win32.SetWindowPos(hwnd, 0, rect.Left, rect.Top, rect.Width, rect.Height,
-            Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | (uint)SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS);
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE |
+                   SET_WINDOW_POS_FLAGS.SWP_ASYNCWINDOWPOS));
     }
 
     /// <summary>

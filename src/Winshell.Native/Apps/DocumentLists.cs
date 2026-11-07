@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Windows.Win32;
+using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
 
@@ -19,11 +21,14 @@ internal static class DocumentLists
     /// Up to <paramref name="perCategory"/> names from each list. A list that cannot be read is null, and both are
     /// null when the app's lists cannot be opened.
     /// </summary>
-    internal static (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId,
+    internal static unsafe (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId,
         int perCategory)
     {
+        var clsid = Clsid;
         var iid = typeof(IApplicationDocumentLists).GUID;
-        var hr = Win32.CoCreateInstance(in Clsid, 0, Win32.CLSCTX_INPROC_SERVER, in iid, out var pointer);
+        void* created;
+        var hr = PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, &iid, &created).Value;
+        var pointer = (nint)created;
         if (hr < 0 || pointer == 0)
             return (null, null);
         IApplicationDocumentLists lists;
