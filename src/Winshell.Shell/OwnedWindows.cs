@@ -31,7 +31,7 @@ internal static class OwnedWindows
     private static void PlaceAboveOwner(nint window)
     {
         var owner = Win32.GetWindowLongPtr(window, Win32.GWLP_HWNDPARENT);
-        if (owner == 0 || owner == window || !Win32.IsWindow(owner))
+        if (owner == 0 || !Win32.IsWindow(owner))
             return;
         var above = Win32.GetWindow(owner, Win32.GW_HWNDPREV);
         if (above == window)

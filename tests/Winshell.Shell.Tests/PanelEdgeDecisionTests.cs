@@ -154,21 +154,7 @@ public class PanelEdgeDecisionTests
         return desktop.Moved!.Value;
     }
 
-    [Fact]
-    public void A_panel_reserves_a_strip_of_the_screen_it_names()
-    {
-        var desktop = new Desktop();
-        var edge = Shown(desktop);
-
-        edge.Set(Panel(Edges.Top | Edges.Left | Edges.Right, Second.Id));
-
-        Assert.Equal(new RECT(2560, 1080, 5120, 1128), desktop.Asked);
-        Assert.Equal(1, desktop.Registers);
-        Assert.True(desktop.Topmost);
-        edge.Release();
-    }
-
-    // Second is away from the origin, so an edge's coordinates are never its depth.
+    // The panel names Second, which is away from the origin, so an edge's coordinates are never its depth.
     [Theory]
     [InlineData(Edges.Top | Edges.Left | Edges.Right, 2560, 1080, 5120, 1128)]
     [InlineData(Edges.Bottom | Edges.Left | Edges.Right, 2560, 2472, 5120, 2520)]
@@ -183,6 +169,7 @@ public class PanelEdgeDecisionTests
 
         edge.Set(Panel(anchors, Second.Id));
 
+        Assert.Equal(1, desktop.Registers);
         Assert.Equal(new RECT(left, top, right, bottom), desktop.Asked);
         edge.Release();
     }
@@ -203,8 +190,8 @@ public class PanelEdgeDecisionTests
         Assert.Null(desktop.Asked);
     }
 
-    // Explorer grants less than was asked: beside a taskbar on the same edge of the primary, or shortened by a taskbar
-    // on a neighboring edge of the second. The bar sits in what it got.
+    // Explorer grants less than was asked: beside a taskbar on the same edge, or shortened by one on a neighboring
+    // edge. The bar sits in what it got.
     [Theory]
     [InlineData(null, Edges.Top, 0, 48, 1920, 96)]
     [InlineData(null, Edges.Bottom, 0, 984, 1920, 1032)]

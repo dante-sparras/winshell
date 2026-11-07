@@ -17,27 +17,33 @@ public sealed class PanelMenuTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task A_panel_press_closes_a_menu_opened_without_the_foreground(bool mouseActivation)
+    public async Task A_panel_press_closes_a_menu_opened_without_the_foreground_and_takes_no_activation(
+        bool mouseActivation)
     {
-        var menu = TrayAppMenu.Open();
-
-        await ShellFixture.On(shell =>
+        // Another test's press closes every menu too, so none runs until this menu is gone.
+        await ShellFixture.Hold(async () =>
         {
-            using var panel = new PanelWindow { Content = new Grid() };
-            using var host = new HostWindow(shell.Platform, WindowKind.Panel, panel);
-            var foreground = Win32.GetForegroundWindow();
+            var menu = TrayAppMenu.Open();
 
-            if (mouseActivation)
-                Assert.Equal(Win32.MA_NOACTIVATE, Win32.SendMessageW(host.Handle, Win32.WM_MOUSEACTIVATE, 0, 0));
-            else
-                // What `winshell inspect click` does before it invokes a control.
-                host.Messages.Press();
+            await ShellFixture.On(shell =>
+            {
+                using var panel = new PanelWindow { Content = new Grid() };
+                using var host = new HostWindow(shell.Platform, WindowKind.Panel, panel);
+                var foreground = Win32.GetForegroundWindow();
+                Assert.True(menu.Shows);
 
-            Assert.Equal(foreground, Win32.GetForegroundWindow());
-            return true;
+                if (mouseActivation)
+                    Assert.Equal(Win32.MA_NOACTIVATE, Win32.SendMessageW(host.Handle, Win32.WM_MOUSEACTIVATE, 0, 0));
+                else
+                    // What `winshell inspect click` does before it invokes a control.
+                    host.Messages.Press();
+
+                Assert.Equal(foreground, Win32.GetForegroundWindow());
+                return true;
+            });
+
+            await menu.Closed();
         });
-
-        await menu.Closed();
     }
 
     /// <summary>A popup menu shown on a thread of its own that never has the foreground.</summary>
@@ -47,6 +53,8 @@ public sealed class PanelMenuTests
         private volatile uint _thread;
         private TimeSpan _opened;
         private string _before = "";
+
+        public bool Shows => MenuShowsOn(_thread);
 
         public static TrayAppMenu Open()
         {
