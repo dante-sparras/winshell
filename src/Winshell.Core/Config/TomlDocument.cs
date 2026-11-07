@@ -134,8 +134,7 @@ internal sealed partial class TomlDocument
         bool bom;
         try
         {
-            // Share the file so a save can replace it while this read is open. The length is known before the bytes
-            // are: a file past the limit is not copied into a string.
+            // Share the file so a save can replace it while this read is open.
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                 FileShare.ReadWrite | FileShare.Delete);
             if (FileBytes(stream.Length, MaxTextBytes) is { } why)
@@ -222,7 +221,6 @@ internal sealed partial class TomlDocument
             var before = _document.ToString();
             var changes = Changes(current, desired);
             var updated = UpdateOwned(owned, key, changes);
-            // A null for a part under its own header or in dotted keys is not taken out in place.
             if (!updated || !TryLoad(_document.ToString(), out _, out var read, out _, out _, out _)
                          || Keeps(Plain(read.TryGetValue(key, out var after) ? after : null), changes))
             {
@@ -253,7 +251,6 @@ internal sealed partial class TomlDocument
             IReadOnlyDictionary<string, object?> table => table.ToDictionary(pair => pair.Key,
                 pair => Plain(pair.Value)),
             IEnumerable items => items.Cast<object?>().Select(Plain).ToList(),
-            // A date or a time.
             _ => value.ToString() ?? ""
         };
     }

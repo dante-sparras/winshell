@@ -7,8 +7,7 @@ using Tomlyn.Syntax;
 
 namespace Winshell;
 
-// Reading and editing the syntax tree. A key is found by its first segment, and what follows a removed key or table
-// stays in the file. Tomlyn is named only in this type.
+// Tomlyn is named only in this type.
 internal sealed partial class TomlDocument
 {
     /// <summary>1 MiB. A TOML file stops past this.</summary>
@@ -150,7 +149,6 @@ internal sealed partial class TomlDocument
         var item = new ArrayItemSyntax { Value = value };
         if (items.ChildrenCount == 0)
         {
-            // Under a comment, or on the line after the open bracket, with the bracket on the next line.
             var open = array.OpenBracket!.TrailingTrivia;
             if (open is not null && LastBreak(open) is var start and >= 0)
                 LastToken(value).TrailingTrivia = open[start..];
@@ -209,7 +207,6 @@ internal sealed partial class TomlDocument
         var lines = own[..(ownLine + 1)];
         if (endLine >= 0)
             return [.. lines, .. end[(endLine + 1)..]];
-        // The bracket was on the gone item's line, so it goes on this item's line, or under its comment.
         return lines.Exists(t => t.Kind == TokenKind.Comment) ? lines : end;
     }
 
@@ -345,7 +342,6 @@ internal sealed partial class TomlDocument
             index++;
         var after = LastToken(table).TrailingTrivia ?? [];
         var comment = after.FindIndex(t => t.Kind == TokenKind.Comment);
-        // The blank line between the table and the comments goes when one is above the table already, or nothing is.
         if (comment >= 0 && EndsBlank(table.LeadingTrivia ?? Above(document, index)))
             after = after[(after.FindLastIndex(comment, t => t.Kind == TokenKind.NewLine) + 1)..];
         List<SyntaxTrivia> kept = [.. table.LeadingTrivia ?? [], .. comment >= 0 ? after : []];

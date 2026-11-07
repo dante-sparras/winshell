@@ -90,7 +90,6 @@ internal sealed class DirectoryWatch : IDisposable
 
     public void Dispose()
     {
-        // A second call would cancel through a closed handle.
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
         _stopped = true;
