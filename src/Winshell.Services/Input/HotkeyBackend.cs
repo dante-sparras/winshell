@@ -2,56 +2,80 @@ using Winshell.Native;
 
 namespace Winshell.Input;
 
-/// <summary>The <see cref="IHotkeyBackend"/> Windows provides, over <see cref="HotkeyWindow"/> and <see cref="KeyboardHook"/>.</summary>
-internal sealed class HotkeyBackend : IHotkeyBackend
+/// <summary>
+/// The <see cref="IHotkeyBackend"/> Windows provides. Registered chords belong to a message-only window made on the
+/// loop's thread, which receives <c>WM_HOTKEY</c> there and exists only while a chord is registered. The hook is
+/// <see cref="LowLevelKeyboard"/>.
+/// </summary>
+internal sealed class HotkeyBackend(IEventLoop loop) : IHotkeyBackend
 {
-    private readonly IEventLoop _loop;
-    private readonly HotkeyWindow _window;
-    private readonly KeyboardHook _hook;
-    private Func<int, bool, HotkeyModifiers, bool>? _onKey;
-    private Action? _onLost;
-    private bool _disposed;
+    private const int ErrorAlreadyRegistered = 1409;
+    private const uint ModNoRepeat = 0x4000;
 
-    public HotkeyBackend(IEventLoop loop)
-    {
-        _loop = loop;
-        _window = new HotkeyWindow(OnHotkey);
-        _hook = new KeyboardHook(
-            (virtualKey, up, modifiers) =>
-            {
-                var onKey = Volatile.Read(ref _onKey);
-                return onKey is not null && onKey(virtualKey, up, modifiers);
-            },
-            () => Volatile.Read(ref _onLost)?.Invoke());
-    }
+    // RegisterHotKey takes application ids from 0x0000 to 0xBFFF.
+    private const int LastId = 0xBFFF;
+
+    private readonly Dictionary<OsChord, int> _ids = [];
+    private readonly Dictionary<int, OsChord> _chords = [];
+    private HotkeyTarget? _target;
+    private int _nextId = 1;
+    private IDisposable? _hook;
 
     public event Action<OsChord>? ChordPressed;
 
-    public bool IsHookInstalled => _hook.IsAttached;
-
     public HotkeyClaim Register(HotkeyChord chord)
     {
-        return _window.Register(chord);
+        if (_nextId > LastId)
+            return HotkeyClaim.Invalid($"{chord.Text} could not be registered (no id).");
+        _target ??= HotkeyTarget.Create(OnHotkey, Warn);
+        if (_target is null)
+            return HotkeyClaim.Invalid($"{chord.Text} could not be registered (0).");
+        var id = _nextId;
+        if (!_target.Register(id, (uint)chord.Modifiers | ModNoRepeat, (uint)chord.VirtualKey, out var code))
+        {
+            // A refused chord must not leave the window up when it is the only reason the window exists.
+            DestroyIfIdle();
+            return code == ErrorAlreadyRegistered
+                ? HotkeyClaim.Taken($"{chord.Text} is already in use by Windows or another app.")
+                : HotkeyClaim.Invalid($"{chord.Text} could not be registered ({code}).");
+        }
+
+        _nextId++;
+        _ids[chord.OsKey] = id;
+        _chords[id] = chord.OsKey;
+        return HotkeyClaim.Active;
     }
 
     public void Unregister(OsChord chord)
     {
-        _window.Unregister(chord);
+        if (!_ids.Remove(chord, out var id))
+            return;
+        _chords.Remove(id);
+        _target?.Unregister(id);
+        DestroyIfIdle();
     }
 
-    public bool InstallHook(Func<int, bool, HotkeyModifiers, bool> onKey, Action onLost)
+    public bool InstallHook(Func<int, bool, bool> onKey, Action onLost)
     {
-        Volatile.Write(ref _onKey, onKey);
-        Volatile.Write(ref _onLost, onLost);
-        _hook.Attach();
-        return _hook.IsAttached;
+        if (_hook is not null)
+            return true;
+        IDisposable? hook = null;
+        hook = LowLevelKeyboard.Start(key => onKey(key.VirtualKey, key.Up), Warn, () => loop.Post(() =>
+        {
+            if (hook is null || !ReferenceEquals(_hook, hook))
+                return;
+            _hook = null;
+            onLost();
+        }));
+        _hook = hook;
+        return hook is not null;
     }
 
     public void RemoveHook()
     {
-        _hook.Detach();
-        Volatile.Write(ref _onKey, null);
-        Volatile.Write(ref _onLost, null);
+        var hook = _hook;
+        _hook = null;
+        hook?.Dispose();
     }
 
     public bool IsKeyDown(int virtualKey)
@@ -59,19 +83,34 @@ internal sealed class HotkeyBackend : IHotkeyBackend
         return Win32.GetAsyncKeyState(virtualKey) < 0;
     }
 
+    public void SendMask()
+    {
+        KeyInput.Tap();
+    }
+
     public void Dispose()
     {
-        if (_disposed)
-            return;
-        _disposed = true;
         RemoveHook();
-        _window.Dispose();
+        foreach (var chord in _ids.Keys.ToList())
+            Unregister(chord);
+    }
+
+    private void DestroyIfIdle()
+    {
+        if (_ids.Count > 0)
+            return;
+        _target?.Dispose();
+        _target = null;
     }
 
     private void OnHotkey(int id)
     {
-        if (_disposed || !_window.TryGetChord(id, out var chord))
-            return;
-        _loop.Post(() => ChordPressed?.Invoke(chord));
+        if (_chords.TryGetValue(id, out var chord))
+            loop.Post(() => ChordPressed?.Invoke(chord));
+    }
+
+    private static void Warn(Exception e)
+    {
+        Log.Default.Warn("hotkey", e.Message);
     }
 }

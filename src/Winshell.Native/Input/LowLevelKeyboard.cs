@@ -6,12 +6,12 @@ namespace Winshell.Native;
 /// <summary>A key as the low-level keyboard hook sees it.</summary>
 /// <param name="VirtualKey">The virtual-key code.</param>
 /// <param name="Up">Whether the key came up.</param>
-/// <param name="ExtraInfo">The tag whoever injected the key put on it, or 0.</param>
-internal readonly record struct HookedKey(int VirtualKey, bool Up, nint ExtraInfo);
+internal readonly record struct HookedKey(int VirtualKey, bool Up);
 
 /// <summary>
 /// The process's one low-level keyboard hook, on a thread of its own. A second call does nothing until the first hook
-/// is disposed: Windows calls one static procedure, so the process keeps one.
+/// is disposed: Windows calls one static procedure, so the process keeps one. Keys this process injected with
+/// <see cref="KeyInput.Tap"/> pass the hook without reaching its handler.
 /// </summary>
 internal static unsafe class LowLevelKeyboard
 {
@@ -77,9 +77,8 @@ internal static unsafe class LowLevelKeyboard
         if (code >= 0 && lParam != 0 && Volatile.Read(ref Owner) is { } owner)
         {
             var info = (KBDLLHOOKSTRUCT*)lParam;
-            var key = new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0,
-                (nint)info->dwExtraInfo);
-            if (Callback.Run(owner.Failed, () => owner.OnKey(key), false))
+            var key = new HookedKey((int)info->vkCode, (info->flags & KBDLLHOOKSTRUCT_FLAGS.LLKHF_UP) != 0);
+            if (info->dwExtraInfo != KeyInput.Marker && Callback.Run(owner.Failed, () => owner.OnKey(key), false))
                 return 1;
         }
 

@@ -11,7 +11,7 @@ public sealed class HotkeyBookTests
         var chord = Parse("shift+alt+ctrl+win+k").Chords[0];
         Assert.Equal("Win+Ctrl+Alt+Shift+K", chord.Text);
         Assert.Equal('K', chord.VirtualKey);
-        Assert.Equal(0x000Fu, chord.Win32Modifiers);
+        Assert.Equal(0x000F, (int)chord.Modifiers);
         Assert.False(chord.IsWinOnly);
 
         Assert.Equal("Alt+F4", Parse("alt+f4").Text);
@@ -26,7 +26,7 @@ public sealed class HotkeyBookTests
         var winE = Parse("Win+E").Chords[0];
         Assert.False(winE.IsWinOnly);
         Assert.Equal('E', winE.VirtualKey);
-        Assert.Equal(0x0008u, winE.Win32Modifiers);
+        Assert.Equal(0x0008, (int)winE.Modifiers);
 
         var either = Parse("Win").Chords[0];
         Assert.True(either.IsWinOnly);
@@ -102,69 +102,6 @@ public sealed class HotkeyBookTests
     }
 
     [Fact]
-    public void A_handled_windows_tap_is_masked_and_the_key_up_is_not_eaten()
-    {
-        var book = new HotkeyBook();
-        var either = new Probe(new ManualEventLoop());
-        book.Add(either, Parse("Win"));
-        book.Hook(VirtualKeys.LeftWin, false, HotkeyModifiers.None, 0);
-        var up = book.Hook(VirtualKeys.LeftWin, true, HotkeyModifiers.Win, 0);
-
-        Assert.Contains(either, up.Pressed);
-        Assert.True(up.MaskWin);
-        Assert.True(up.Swallow);
-        var injected = 0;
-        Assert.False(HotkeyRegistrar.Consume(up, () => injected++));
-        Assert.Equal(1, injected);
-    }
-
-    [Fact]
-    public void An_unused_windows_tap_is_not_masked()
-    {
-        var book = new HotkeyBook();
-        book.Add(new Probe(new ManualEventLoop()), Parse("Win"));
-        book.Hook(VirtualKeys.LeftWin, false, HotkeyModifiers.None, 0);
-        book.Hook((int)'E', false, HotkeyModifiers.Win, 0);
-        var up = book.Hook(VirtualKeys.LeftWin, true, HotkeyModifiers.Win, 0);
-
-        Assert.False(up.MaskWin);
-        Assert.False(up.Swallow);
-        Assert.False(HotkeyRegistrar.Consume(up));
-    }
-
-    [Fact]
-    public void A_matched_sequence_key_is_still_eaten()
-    {
-        var book = new HotkeyBook();
-        var listener = new Probe(new ManualEventLoop());
-        book.Add(listener, Parse("Ctrl+K, C"));
-        book.Trigger(Parse("Ctrl+K").Chords[0].OsKey, 0);
-        var hit = book.Hook((int)'C', false, HotkeyModifiers.None, 0);
-
-        Assert.False(hit.MaskWin);
-        Assert.True(hit.Swallow);
-        Assert.True(HotkeyRegistrar.Consume(hit));
-    }
-
-    [Fact]
-    public void The_masking_stroke_uses_an_unassigned_key_and_a_hook_tag()
-    {
-        var stroke = KeyMask.Stroke();
-        Assert.Equal(2, stroke.Length);
-        Assert.Equal(KeyMask.VirtualKey, stroke[0].VirtualKey);
-        Assert.Equal((ushort)0xE8, stroke[0].VirtualKey);
-        Assert.False(stroke[0].Up);
-        Assert.True(stroke[1].Up);
-        Assert.Equal(stroke[0].VirtualKey, stroke[1].VirtualKey);
-        Assert.Equal(KeyMask.ExtraInfo, stroke[0].ExtraInfo);
-        Assert.Equal(KeyMask.ExtraInfo, stroke[1].ExtraInfo);
-        Assert.NotEqual(0, KeyMask.ExtraInfo);
-        Assert.True(KeyMask.IsOurs(KeyMask.ExtraInfo));
-        Assert.False(KeyMask.IsOurs(0));
-        Assert.Equal(nint.Size == 8 ? 40 : 28, KeyMask.InputSize);
-    }
-
-    [Fact]
     public void Windows_key_used_as_a_modifier_does_not_fire_and_repeats_do_not_reset_that()
     {
         var book = new HotkeyBook();
@@ -219,7 +156,7 @@ public sealed class HotkeyBookTests
     [Fact]
     public void A_sequence_expires_when_the_deadline_is_reached()
     {
-        var book = new HotkeyBook { SequenceTimeout = TimeSpan.FromMilliseconds(1000) };
+        var book = new HotkeyBook();
         var listener = new Probe(new ManualEventLoop());
         book.Add(listener, Parse("A, B"));
         book.Trigger(Parse("A").Chords[0].OsKey, 0);

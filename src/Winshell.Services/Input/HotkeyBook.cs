@@ -26,6 +26,9 @@ internal sealed class BookResult
 /// </summary>
 internal sealed class HotkeyBook
 {
+    // How long a sequence waits for its next chord.
+    private const long TimeoutMs = 1000;
+
     private readonly Dictionary<OsChord, List<IHotkeyListener>> _os = [];
     private readonly Dictionary<WinKeySide, List<IHotkeyListener>> _win = [];
     private readonly Dictionary<IHotkeyListener, HotkeySequence> _sequences = [];
@@ -36,10 +39,6 @@ internal sealed class HotkeyBook
     private bool _leftUsed;
     private bool _rightUsed;
 
-    public TimeSpan SequenceTimeout { get; set; } = TimeSpan.FromSeconds(1);
-
-    private long TimeoutMs => (long)SequenceTimeout.TotalMilliseconds;
-
     /// <summary>True while a Windows-key hotkey is claimed or a sequence is waiting for its next chord.</summary>
     public bool NeedsHook => _win.Count > 0 || _armed.Count > 0;
 
@@ -48,10 +47,10 @@ internal sealed class HotkeyBook
         return _os.ContainsKey(chord);
     }
 
+    /// <summary>Adds a listener the book does not hold.</summary>
     public void Add(IHotkeyListener listener, HotkeySequence sequence)
     {
-        Remove(listener);
-        _sequences[listener] = sequence;
+        _sequences.Add(listener, sequence);
         var first = sequence.Chords[0];
         if (first.IsWinOnly)
             AddTo(_win, first.Side, listener);
@@ -59,12 +58,20 @@ internal sealed class HotkeyBook
             AddTo(_os, first.OsKey, listener);
     }
 
-    public void Remove(IHotkeyListener listener)
+    /// <summary>Drops a listener. Returns the chord it was the last to hold, which Windows can have back.</summary>
+    public OsChord? Remove(IHotkeyListener listener)
     {
-        RemoveFrom(_os, listener);
-        RemoveFrom(_win, listener);
-        _sequences.Remove(listener);
         _armed.RemoveAll(armed => armed.Listener == listener);
+        if (!_sequences.Remove(listener, out var sequence))
+            return null;
+        var first = sequence.Chords[0];
+        if (first.IsWinOnly)
+        {
+            RemoveFrom(_win, first.Side, listener);
+            return null;
+        }
+
+        return RemoveFrom(_os, first.OsKey, listener) ? first.OsKey : null;
     }
 
     public void Clear()
@@ -264,21 +271,15 @@ internal sealed class HotkeyBook
         list.Add(listener);
     }
 
-    private static void RemoveFrom<TKey>(Dictionary<TKey, List<IHotkeyListener>> map, IHotkeyListener listener)
+    // True when the listener was the last one under the key.
+    private static bool RemoveFrom<TKey>(Dictionary<TKey, List<IHotkeyListener>> map, TKey key,
+        IHotkeyListener listener)
         where TKey : notnull
     {
-        List<TKey>? empty = null;
-        foreach (var (key, list) in map)
-        {
-            list.Remove(listener);
-            if (list.Count == 0)
-                (empty ??= []).Add(key);
-        }
-
-        if (empty is null)
-            return;
-        foreach (var key in empty)
-            map.Remove(key);
+        if (!map.TryGetValue(key, out var list) || !list.Remove(listener) || list.Count > 0)
+            return false;
+        map.Remove(key);
+        return true;
     }
 
     private sealed class Armed
