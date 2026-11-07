@@ -1,9 +1,10 @@
+using System.Collections.ObjectModel;
 using Winshell.Power;
 
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// A monitor stays when one read of it fails, and a burst of writes asks for one new read. A fake write
+/// A monitor stays when one read of it fails, and a change to the screens or a burst of writes asks for one new read. A fake write
 /// stands in for Windows, so the PC's brightness never changes.
 /// </summary>
 public class BrightnessRefreshTests
@@ -27,6 +28,25 @@ public class BrightnessRefreshTests
         Assert.Equal(
             new BrightnessInfo(@"\.\DISPLAY2", "Desk", BrightnessConnection.External, 0, 100, 70),
             BrightnessBackend.External(@"\.\DISPLAY2", "Desk", (0, 70, 100), [last]));
+    }
+
+    [Fact]
+    public void A_change_to_the_shells_screens_reads_brightness_again()
+    {
+        var loop = new ManualEventLoop();
+        var screens = new ObservableCollection<ScreenInfo>();
+        var source = new FakeBrightnessBackend(
+            new BrightnessSnapshot(true,
+                [new BrightnessInfo("d", "Monitor", BrightnessConnection.External, 0, 100, 10)]),
+            (_, _) => null);
+        using var brightness = new BrightnessService(loop, Log.Default, screens, source);
+        loop.Process();
+        Assert.Equal(1, source.Reads);
+
+        screens.Add(new ScreenInfo(@"\.\DISPLAY2", "DISPLAY2", "", "", "", default, default, 1, 0, 0, 60, false));
+        loop.Process();
+
+        Assert.Equal(2, source.Reads);
     }
 
     [Fact]

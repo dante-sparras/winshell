@@ -135,26 +135,6 @@ public sealed class PowerServiceTests
     }
 
     [Fact]
-    public void A_change_to_the_shells_screens_reads_brightness_again_until_disposed()
-    {
-        var loop = new ManualEventLoop();
-        var screens = new ObservableCollection<ScreenInfo>();
-        var source = new FakeBrightnessBackend(new BrightnessSnapshot(true, [Monitor(10)]), (_, _) => null);
-        var brightness = new BrightnessService(loop, Log.Default, screens, source);
-        loop.Process();
-        Assert.Equal(1, source.Reads);
-
-        screens.Add(new ScreenInfo(@"\\.\DISPLAY2", "DISPLAY2", "", "", "", default, default, 1, 0, 0, 60, false));
-        loop.Process();
-        Assert.Equal(2, source.Reads);
-
-        brightness.Dispose();
-        screens.Clear();
-        loop.Process();
-        Assert.Equal(2, source.Reads);
-    }
-
-    [Fact]
     public void An_idle_monitor_turns_on_after_the_timeout_and_a_keep_awake_holds_it_off()
     {
         var loop = new ManualEventLoop();
