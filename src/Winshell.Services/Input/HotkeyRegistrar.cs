@@ -15,6 +15,7 @@ internal sealed class HotkeyRegistrar : IDisposable
     private readonly IEventLoop _loop;
     private readonly IHotkeyBackend _backend;
     private readonly HotkeyBook _book = new();
+    private readonly long _started;
     private readonly Dictionary<IHotkeyListener, IDisposable> _timers = [];
     private int _syncPosted;
     private bool _disposed;
@@ -27,6 +28,7 @@ internal sealed class HotkeyRegistrar : IDisposable
     internal HotkeyRegistrar(IEventLoop loop, IHotkeyBackend backend)
     {
         _loop = loop;
+        _started = loop.Time.GetTimestamp();
         _backend = backend;
         _backend.ChordPressed += OnChord;
     }
@@ -214,7 +216,7 @@ internal sealed class HotkeyRegistrar : IDisposable
 
     private long NowMs()
     {
-        return (long)_loop.Now.TotalMilliseconds;
+        return (long)_loop.Time.GetElapsedTime(_started).TotalMilliseconds;
     }
 
     // True when the hook is installed.

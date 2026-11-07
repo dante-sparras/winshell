@@ -66,7 +66,8 @@ internal sealed record BluetoothSnapshot(
 /// The device icon is the class and appearance on that same enumeration.
 /// Each shell generation owns and stops its own nearby-device watchers.
 /// </summary>
-internal sealed class BluetoothBackend : IBluetoothBackend
+/// <param name="time">Times how long a battery level is kept.</param>
+internal sealed class BluetoothBackend(TimeProvider time) : IBluetoothBackend
 {
     private const string AddressKey = "System.Devices.Aep.DeviceAddress";
     private const string ConnectedKey = "System.Devices.Aep.IsConnected";
@@ -325,7 +326,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
     private async Task<double?> ReadBatteryAsync(Guid container, CancellationToken cancellation)
     {
         if (_batteries.TryGetValue(container, out var cached) &&
-            TimeProvider.System.GetUtcNow() - cached.Read < TimeSpan.FromSeconds(30))
+            time.GetUtcNow() - cached.Read < TimeSpan.FromSeconds(30))
             return cached.Level;
         double? level = null;
         try
@@ -340,7 +341,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
         {
         }
 
-        _batteries[container] = (level, TimeProvider.System.GetUtcNow());
+        _batteries[container] = (level, time.GetUtcNow());
         return level;
     }
 

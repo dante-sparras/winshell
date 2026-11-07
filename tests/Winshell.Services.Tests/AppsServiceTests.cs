@@ -47,11 +47,10 @@ public sealed class AppsServiceTests : IDisposable
     }
 
     /// <summary>A service over a backend whose first scan finds <paramref name="apps"/>, in name order as a scan lists them.</summary>
-    private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null,
-        TimeProvider? time = null)
+    private AppsService Start(IReadOnlyList<AppRecord> apps, Dictionary<string, AppUsage>? usage = null)
     {
         _backend.FirstScan = new AppSnapshot(apps, usage ?? Usage());
-        var service = new AppsService(_loop, _log, _backend, time);
+        var service = new AppsService(_loop, _log, _backend);
         _loop.Process();
         return service;
     }
@@ -124,8 +123,7 @@ public sealed class AppsServiceTests : IDisposable
     public void A_shortcut_opens_with_its_start_in_folder_and_counts_as_a_use_at_once()
     {
         var notepad = Shortcut("Notepad");
-        var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero));
-        using var apps = Start([notepad], time: time);
+        using var apps = Start([notepad]);
         var entry = apps.ById(notepad.Id)!;
         var changes = new List<string>();
         ((INotifyPropertyChanged)entry).PropertyChanged += (_, e) => changes.Add(e.PropertyName!);
@@ -134,7 +132,7 @@ public sealed class AppsServiceTests : IDisposable
 
         Assert.Equal([@"shortcut C:\Menu\Notepad.lnk in C:\Users\Me"], _backend.Opened);
         Assert.Equal(1, entry.RunCount);
-        Assert.Equal(time.GetUtcNow().ToUnixTimeMilliseconds(), entry.LastUsed);
+        Assert.Equal(_loop.Time.GetUtcNow().ToUnixTimeMilliseconds(), entry.LastUsed);
         Assert.Equal([nameof(AppEntry.RunCount), nameof(AppEntry.LastUsed)], changes);
         Assert.Same(entry, Assert.Single(apps.Recent));
         Assert.Same(entry, Assert.Single(apps.Frequent));

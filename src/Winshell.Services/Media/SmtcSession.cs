@@ -16,20 +16,20 @@ internal sealed class SmtcSession
     private double _position;
 
     public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id,
-        string appId, string appName, TimeProvider time)
-        : this(loop, log, id, appId, appName, time, self => new SmtcSessionLink(loop, log, self, session, time))
+        string appId, string appName)
+        : this(loop, log, id, appId, appName, self => new SmtcSessionLink(loop, log, self, session))
     {
     }
 
-    // A test gives it a link that records commands, and a clock it advances.
-    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, TimeProvider time,
+    // A test gives it a link that records commands.
+    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName,
         Func<SmtcSession, ISmtcLink> link)
     {
         Id = id;
         AppId = appId;
         AppName = appName;
-        _time = time;
-        _positionTime = time.GetUtcNow();
+        _time = loop.Time;
+        _positionTime = _time.GetUtcNow();
         _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"),
             () => Changed?.Invoke());
         _link = link(this);

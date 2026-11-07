@@ -40,7 +40,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         _loop = loop;
         _log = log;
         _backend = backend;
-        _changes = new ToastChanges(backend.ToastStamp, TimeProvider.System);
+        _changes = new ToastChanges(backend.ToastStamp, loop.Time);
         _icons = new NotificationAppIcons(loop, log, _stop.Token);
         if (monitor)
         {

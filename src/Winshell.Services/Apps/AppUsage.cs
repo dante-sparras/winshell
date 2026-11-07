@@ -43,18 +43,19 @@ internal static class AppUsageReader
     private const string FeatureUsage = @"Software\Microsoft\Windows\CurrentVersion\Explorer\FeatureUsage";
     private const string UserAssist = @"Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist";
 
-    public static Dictionary<string, AppUsage> Read()
+    /// <param name="now">A last use more than two days after this is a bad value, and is left out.</param>
+    public static Dictionary<string, AppUsage> Read(DateTimeOffset now)
     {
         var launches = ReadCounts(FeatureUsage + @"\AppLaunch");
         var switches = ReadCounts(FeatureUsage + @"\AppSwitched");
         var assist = ReadUserAssist();
-        return From(launches, switches, assist);
+        return From(launches, switches, assist, now);
     }
 
     public static Dictionary<string, AppUsage> From(
         IEnumerable<KeyValuePair<string, int>> launches,
         IEnumerable<KeyValuePair<string, int>> switches,
-        IEnumerable<(string EncodedName, byte[] Data)> userAssist)
+        IEnumerable<(string EncodedName, byte[] Data)> userAssist, DateTimeOffset now)
     {
         var usage = new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
         foreach (var (key, count) in launches)
@@ -66,7 +67,7 @@ internal static class AppUsageReader
             var name = Rot13(encoded);
             if (name.StartsWith("UEME_", StringComparison.Ordinal))
                 continue;
-            if (!TryParse(data, out var parsed))
+            if (!TryParse(data, now, out var parsed))
                 continue;
             Add(usage, name, parsed);
         }
@@ -103,7 +104,7 @@ internal static class AppUsageReader
         return rest.Length == 0 ? folder : Path.Combine(folder, rest);
     }
 
-    public static bool TryParse(byte[] data, out AppUsage usage)
+    public static bool TryParse(byte[] data, DateTimeOffset now, out AppUsage usage)
     {
         usage = default;
         if (data.Length < 16)
@@ -128,7 +129,7 @@ internal static class AppUsageReader
             try
             {
                 var time = DateTimeOffset.FromFileTime(fileTime);
-                if (time.Year >= 2000 && time < TimeProvider.System.GetUtcNow().AddDays(2))
+                if (time.Year >= 2000 && time < now.AddDays(2))
                     last = time.ToUnixTimeMilliseconds();
             }
             catch (ArgumentOutOfRangeException)

@@ -11,7 +11,6 @@ public sealed class AppsService : ObservableObject, IDisposable
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly IAppsBackend _backend;
-    private readonly TimeProvider _time;
     private readonly Dictionary<string, AppEntry> _byId = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, AppUsage> _bumps = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlyList<AppRecord> _entries = [];
@@ -21,13 +20,12 @@ public sealed class AppsService : ObservableObject, IDisposable
 
     private bool _disposed;
 
-    internal AppsService(IEventLoop loop, Log log, IAppsBackend? backend = null, TimeProvider? time = null)
+    internal AppsService(IEventLoop loop, Log log, IAppsBackend? backend = null)
     {
         _loop = loop;
         _log = log;
         _backend = backend ?? new AppCatalog(log, AppCatalog.ProgramsFolders(), () => PackagedApps.Read(log),
-            AppUsageReader.Read);
-        _time = time ?? TimeProvider.System;
+            () => AppUsageReader.Read(loop.Time.GetUtcNow()));
         _backend.Changed += OnChanged;
         _backend.Start();
         Apply();
@@ -57,7 +55,7 @@ public sealed class AppsService : ObservableObject, IDisposable
     /// <summary>Visible apps the query matches, best first. A blank query matches nothing.</summary>
     public IReadOnlyList<AppEntry> Search(string query)
     {
-        return AppIndex.Search(_entries, query, UsageFor, _time.GetUtcNow().ToUnixTimeMilliseconds())
+        return AppIndex.Search(_entries, query, UsageFor, _loop.Time.GetUtcNow().ToUnixTimeMilliseconds())
             .Select(entry => _byId[entry.Id]).ToList();
     }
 
@@ -94,7 +92,7 @@ public sealed class AppsService : ObservableObject, IDisposable
         if (_disposed)
             return;
         var shown = UsageFor(entry);
-        _bumps[entry.Id] = new AppUsage(shown.RunCount + 1, _time.GetUtcNow().ToUnixTimeMilliseconds());
+        _bumps[entry.Id] = new AppUsage(shown.RunCount + 1, _loop.Time.GetUtcNow().ToUnixTimeMilliseconds());
         if (_byId.TryGetValue(entry.Id, out var obj))
             obj.Update(entry, UsageFor(entry));
         Publish();

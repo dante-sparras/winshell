@@ -127,9 +127,8 @@ public class IpcBoundsTests
     public async Task Clients_that_send_nothing_give_their_slots_back()
     {
         var name = PipeName();
-        var time = new FakeTimeProvider();
         var loop = new ManualEventLoop();
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new FakeInstanceControl(), time: time);
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new FakeInstanceControl());
         var idle = new List<NamedPipeClientStream>();
         try
         {
@@ -143,8 +142,7 @@ public class IpcBoundsTests
             await Wait.UntilAsync(() => answered.Task.IsCompleted, "The idle clients never gave their slots back.",
                 () =>
                 {
-                    time.Advance(IpcServer.RequestTimeout);
-                    loop.Process();
+                    loop.Advance(IpcServer.RequestTimeout);
                     if (asking.IsCompleted)
                         asking = Ask(name, answered);
                 });

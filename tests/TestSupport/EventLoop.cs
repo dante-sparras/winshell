@@ -3,21 +3,29 @@ using System.Collections.Concurrent;
 namespace Winshell.TestSupport;
 
 /// <summary>
-/// Posted work and timers for tests. A test calls <see cref="RunDue"/> when work may be ready, and reads
-/// <see cref="NextDue"/> to see when the next timer is due. <see cref="ManualEventLoop"/> moves time itself.
+/// Posted work and timers for tests, on real time unless a clock is given. A test calls <see cref="RunDue"/> when
+/// work may be ready, and reads <see cref="NextDue"/> to see when the next timer is due. <see cref="ManualEventLoop"/>
+/// moves time itself.
 /// </summary>
-internal class EventQueue : IEventLoop
+internal class EventQueue(TimeProvider time) : IEventLoop
 {
     private readonly ConcurrentQueue<Action> _posted = new();
     private readonly Queue<Action> _batch = new();
     private readonly PriorityQueue<TimerEntry, (TimeSpan, long)> _timers = new();
-    private readonly long _started = TimeProvider.System.GetTimestamp();
+    private readonly long _started = time.GetTimestamp();
     private long _sequence;
     private int _cancelled;
 
+    public EventQueue() : this(TimeProvider.System)
+    {
+    }
+
     public event Action? Woken;
 
-    public virtual TimeSpan Now => TimeProvider.System.GetElapsedTime(_started);
+    public TimeProvider Time => time;
+
+    /// <summary>Time since the loop was made, which <see cref="NextDue"/> counts from.</summary>
+    public TimeSpan Now => time.GetElapsedTime(_started);
 
     public Log Log { get; set; } = Log.Default;
 
@@ -209,12 +217,19 @@ internal class EventQueue : IEventLoop
     }
 }
 
-/// <summary>An event loop for tests: time moves only when the test advances it.</summary>
+/// <summary>An event loop for tests: time moves only when the test advances it. It starts at 2026-01-01 UTC.</summary>
 internal sealed class ManualEventLoop : EventQueue
 {
-    private TimeSpan _now;
+    private readonly FakeTimeProvider _clock;
 
-    public override TimeSpan Now => _now;
+    public ManualEventLoop() : this(new FakeTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)))
+    {
+    }
+
+    private ManualEventLoop(FakeTimeProvider clock) : base(clock)
+    {
+        _clock = clock;
+    }
 
     /// <summary>Runs everything that is due now.</summary>
     public void Process()
@@ -224,18 +239,27 @@ internal sealed class ManualEventLoop : EventQueue
                 return;
     }
 
-    /// <summary>Moves time forward, running each timer when its time comes.</summary>
+    /// <summary>
+    /// Moves time forward, running each timer when its time comes. Timers made by <see cref="EventQueue.Time"/> fire
+    /// on this thread as the clock passes them.
+    /// </summary>
     public void Advance(TimeSpan by)
     {
-        var end = _now + by;
+        var end = Now + by;
         Process();
         while (NextDue is { } due && due <= end)
         {
-            _now = due;
+            MoveTo(due);
             Process();
         }
 
-        _now = end;
+        MoveTo(end);
         Process();
+    }
+
+    private void MoveTo(TimeSpan at)
+    {
+        if (at > Now)
+            _clock.Advance(at - Now);
     }
 }

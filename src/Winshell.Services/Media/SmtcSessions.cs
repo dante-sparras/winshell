@@ -14,7 +14,6 @@ internal sealed class SmtcSessions : IMediaSessions
 
     private readonly IEventLoop _loop;
     private readonly Log _log;
-    private readonly TimeProvider _time;
     private readonly List<SmtcSession> _sessions = [];
     private readonly AppNames _names;
     private readonly SessionManagerPoll _poll;
@@ -26,11 +25,10 @@ internal sealed class SmtcSessions : IMediaSessions
     private int _nextId = 1;
 
     internal SmtcSessions(IEventLoop loop, Log log,
-        Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request, TimeProvider time)
+        Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request)
     {
         _loop = loop;
         _log = log;
-        _time = time;
         _poll = new SessionManagerPoll(loop, log, request, manager =>
         {
             Subscribe(manager);
@@ -45,9 +43,7 @@ internal sealed class SmtcSessions : IMediaSessions
     {
         if (_instance is not null)
             return _instance;
-        // The shell's clock. A session counts playback forward from it while playing.
-        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync,
-            TimeProvider.System);
+        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync);
     }
 
     public IReadOnlyList<SmtcSession> Sessions => _sessions;
@@ -96,7 +92,7 @@ internal sealed class SmtcSessions : IMediaSessions
                 continue;
             }
 
-            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, ids[i], _names.Get(ids[i]), _time);
+            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, ids[i], _names.Get(ids[i]));
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();
