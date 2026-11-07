@@ -39,11 +39,9 @@ if ($Lint) {
 
 . (Join-Path $PSScriptRoot 'lib/Tests.ps1')
 
-# Fast and All also check formatting and run the tooling tests; the other tiers run only their .NET tests.
 $full = $Tier -in 'Fast', 'All'
 $run = Get-TestRun -Tier $Tier
 
-# Check prerequisites before spending time on a build.
 if ($full) {
     if (-not (Get-Module -ListAvailable -Name Pester | Where-Object Version -EQ ([version]'5.6.1'))) {
         throw 'Pester 5.6.1 is required. Run: Install-Module Pester -RequiredVersion 5.6.1 -Scope CurrentUser -Force -SkipPublisherCheck'

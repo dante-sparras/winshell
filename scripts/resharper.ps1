@@ -94,7 +94,6 @@ function Invoke-Processing {
                     $null -ne $run.originalUriBaseIds.PSObject.Properties['solutionDir']) {
                     $run.originalUriBaseIds.solutionDir.uri = ([uri]::new($root + [IO.Path]::DirectorySeparatorChar)).AbsoluteUri
                 }
-                # Includes result, artifact-table and related-location references, preserving their indices.
                 Restore-TemplateReportPaths -Node $run
             }
             $sarif | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $report -Encoding utf8NoBOM

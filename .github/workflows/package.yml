@@ -65,7 +65,6 @@ jobs:
         id: changes
 
   publish:
-    # One job per architecture, each on its own runner, so neither waits for the other. package takes both from here.
     name: publish (${{ matrix.runtime }})
     needs: changes
     if: ${{ needs.changes.outputs.build == 'true' }}
