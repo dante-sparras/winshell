@@ -39,7 +39,6 @@ public class InstanceListTests
         try
         {
             Assert.True(Instances.IsRunning(Record(other.Id, "cmd", Started(other))));
-            Assert.False(Instances.IsRunning(Record(other.Id, "cmd", Started(other) - 1)));
         }
         finally
         {

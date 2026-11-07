@@ -143,7 +143,7 @@ internal static class ShellExit
         try
         {
             process = Process.GetProcessById(info.Pid);
-            if (Instances.Wrote(info, process))
+            if (!process.HasExited && Instances.Wrote(info, process))
                 return process;
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException or Win32Exception)

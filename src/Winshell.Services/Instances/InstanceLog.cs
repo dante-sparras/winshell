@@ -174,8 +174,13 @@ internal sealed class InstanceLog : IDisposable
             }
 
             // A shell writes far less than the cap between two reads, so a file shorter than what was read has rolled.
+            // The roll copied it to log.1.txt first, so what was not read yet is there.
             if (stream.Length < stream.Position)
             {
+                if (stream is FileStream { Name: var name })
+                    foreach (var missed in Rest(Path.Combine(Path.GetDirectoryName(name)!, RolledName),
+                                 stream.Position))
+                        yield return missed;
                 stream.Position = 0;
                 reader.DiscardBufferedData();
                 continue;
@@ -183,5 +188,26 @@ internal sealed class InstanceLog : IDisposable
 
             await Task.Delay(FollowPoll, cancel);
         }
+    }
+
+    /// <summary>The lines of <paramref name="file"/> after byte <paramref name="from"/>, or none when it cannot be read.</summary>
+    private static List<string> Rest(string file, long from)
+    {
+        var lines = new List<string>();
+        try
+        {
+            using var stream = OpenToRead(file);
+            if (stream.Length <= from)
+                return lines;
+            stream.Position = from;
+            using var reader = new StreamReader(stream);
+            while (reader.ReadLine() is { } line)
+                lines.Add(line);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return lines;
     }
 }

@@ -90,7 +90,8 @@ internal sealed class Instances(string folder)
                 result.Add((info, alive));
         }
 
-        // Two files can name one live process only when this user cannot read its start time. The newest is its own.
+        // Two files can name one live process when it opened two instances, or when this user cannot read its start
+        // time. The newest is its own.
         return result.Where(row => !row.Alive)
             .Concat(result.Where(row => row.Alive).GroupBy(row => row.Info.Pid)
                 .Select(group => group.MaxBy(row => row.Info.LaunchTime)))
@@ -179,8 +180,8 @@ internal sealed class Instances(string folder)
     /// <summary>Removes the folders of instances that are no longer running, keeping their logs a day.</summary>
     /// <remarks>
     /// A stopped instance's folder goes once it is a day old, measured from when it exited, or else from the log's last
-    /// write. A folder with no record that can be read, from a start that ended before it wrote one, goes on the same
-    /// rule.
+    /// write. A folder with no record, from a start that ended before it wrote one, goes on the same rule. A record that
+    /// does not read may be one being written, so its folder stays.
     /// </remarks>
     public void Clean()
     {
@@ -189,7 +190,7 @@ internal sealed class Instances(string folder)
         foreach (var dir in Directory.EnumerateDirectories(folder))
         {
             var info = Read(dir);
-            if (info is not null && IsRunning(info))
+            if (info is null ? File.Exists(Path.Combine(dir, RecordName)) : IsRunning(info))
                 continue;
             if (TimeProvider.System.GetLocalNow().LocalDateTime - LastUsed(dir, info) > TimeSpan.FromDays(1))
                 TryDelete(dir);

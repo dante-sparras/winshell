@@ -39,24 +39,32 @@ public sealed class InstanceLogTests : IDisposable
         }
     }
 
-    /// <summary><c>winshell log -f</c> holds the log open while the shell rolls it.</summary>
+    /// <summary>
+    /// <c>winshell log -f</c> holds the log open while the shell rolls it, and gets every line: the one written just
+    /// before the roll, which only <c>log.1.txt</c> has, and the one after.
+    /// </summary>
     [Fact]
     public async Task A_follower_reads_on_after_the_log_rolls()
     {
         var path = Path.Combine(_dir, "log.txt");
         var cancel = TestContext.Current.CancellationToken;
-        using var log = new InstanceLog(path, 10, Timeout.InfiniteTimeSpan);
-        log.Write(LogLevel.Warn, "before-the-roll");
+        // 20 bytes: the second line passes the cap, so the third rolls the file.
+        using var log = new InstanceLog(path, 20, Timeout.InfiniteTimeSpan);
+        log.Write(LogLevel.Warn, "first-line");
         await using var stream = InstanceLog.OpenToRead(path);
         using var reader = new StreamReader(stream);
-        Assert.Equal("before-the-roll", await reader.ReadLineAsync(cancel));
+        Assert.Equal("first-line", await reader.ReadLineAsync(cancel));
         await using var lines = InstanceLog.Follow(reader, cancel).GetAsyncEnumerator(cancel);
 
-        log.Write(LogLevel.Warn, "after-the-roll");
+        log.Write(LogLevel.Warn, "second-line");
+        // Shorter than what the follower has read: between two reads a shell writes far less than the real cap.
+        log.Write(LogLevel.Warn, "third");
 
-        Assert.Equal("before-the-roll\n", Read(Path.Combine(_dir, "log.1.txt")));
+        Assert.Equal("first-line\nsecond-line\n", Read(Path.Combine(_dir, "log.1.txt")));
         Assert.True(await lines.MoveNextAsync());
-        Assert.Equal("after-the-roll", lines.Current);
+        Assert.Equal("second-line", lines.Current);
+        Assert.True(await lines.MoveNextAsync());
+        Assert.Equal("third", lines.Current);
     }
 
     [Fact]
@@ -81,7 +89,7 @@ public sealed class InstanceLogTests : IDisposable
         using var log = new InstanceLog(path, 10, delay, time);
         log.Write(LogLevel.Warn, "fills-the-file-past-the-cap");
 
-        // Move the file the log holds aside and keep a new one at its path open, so the roll cannot move or reopen it.
+        // Move the file the log holds aside and keep a new one at its path open, so the roll can neither copy nor reopen it.
         File.Move(path, Path.Combine(_dir, "aside.txt"));
         using (new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
         {
