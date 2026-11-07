@@ -27,24 +27,24 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
         return SystemTray.ExplorerFirst();
     }
 
-    public bool Register(nint window, uint callback)
+    public bool Register(uint callback)
     {
-        return AppBars.Register(window, callback);
+        return AppBars.Register(host.Handle, callback);
     }
 
-    public RECT Query(nint window, AppBarEdge edge, RECT proposed)
+    public RECT Query(AppBarEdge edge, RECT proposed)
     {
-        return AppBars.Query(window, edge, proposed);
+        return AppBars.Query(host.Handle, edge, proposed);
     }
 
-    public RECT Reserve(nint window, AppBarEdge edge, RECT desired)
+    public RECT Reserve(AppBarEdge edge, RECT desired)
     {
-        return AppBars.Reserve(window, edge, desired);
+        return AppBars.Reserve(host.Handle, edge, desired);
     }
 
-    public void Remove(nint window)
+    public void Remove()
     {
-        AppBars.Remove(window);
+        AppBars.Remove(host.Handle);
     }
 
     public void Move(RECT rect, bool topmost, double scale)

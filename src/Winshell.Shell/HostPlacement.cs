@@ -3,42 +3,16 @@ using Winshell.Native;
 
 namespace Winshell;
 
-/// <summary>Where a popup sits, in screen coordinates.</summary>
-internal sealed record PopupPlacement(ScreenInfo? Screen, Rect Rect);
-
 /// <summary>
-/// Where a native window is and whether it shows: its screen, scale, size and place, its z-order, and the parts of it
-/// that take clicks. A panel's screen and edge are <see cref="PanelEdge"/>. A floating window sits on its screen
-/// through its <see cref="Frame"/>.
+/// Where a native window is and whether it shows: its scale, size and place, its z-order, and the parts of it that
+/// take clicks. Where its kind puts it is its <see cref="HostWindow.Placer"/>.
 /// </summary>
-internal sealed class HostPlacement
+internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
 {
-    private readonly HostWindow _host;
-    private readonly ShellPlatform _platform;
     private bool _visible;
     private bool _clickThrough;
     private Point _origin;
     private string _screenId = "";
-
-    public HostPlacement(HostWindow host, ShellPlatform platform)
-    {
-        _host = host;
-        _platform = platform;
-        if (host.Kind == WindowKind.Panel)
-            Edge = new PanelEdge(host.Handle, new HostPanelDesktop(host, platform), PlacePanel);
-        else if (host.Kind == WindowKind.Floating)
-            Frame = new FloatingFrame(host, platform);
-    }
-
-    /// <summary>Where a panel sits and which edge it holds. Null for a popup or a floating window.</summary>
-    internal PanelEdge? Edge { get; }
-
-    /// <summary>How a floating window sits on its screen.</summary>
-    internal FloatingFrame? Frame { get; }
-
-    internal PanelPlacement? Panel { get; private set; }
-
-    internal PopupPlacement? Popup { get; private set; }
 
     public bool IsVisible => _visible;
 
@@ -49,52 +23,7 @@ internal sealed class HostPlacement
     /// <summary>Whether <see cref="Move"/> is placing the window, so the messages it sends come from that placement.</summary>
     internal bool Placing { get; private set; }
 
-    private nint Handle => _host.Handle;
-
-    public void SetPanel(PanelPlacement placement)
-    {
-        Panel = placement;
-        PlacePanel();
-    }
-
-    /// <summary>Puts the panel on its screen. The edge module decides the screen, the reservation and the z-order.</summary>
-    internal void PlacePanel()
-    {
-        Edge?.Place(Panel, _visible, _host.Released);
-    }
-
-    public void SetPopup(PopupPlacement placement)
-    {
-        Popup = placement;
-        // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
-        var monitors = Screens.Enumerate();
-        var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y),
-            monitors.Select(m => m.Info.Geometry).ToList());
-        var monitor = monitors.FirstOrDefault(m => m.Info.Id == placement.Screen?.Id) ??
-                      (at is { } i ? monitors[i] : monitors.FirstOrDefault());
-        if (monitor is null)
-            return;
-        Scale = monitor.Scale;
-        var r = DesktopSpace.ToPhysical(placement.Rect, monitor.Bounds, Scale);
-        Move(r, Win32.HWND_TOPMOST, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
-    }
-
-    public void SetFloating(FloatingPlacement placement)
-    {
-        if (Handle != 0 && !_host.Released)
-            Frame?.Apply(placement);
-    }
-
-    /// <summary>Places a panel or popup again from its logical size, as after its monitor's scale changed.</summary>
-    internal void Replace()
-    {
-        if (Handle == 0)
-            return;
-        if (_host.Kind == WindowKind.Panel)
-            PlacePanel();
-        else if (Popup is { } popup)
-            SetPopup(popup);
-    }
+    private nint Handle => host.Handle;
 
     public (int X, int Y) MapToScreen(double x, double y)
     {
@@ -144,14 +73,14 @@ internal sealed class HostPlacement
         _origin = DesktopSpace.ToLogical(origin, monitor, Scale);
         var width = Math.Max(1, rc.Width);
         var height = Math.Max(1, rc.Height);
-        _host.Presentation.FitIsland(width, height);
-        _host.Client.OnResized(width / Scale, height / Scale, Scale);
-        _host.Client.OnMoved(_origin.X, _origin.Y);
+        host.Presentation.FitIsland(width, height);
+        host.Client.OnResized(width / Scale, height / Scale, Scale);
+        host.Client.OnMoved(_origin.X, _origin.Y);
         // Last, since a window that follows its screen can place itself again.
         if (device != _screenId)
         {
             _screenId = device;
-            _host.Client.OnScreenChanged(device);
+            host.Client.OnScreenChanged(device);
         }
     }
 
@@ -160,20 +89,19 @@ internal sealed class HostPlacement
         if (_visible == visible)
             return;
         _visible = visible;
-        var kind = _host.Kind;
         if (visible)
         {
-            if (kind == WindowKind.Panel)
-                PlacePanel();
-            _host.Focus.Show();
-            if (kind == WindowKind.Floating && !Win32.IsIconic(Handle))
-                OwnedWindows.Raise(Handle, _platform.Windows);
+            host.Placer.Show();
+            host.Focus.Show();
+            // Showing a window can put it above the windows it owns. Put those back above it.
+            if (!Win32.IsIconic(Handle))
+                OwnedWindows.Raise(Handle, platform.Windows);
         }
         else
         {
-            Edge?.Remove();
+            host.Placer.Hide();
             Win32.ShowWindow(Handle, Win32.SW_HIDE);
-            _host.Focus.Release();
+            host.Focus.Release();
         }
     }
 
@@ -252,7 +180,7 @@ internal sealed class HostPlacement
     /// <summary>Gives back what the window holds while it is placed: a popup's grab on clicks and a panel's edge.</summary>
     internal void Release()
     {
-        _host.Focus.Release();
-        Edge?.Remove();
+        host.Focus.Release();
+        host.Placer.Release();
     }
 }

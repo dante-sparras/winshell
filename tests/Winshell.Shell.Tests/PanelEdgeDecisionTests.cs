@@ -34,6 +34,8 @@ public class PanelEdgeDecisionTests
 
         public RECT? Asked { get; private set; }
 
+        public int Moves { get; private set; }
+
         public RECT? Moved { get; private set; }
 
         public bool? Topmost { get; private set; }
@@ -67,31 +69,32 @@ public class PanelEdgeDecisionTests
             return new Noop();
         }
 
-        public bool Register(nint window, uint callback)
+        public bool Register(uint callback)
         {
             Registers++;
             return true;
         }
 
-        public RECT Query(nint window, AppBarEdge edge, RECT proposed)
+        public RECT Query(AppBarEdge edge, RECT proposed)
         {
             return proposed;
         }
 
-        public RECT Reserve(nint window, AppBarEdge edge, RECT desired)
+        public RECT Reserve(AppBarEdge edge, RECT desired)
         {
             Reserves++;
             Asked = desired;
             return desired;
         }
 
-        public void Remove(nint window)
+        public void Remove()
         {
             Removes++;
         }
 
         public void Move(RECT rect, bool topmost, double scale)
         {
+            Moves++;
             Moved = rect;
             Topmost = topmost;
             Scale = scale;
@@ -132,12 +135,19 @@ public class PanelEdgeDecisionTests
         return new PanelPlacement(null, anchors, left, top, right, bottom, width, height, false, 0, true);
     }
 
+    private static PanelEdge Shown(Desktop desktop)
+    {
+        var edge = new PanelEdge(desktop);
+        edge.Show();
+        return edge;
+    }
+
     /// <summary>Where a panel that reserves nothing goes on a monitor with this work area, in physical pixels.</summary>
     private static RECT PlacedIn(RECT bounds, RECT area, double scale, PanelPlacement panel)
     {
         var desktop = new Desktop();
         desktop.Monitors.Add(new PanelMonitor("anchored", bounds, area, scale));
-        new PanelEdge(9, desktop, () => { }).Place(panel with { Screen = Screen("anchored") }, true, false);
+        Shown(desktop).Set(panel with { Screen = Screen("anchored") });
         return desktop.Moved!.Value;
     }
 
@@ -145,23 +155,23 @@ public class PanelEdgeDecisionTests
     public void A_panel_reserves_a_strip_of_the_screen_it_names()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(1, desktop, () => { });
+        var edge = Shown(desktop);
 
-        Assert.True(edge.Place(Panel(Edges.Top | Edges.Left | Edges.Right, Second.Id), true, false));
+        edge.Set(Panel(Edges.Top | Edges.Left | Edges.Right, Second.Id));
 
         Assert.Equal(new RECT(2560, 1080, 5120, 1128), desktop.Asked);
         Assert.Equal(1, desktop.Registers);
         Assert.True(desktop.Topmost);
-        edge.Remove();
+        edge.Release();
     }
 
     [Fact]
     public void A_panel_moves_at_the_scale_of_the_monitor_it_is_on()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(8, desktop, () => { });
+        var edge = Shown(desktop);
 
-        edge.Place(Panel(Edges.Top | Edges.Left, Scaled.Id), true, false);
+        edge.Set(Panel(Edges.Top | Edges.Left, Scaled.Id));
 
         // 320 by 48 logical pixels at scale 2, against the work area's top.
         Assert.Equal(2, desktop.Scale);
@@ -172,9 +182,9 @@ public class PanelEdgeDecisionTests
     public void A_panel_that_covers_its_screen_reserves_nothing_and_fills_the_monitor()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(2, desktop, () => { });
+        var edge = Shown(desktop);
 
-        edge.Place(Panel(Edges.Left | Edges.Top | Edges.Right | Edges.Bottom, covers: true), true, false);
+        edge.Set(Panel(Edges.Left | Edges.Top | Edges.Right | Edges.Bottom, covers: true));
 
         Assert.Null(desktop.Asked);
         Assert.Equal(0, desktop.Registers);
@@ -185,13 +195,14 @@ public class PanelEdgeDecisionTests
     public void A_corner_panel_uses_the_work_area_and_a_hidden_one_reserves_nothing()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(3, desktop, () => { });
+        var edge = Shown(desktop);
 
-        edge.Place(Panel(Edges.Top | Edges.Left), true, false);
+        edge.Set(Panel(Edges.Top | Edges.Left));
         Assert.Equal(0, desktop.Registers);
         Assert.Equal(Primary.Area.Top, desktop.Moved!.Value.Top);
 
-        edge.Place(Panel(Edges.Top | Edges.Left | Edges.Right), false, false);
+        edge.Hide();
+        edge.Set(Panel(Edges.Top | Edges.Left | Edges.Right));
         Assert.Equal(0, desktop.Registers);
         Assert.Equal(Primary.Area.Top, desktop.Moved.Value.Top);
     }
@@ -200,21 +211,21 @@ public class PanelEdgeDecisionTests
     public void A_panel_steps_behind_a_fullscreen_app_and_comes_back_when_it_leaves()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(4, desktop, () => { });
+        var edge = Shown(desktop);
         var panel = Panel(Edges.Top | Edges.Left);
 
-        edge.Place(panel, true, false);
+        edge.Set(panel);
         Assert.True(desktop.Topmost);
 
         desktop.Fullscreen = true;
-        edge.Place(panel, true, false);
+        edge.Set(panel);
         Assert.False(desktop.Topmost);
 
         desktop.Fullscreen = false;
-        edge.Place(panel, true, false);
+        edge.Set(panel);
         Assert.True(desktop.Topmost);
 
-        edge.Place(Panel(Edges.Top | Edges.Left, above: false), true, false);
+        edge.Set(Panel(Edges.Top | Edges.Left, above: false));
         Assert.False(desktop.Topmost);
     }
 
@@ -222,18 +233,21 @@ public class PanelEdgeDecisionTests
     public void A_placement_that_arrives_after_the_panel_is_gone_reserves_no_edge()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(5, desktop, () => { });
+        var edge = Shown(desktop);
         var panel = Panel(Edges.Top | Edges.Left | Edges.Right);
 
-        edge.Place(panel, true, false);
-        edge.Remove();
+        edge.Set(panel);
+        // The monitor's scale changes, which places the panel again later, and the panel goes before then.
+        edge.OnDpiChanged(default, false);
+        edge.Release();
         Assert.Equal(1, desktop.Removes);
         Assert.Equal(1, desktop.Reserves);
 
-        Assert.False(edge.Place(panel, true, true));
+        desktop.Posted.Single()();
 
         Assert.Equal(1, desktop.Registers);
         Assert.Equal(1, desktop.Reserves);
+        Assert.Equal(1, desktop.Moves);
     }
 
     [Fact]
@@ -241,9 +255,8 @@ public class PanelEdgeDecisionTests
     {
         var desktop = new Desktop();
         var panel = Panel(Edges.Bottom | Edges.Left | Edges.Right);
-        PanelEdge edge = null!;
-        edge = new PanelEdge(6, desktop, () => edge.Place(panel, true, false));
-        edge.Place(panel, true, false);
+        var edge = Shown(desktop);
+        edge.Set(panel);
         Assert.Equal(1, desktop.Registers);
 
         edge.ExplorerRestarted();
@@ -253,15 +266,15 @@ public class PanelEdgeDecisionTests
         desktop.Posted.Single()();
         Assert.Equal(2, desktop.Registers);
         Assert.Equal(2, desktop.Reserves);
-        edge.Remove();
+        edge.Release();
     }
 
     [Fact]
     public void A_crash_gives_back_every_edge_the_shell_holds()
     {
         var desktop = new Desktop();
-        var edge = new PanelEdge(7, desktop, () => { });
-        edge.Place(Panel(Edges.Top | Edges.Left | Edges.Right), true, false);
+        var edge = Shown(desktop);
+        edge.Set(Panel(Edges.Top | Edges.Left | Edges.Right));
         Assert.Equal(1, desktop.Registers);
 
         PanelEdge.ReleaseAll();

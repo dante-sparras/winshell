@@ -214,8 +214,7 @@ internal sealed class ShellPlatform : IDisposable
             _relayout = null;
             RefreshScreens();
             foreach (var w in _windows.ToArray())
-                if (w.Kind == WindowKind.Panel && w.Placement.IsVisible)
-                    w.Placement.PlacePanel();
+                w.Placer.OnWorkAreaChanged();
         });
     }
 

@@ -10,8 +10,8 @@ namespace Winshell;
 internal readonly record struct PanelMonitor(string Id, RECT Bounds, RECT Area, double Scale);
 
 /// <summary>
-/// What <see cref="PanelEdge"/> asks of the desktop: which screens exist, Explorer's app bar, and where the window
-/// sits. The shell has a Win32 adapter. Tests use a fake, so they never open a window.
+/// What <see cref="PanelEdge"/> asks of the desktop for one panel's window: which screens exist, the window's app bar,
+/// and where the window sits. The shell has a Win32 adapter. Tests use a fake, so they never open a window.
 /// </summary>
 internal interface IPanelDesktop
 {
@@ -30,17 +30,17 @@ internal interface IPanelDesktop
     /// </summary>
     IDisposable Explorer();
 
-    /// <summary>Registers <paramref name="window"/> so Explorer posts <paramref name="callback"/> to it. False when no host answers.</summary>
-    bool Register(nint window, uint callback);
+    /// <summary>Registers the window as an app bar, so Explorer posts <paramref name="callback"/> to it. False when no host answers.</summary>
+    bool Register(uint callback);
 
     /// <summary>The part of <paramref name="edge"/> still free inside <paramref name="proposed"/>.</summary>
-    RECT Query(nint window, AppBarEdge edge, RECT proposed);
+    RECT Query(AppBarEdge edge, RECT proposed);
 
     /// <summary>Reserves <paramref name="desired"/> on <paramref name="edge"/> and returns the rectangle Explorer granted.</summary>
-    RECT Reserve(nint window, AppBarEdge edge, RECT desired);
+    RECT Reserve(AppBarEdge edge, RECT desired);
 
-    /// <summary>Removes <paramref name="window"/>'s app bar.</summary>
-    void Remove(nint window);
+    /// <summary>Removes the window's app bar. A crash on any thread may call it.</summary>
+    void Remove();
 
     /// <summary>
     /// Moves the window to <paramref name="rect"/> at <paramref name="scale"/>. The scale is applied before the window
