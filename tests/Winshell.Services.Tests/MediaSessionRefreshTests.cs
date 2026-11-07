@@ -145,6 +145,39 @@ public sealed class MediaSessionRefreshTests
         Assert.Equal(TimeSpan.FromSeconds(32), loop.NextDue);
     }
 
+    [Fact]
+    public void A_disposed_list_asks_Windows_no_more()
+    {
+        var loop = new ManualEventLoop();
+        var requests = 0;
+        var first = new Discovery();
+        var sessions = new SmtcSessions(loop, new Log(), () => ++requests == 1 ? first : new Discovery());
+        loop.Process();
+        first.Finish(AsyncStatus.Error);
+        loop.Process();
+        Assert.Equal(TimeSpan.FromSeconds(2), loop.NextDue);
+
+        sessions.Dispose();
+        loop.Advance(TimeSpan.FromHours(2));
+
+        Assert.Equal(1, requests);
+        Assert.Null(loop.NextDue);
+    }
+
+    [Fact]
+    public void A_disposed_list_cancels_and_closes_the_request_that_is_out()
+    {
+        var loop = new ManualEventLoop();
+        var pending = new Discovery { CompletesOnCancel = false };
+        var sessions = new SmtcSessions(loop, new Log(), () => pending);
+        loop.Process();
+
+        sessions.Dispose();
+
+        Assert.Equal(1, pending.CancelCount);
+        Assert.Equal(1, pending.CloseCount);
+    }
+
     private sealed class Discovery : IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>
     {
         private AsyncOperationCompletedHandler<GlobalSystemMediaTransportControlsSessionManager>? _completed;

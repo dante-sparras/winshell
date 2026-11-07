@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Windows.Media.Control;
 
 namespace Winshell.Media;
 
@@ -10,7 +11,7 @@ public sealed class MediaService : ObservableObject, IDisposable
     private readonly Log _log;
 
     internal MediaService(IEventLoop loop, Log log)
-        : this(loop, log, SmtcSessions.Get(loop, log))
+        : this(loop, log, new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync))
     {
         TempImageStore.Shared.CleanOldOnce(failure => log.Warn("images", failure));
     }
@@ -41,5 +42,6 @@ public sealed class MediaService : ObservableObject, IDisposable
         _sessions.SessionRemoved -= Refresh;
         foreach (var session in Sessions)
             session.Detach();
+        _sessions.Dispose();
     }
 }

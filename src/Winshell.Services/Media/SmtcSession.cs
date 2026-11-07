@@ -15,14 +15,7 @@ internal sealed class SmtcSession
     private DateTimeOffset _positionTime;
     private double _position;
 
-    public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id,
-        string appId, string appName)
-        : this(loop, log, id, appId, appName, self => new SmtcSessionLink(loop, log, self, session))
-    {
-    }
-
-    internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName,
-        Func<SmtcSession, ISmtcLink> link)
+    public SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, ISmtcLink link)
     {
         Id = id;
         AppId = appId;
@@ -31,7 +24,7 @@ internal sealed class SmtcSession
         _positionTime = _time.GetUtcNow();
         _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"),
             () => Changed?.Invoke());
-        _link = link(this);
+        _link = link;
     }
 
     /// <summary>
@@ -142,7 +135,7 @@ internal sealed class SmtcSession
 
     public void Start()
     {
-        _link.Start();
+        _link.Start(this);
     }
 
     /// <summary>Follows the new object Windows returned for this same session, without dropping the read in progress.</summary>

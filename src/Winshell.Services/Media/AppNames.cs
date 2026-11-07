@@ -3,8 +3,8 @@ using Winshell.Apps;
 namespace Winshell.Media;
 
 /// <summary>
-/// The names of the apps behind media sessions, looked up off the loop and kept for the life of the
-/// process. Lives on the UI thread.
+/// The names of the apps behind media sessions, looked up off the loop and kept while the session list lives.
+/// Lives on the UI thread.
 /// </summary>
 internal sealed class AppNames(IEventLoop loop, Log log, Func<string, string> describe, Action named)
 {
