@@ -96,15 +96,15 @@ internal static unsafe class IconBitmap
         {
             PInvoke.DeleteDC(dc);
             if (dib != default)
-                Win32.DeleteObject(dib);
+                PInvoke.DeleteObject(dib);
         }
     }
 
     private static void DeleteBitmaps(HBITMAP color, HBITMAP mask)
     {
         if (color != default)
-            Win32.DeleteObject(color);
+            PInvoke.DeleteObject(color);
         if (mask != default)
-            Win32.DeleteObject(mask);
+            PInvoke.DeleteObject(mask);
     }
 }

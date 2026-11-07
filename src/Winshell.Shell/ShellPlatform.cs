@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Security;
 using Windows.UI;
 using Windows.UI.ViewManagement;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -43,7 +44,8 @@ internal sealed class ShellPlatform : IDisposable
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
         // Display and settings broadcasts reach only top-level windows. One hidden window hears them for the shell,
         // whether or not it has a window of its own.
-        _broadcasts = NativeWindow.TryCreate("WinshellSystemChanges", Win32.WS_POPUP, Win32.WS_EX_TOOLWINDOW,
+        _broadcasts = NativeWindow.TryCreate("WinshellSystemChanges", (uint)WINDOW_STYLE.WS_POPUP,
+            (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW,
             OnBroadcast, e => Log.Warn("shell", e.Message), false);
         if (_broadcasts is null)
             Log.Warn("shell",

@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
@@ -8,7 +9,7 @@ public sealed class SavedFloatingPlaceTests
     public void A_saved_place_follows_a_moved_monitor_and_a_new_scale()
     {
         var saved = new SavedFloatingPlace(
-            Win32.WS_OVERLAPPEDWINDOW, 1, new RECT(0, 0, 1920, 1080), @"\\.\DISPLAY1",
+            (uint)WINDOW_STYLE.WS_OVERLAPPEDWINDOW, 1, new RECT(0, 0, 1920, 1080), @"\\.\DISPLAY1",
             100, 80, 400, 300, false, false, default, false);
 
         Assert.True(saved.Matches(@"\\.\DISPLAY1", new RECT(0, 0, 1920, 1080), 1));

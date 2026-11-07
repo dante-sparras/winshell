@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Diagnostics;
 using Winshell.Native;
 
@@ -74,10 +75,12 @@ internal sealed class HostWindow : IDisposable
     {
         return kind switch
         {
-            WindowKind.Floating => (Win32.WS_OVERLAPPEDWINDOW | Win32.WS_CLIPCHILDREN,
-                Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_APPWINDOW | WindowFocus.StartingExStyle(kind)),
-            _ => (Win32.WS_POPUP,
-                Win32.WS_EX_NOREDIRECTIONBITMAP | Win32.WS_EX_TOOLWINDOW | Win32.WS_EX_TOPMOST |
+            WindowKind.Floating => ((uint)(WINDOW_STYLE.WS_OVERLAPPEDWINDOW | WINDOW_STYLE.WS_CLIPCHILDREN),
+                (uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP | (uint)WINDOW_EX_STYLE.WS_EX_APPWINDOW |
+                WindowFocus.StartingExStyle(kind)),
+            _ => ((uint)WINDOW_STYLE.WS_POPUP,
+                (uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP | (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW |
+                (uint)WINDOW_EX_STYLE.WS_EX_TOPMOST |
                 WindowFocus.StartingExStyle(kind))
         };
     }

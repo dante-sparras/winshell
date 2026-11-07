@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Tray;
 
@@ -51,10 +52,11 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
     {
         // UpdateSize runs inside the move and divides by this. A DPI change during the move keeps it too.
         host.Placement.Scale = scale;
-        host.Placement.SetExStyle(Win32.WS_EX_TOPMOST, topmost);
+        host.Placement.SetExStyle((uint)WINDOW_EX_STYLE.WS_EX_TOPMOST, topmost);
         // HWND_NOTOPMOST would put it above every window that is not topmost, so over the fullscreen app.
         var after = topmost ? Win32.HWND_TOPMOST : Win32.HWND_BOTTOM;
-        host.Placement.Move(rect, after, Win32.SWP_NOACTIVATE | Win32.SWP_NOOWNERZORDER);
+        host.Placement.Move(rect, after,
+            (uint)(SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER));
     }
 
     public void WorkAreaMayHaveChanged()

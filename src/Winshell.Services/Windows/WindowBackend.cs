@@ -1,3 +1,4 @@
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell.Windows;
@@ -216,10 +217,10 @@ internal sealed class WindowBackend : IWindowBackend
             true,
             TopLevelWindows.IsShellWindow(hwnd),
             TopLevelWindows.HasChildStyle(hwnd),
-            (ex & Win32.WS_EX_APPWINDOW) != 0,
+            (ex & (uint)WINDOW_EX_STYLE.WS_EX_APPWINDOW) != 0,
             Win32.GetWindow(hwnd, Win32.GW_OWNER) != 0,
-            (ex & Win32.WS_EX_TOOLWINDOW) != 0,
-            (ex & Win32.WS_EX_NOACTIVATE) != 0,
+            (ex & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0,
+            (ex & (uint)WINDOW_EX_STYLE.WS_EX_NOACTIVATE) != 0,
             TopLevelWindows.HasTitle(hwnd),
             TopLevelWindows.IsCloaked(hwnd));
     }
@@ -261,7 +262,7 @@ internal sealed class WindowBackend : IWindowBackend
         HashSet<string> screens = [];
         var hwnd = Win32.GetForegroundWindow();
         if (hwnd == 0 || !Win32.IsWindowVisible(hwnd) || TopLevelWindows.IsShellWindow(hwnd)
-            || ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0
+            || ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0
             || !Win32.GetWindowRect(hwnd, out var rect))
             return screens;
         var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
@@ -295,7 +296,8 @@ internal sealed class WindowBackend : IWindowBackend
         var maximized = !minimized && Win32.IsZoomed(hwnd);
         var primary = monitors.FirstOrDefault(m => m.Info.IsPrimary);
         var window = new WindowToMove(current, hasPlacement ? placement.Normal : default, hasPlacement, minimized,
-            maximized, ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0);
+            maximized,
+            ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW) != 0);
         if (!WindowOnScreen.TryMove(window, MonitorFrame.Of(source.Bounds, source.Work, source.Scale),
                 MonitorFrame.Of(target.Bounds, target.Work, target.Scale), primary?.Bounds ?? default,
                 primary?.Work ?? default, out var place))

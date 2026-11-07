@@ -1,4 +1,4 @@
-using Winshell.Native;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Winshell;
 
@@ -36,7 +36,7 @@ internal sealed class WindowFocus(WindowKind kind, IFocusEffects effects)
     /// <summary>The extended style a native window starts with: a panel and a popup window start out refusing activation.</summary>
     internal static uint StartingExStyle(WindowKind kind)
     {
-        return kind == WindowKind.Floating ? 0 : Win32.WS_EX_NOACTIVATE;
+        return kind == WindowKind.Floating ? 0 : (uint)WINDOW_EX_STYLE.WS_EX_NOACTIVATE;
     }
 
     /// <summary>Whether a click on the window activates it, and with it the keyboard.</summary>

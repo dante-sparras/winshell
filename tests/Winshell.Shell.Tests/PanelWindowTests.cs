@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -48,10 +49,11 @@ public sealed class PanelWindowTests
             return (uint)Win32.GetWindowLongPtr(panel.Host!.Handle, Win32.GWL_EXSTYLE);
         });
 
-        Assert.Equal(Win32.WS_EX_NOACTIVATE, styles & Win32.WS_EX_NOACTIVATE);
-        Assert.Equal(Win32.WS_EX_TOOLWINDOW, styles & Win32.WS_EX_TOOLWINDOW);
-        Assert.Equal(Win32.WS_EX_TOPMOST, styles & Win32.WS_EX_TOPMOST);
-        Assert.Equal(Win32.WS_EX_NOREDIRECTIONBITMAP, styles & Win32.WS_EX_NOREDIRECTIONBITMAP);
+        Assert.Equal((uint)WINDOW_EX_STYLE.WS_EX_NOACTIVATE, styles & (uint)WINDOW_EX_STYLE.WS_EX_NOACTIVATE);
+        Assert.Equal((uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW, styles & (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW);
+        Assert.Equal((uint)WINDOW_EX_STYLE.WS_EX_TOPMOST, styles & (uint)WINDOW_EX_STYLE.WS_EX_TOPMOST);
+        Assert.Equal((uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP,
+            styles & (uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP);
     }
 
     [Fact]
