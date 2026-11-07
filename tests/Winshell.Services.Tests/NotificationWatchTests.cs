@@ -9,7 +9,7 @@ public sealed class NotificationWatchTests
     public async Task A_toast_change_refreshes_without_waiting_for_the_poll_and_dispose_stops_the_watch()
     {
         var backend = new WatchingBackend();
-        var listener = new NotificationListener(new ManualEventLoop(), Log.Default, backend, true);
+        var listener = new NotificationListener(new ManualEventLoop(), Log.Default, backend);
         try
         {
             await backend.FirstRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);

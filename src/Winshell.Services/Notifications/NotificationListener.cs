@@ -6,13 +6,20 @@ namespace Winshell.Notifications;
 /// <summary>A view of Windows Notification Center. Making one never prompts for access.</summary>
 public sealed class NotificationListener : ObservableObject, IDisposable
 {
+    /// <summary>
+    /// How often Focus, Do Not Disturb and access are read. Windows announces none of them, and announces toast changes
+    /// only with package identity.
+    /// </summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(10);
+
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly INotificationBackend _backend;
     private readonly ToastChanges _changes;
     private readonly NotificationAppIcons _icons;
     private readonly CancellationTokenSource _stop = new();
-    private readonly Task? _monitorTask;
+    private readonly StateReader<NotificationSnapshot> _reader;
+    private IDisposable _poll;
 
     /// <summary>
     /// The toasts of the last read. A poll sees the same toasts, each of which costs Windows milliseconds to name its
@@ -21,6 +28,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private Dictionary<(uint Id, DateTimeOffset Created), IncomingToast> _read = [];
 
     private IReadOnlyList<IncomingToast> _toasts = [];
+    private Action? _unwatch;
 
     private NotificationAccessStatus _accessStatus;
     private NotificationState _focusState;
@@ -28,26 +36,25 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private string _error = "";
     private bool _requesting;
     private bool _disposed;
-    private long _revision;
 
     internal NotificationListener(IEventLoop loop, Log log)
-        : this(loop, log, new WindowsNotificationBackend(), true)
+        : this(loop, log, new WindowsNotificationBackend())
     {
         TempImageStore.Shared.CleanOldOnce(failure => log.Warn("images", failure));
     }
 
-    internal NotificationListener(IEventLoop loop, Log log, INotificationBackend backend, bool monitor = false)
+    internal NotificationListener(IEventLoop loop, Log log, INotificationBackend backend)
     {
         _loop = loop;
         _log = log;
         _backend = backend;
         _changes = new ToastChanges(backend.ToastStamp, loop.Time);
         _icons = new NotificationAppIcons(loop, log, _stop.Token);
-        if (monitor)
-        {
-            var cancellation = _stop.Token;
-            _monitorTask = Task.Run(() => MonitorAsync(cancellation));
-        }
+        // The reads call Windows synchronously for each toast, so they run off the loop.
+        _reader = new StateReader<NotificationSnapshot>(c => Task.Run(() => ReadAsync(c), c), Apply, loop,
+            new MonitorWarning(log, "notifications"));
+        _poll = SchedulePoll();
+        _reader.Request();
     }
 
     /// <summary>Raised after <see cref="Notifications"/> holds a newly seen notification, including those in the first read.</summary>
@@ -93,7 +100,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         if (_requesting || _disposed)
             return;
         _requesting = true;
-        Interlocked.Increment(ref _revision);
+        _reader.Invalidate();
         Set(ref _accessStatus, NotificationAccessStatus.Requesting, nameof(AccessStatus));
         Set(ref _error, "", nameof(Error));
         try
@@ -103,7 +110,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             Post(() =>
             {
                 _requesting = false;
-                Interlocked.Increment(ref _revision);
+                _reader.Invalidate();
                 SetAccess(status);
             });
         }
@@ -116,105 +123,40 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             Post(() =>
             {
                 _requesting = false;
-                Interlocked.Increment(ref _revision);
+                _reader.Invalidate();
                 SetAccess(NotificationAccessStatus.Unavailable);
                 Fail(e.Message);
             });
         }
     }
 
-    private async Task MonitorAsync(CancellationToken cancellation)
+    private IDisposable SchedulePoll()
     {
-        var warning = new MonitorWarning(_log, "notifications");
-        // Not disposed: a toast event can still arrive after the watch stops.
-        var changed = new SemaphoreSlim(0);
-        Action? unwatch = null;
-        try
+        return _loop.Schedule(PollInterval, () =>
         {
-            while (!cancellation.IsCancellationRequested)
-            {
-                var wait = TimeSpan.FromSeconds(10);
-                try
-                {
-                    // With package identity Windows reports toast changes; the poll catches Focus, Do Not Disturb and access.
-                    unwatch ??= _backend.WatchToasts(() =>
-                    {
-                        _changes.Change();
-                        changed.Release();
-                    });
-                    await RefreshAsync().ConfigureAwait(false);
-                    warning.Succeeded();
-                }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-                {
-                    return;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
-#pragma warning disable CA1031 // One failed read must not stop the rest of the poll.
-                catch (Exception e)
-#pragma warning restore CA1031
-                {
-                    warning.Failed(e);
-                    wait = TimeSpan.FromSeconds(2);
-                }
-
-                try
-                {
-                    await changed.WaitAsync(wait, cancellation).ConfigureAwait(false);
-                    while (changed.Wait(0, cancellation))
-                    {
-                    }
-                }
-                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-                {
-                    return;
-                }
-            }
-        }
-        finally
-        {
-            unwatch?.Invoke();
-        }
+            if (_disposed)
+                return;
+            _poll = SchedulePoll();
+            _reader.Request();
+        });
     }
 
-    internal async Task RefreshAsync()
+    private void OnToastsChanged()
     {
-        var revision = Interlocked.Read(ref _revision);
-        try
-        {
-            var snapshot = await ReadAsync(_stop.Token).ConfigureAwait(false);
-            Post(() =>
-            {
-                if (revision == Interlocked.Read(ref _revision) && !_requesting)
-                    Apply(snapshot);
-            });
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
-        }
-        catch (Exception e) when (WindowsFailure.IsExpected(e))
-        {
-            Post(() =>
-            {
-                if (revision != Interlocked.Read(ref _revision) || _requesting)
-                    return;
-                SetAccess(NotificationAccessStatus.Unavailable);
-                Fail(e.Message);
-            });
-        }
+        _changes.Change();
+        _reader.Request();
+    }
+
+    internal Task RefreshAsync()
+    {
+        return _reader.ReadAsync();
     }
 
     private async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
+        // With package identity and access Windows reports toast changes; until then each read tries again.
+        _unwatch ??= _backend.WatchToasts(OnToastsChanged);
         // Focus and notification restriction mode do not require listener permission.
         var focus = _backend.ReadFocus();
         var mode = _backend.ReadMode();
@@ -271,7 +213,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     internal void Apply(NotificationSnapshot snapshot)
     {
-        if (_disposed)
+        if (_disposed || _requesting)
             return;
         SetAccess(snapshot.AccessStatus);
         Set(ref _focusState, snapshot.Focus, nameof(FocusState));
@@ -349,7 +291,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             {
                 _backend.Dismiss(notification.Id);
                 _changes.Change();
-                Interlocked.Increment(ref _revision);
+                _reader.Invalidate();
                 Notifications.Remove(notification);
                 SyncGroups();
                 notification.LetGo();
@@ -390,20 +332,12 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        _poll.Dispose();
         _stop.Cancel();
-        DisposeAfterMonitor(_stop, _monitorTask);
+        _stop.Dispose();
+        _reader.Stop(() => _unwatch?.Invoke());
         foreach (var notification in Notifications)
             notification.LetGo();
-    }
-
-    /// <summary>Releases a cancelled monitor's token source only after its task has ended, without waiting.</summary>
-    private static void DisposeAfterMonitor(CancellationTokenSource stop, Task? monitor)
-    {
-        if (monitor is null || monitor.IsCompleted)
-            stop.Dispose();
-        else
-            _ = monitor.ContinueWith(static (_, state) => ((CancellationTokenSource)state!).Dispose(), stop,
-                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 }
 
