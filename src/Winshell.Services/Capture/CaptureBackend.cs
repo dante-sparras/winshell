@@ -1,3 +1,4 @@
+using SharpGen.Runtime;
 using Winshell.Windows;
 
 namespace Winshell.Capture;
@@ -46,4 +47,16 @@ internal interface ICaptureBackend : IDisposable
 
     /// <summary>The latest image, skipping superseded frames. Null means no new frame.</summary>
     PixelImage? ReadLatest();
+}
+
+internal static class CaptureFailure
+{
+    /// <summary>
+    /// Whether <paramref name="e"/> is Windows refusing or failing a capture: what <see cref="WindowsFailure"/> expects,
+    /// or the <see cref="SharpGenException"/> Vortice throws for a failed Direct3D call, such as a lost device.
+    /// </summary>
+    public static bool IsExpected(Exception e)
+    {
+        return WindowsFailure.IsExpected(e) || e is SharpGenException;
+    }
 }

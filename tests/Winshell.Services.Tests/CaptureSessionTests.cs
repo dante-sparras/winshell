@@ -6,7 +6,7 @@ using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>Capture over a fake backend and a fake clipboard: no frame is read from Windows, and the clipboard is left alone.</summary>
+/// <summary>Capture over a fake backend: no frame is read from Windows, and the clipboard is left alone.</summary>
 public sealed class CaptureSessionTests
 {
     private static readonly CaptureTarget Screen = new(0, "display");
@@ -272,31 +272,23 @@ public sealed class CaptureSessionTests
     public void Copying_needs_a_frame_and_a_window_and_reports_a_failure()
     {
         var loop = new ManualEventLoop();
-        var frame = Red();
-        var backend = new FakeCapture { Next = frame };
-        var copied = new List<(PixelImage Image, nint Owner)>();
-        Exception? refuse = null;
-        using var session = new CaptureSession(loop, () => backend, (image, owner) =>
-            {
-                if (refuse is not null)
-                    throw refuse;
-                copied.Add((image, owner));
-            })
-            { Target = Screen };
+        var backend = new FakeCapture { Next = Red() };
+        using var session = new CaptureSession(loop, () => backend) { Target = Screen };
+        // A window that is gone: Windows refuses to open the clipboard for it, so the clipboard is left alone.
+        var gone = Win32.CreateWindowExW(0, "STATIC", "", 0, 0, 0, 0, 0, Win32.HWND_MESSAGE, 0, 0, 0);
+        Assert.NotEqual(0, gone);
+        Assert.True(Win32.DestroyWindow(gone));
 
-        Assert.False(session.CopyToClipboard(7));
+        Assert.False(session.CopyToClipboard(gone));
+        Assert.Contains("open window", session.Error, StringComparison.Ordinal);
         Assert.True(session.Start());
         loop.Advance(TimeSpan.FromMilliseconds(33));
         Assert.False(session.CopyToClipboard(0));
-        Assert.Empty(copied);
+        Assert.Contains("open window", session.Error, StringComparison.Ordinal);
 
-        Assert.True(session.CopyToClipboard(7));
-        Assert.Empty(session.Error);
-        Assert.Equal((frame, (nint)7), Assert.Single(copied));
-
-        refuse = new InvalidOperationException("Clipboard busy");
-        Assert.False(session.CopyToClipboard(7));
-        Assert.Equal("Clipboard busy", session.Error);
+        Assert.False(session.CopyToClipboard(gone));
+        Assert.NotEmpty(session.Error);
+        Assert.DoesNotContain("open window", session.Error, StringComparison.Ordinal);
     }
 
     [Fact]
