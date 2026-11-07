@@ -225,8 +225,9 @@ internal static class SignInEntry
     }
 
     /// <summary>
-    /// The folder of the project <paramref name="launch"/> starts: the one <c>winshell run</c> would choose with the same
-    /// <c>-p</c> or <c>-c</c>, or with neither, in <paramref name="configRoot"/>. Null when it would start none.
+    /// The project file <paramref name="launch"/> starts: the one <c>winshell run</c> would choose with the same
+    /// <c>-p</c> or <c>-c</c>, or with neither, in <paramref name="configRoot"/>. Null when it would start none. A folder
+    /// can hold several projects, so its path does not name one.
     /// </summary>
     internal static string? ProjectOf(SignInLaunch launch, string configRoot)
     {
@@ -235,7 +236,7 @@ internal static class SignInEntry
             return null;
         try
         {
-            return ConfigurationProject.Find(launch.Path, launch.Name, configRoot, out _)?.Folder;
+            return ConfigurationProject.Find(launch.Path, launch.Name, configRoot, out _)?.ProjectFile;
         }
         catch (Exception e) when (e is ArgumentException or NotSupportedException)
         {
@@ -243,10 +244,10 @@ internal static class SignInEntry
         }
     }
 
-    /// <summary>Whether <paramref name="launch"/> starts the project in <paramref name="projectFolder"/>.</summary>
-    internal static bool Starts(SignInLaunch launch, string projectFolder, string configRoot)
+    /// <summary>Whether <paramref name="launch"/> starts the project <paramref name="projectFile"/>.</summary>
+    internal static bool Starts(SignInLaunch launch, string projectFile, string configRoot)
     {
-        return SamePath(ProjectOf(launch, configRoot), projectFolder);
+        return SamePath(ProjectOf(launch, configRoot), projectFile);
     }
 
     private static bool SamePath(string? left, string? right)

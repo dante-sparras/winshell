@@ -242,6 +242,8 @@ public sealed class StartupRegistryTests : IDisposable
         var project = Configuration(root, "work");
         // Not a folder of the config folder itself, so a bare winshell run still has one configuration to start.
         var play = Configuration(Path.Combine(root, "other"), "play");
+        var workFile = Path.Combine(project, "work.csproj");
+        var playFile = Path.Combine(play, "play.csproj");
         var supervised = SignInEntry.CommandFor(winshell, ["run", "-p", project]);
 
         bool Exists(string path)
@@ -261,7 +263,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.True(startup.RunAtSignIn);
         Assert.False(startup.RegisteredElsewhere);
         Assert.Equal(CheckStatus.Pass,
-            SignIn(install, false, winshell, root, Exists, projectFolder: project).Status);
+            SignIn(install, false, winshell, root, Exists, projectFile: workFile).Status);
 
         startup.RunAtSignIn = false;
         using (var key = Registry.CurrentUser.OpenSubKey(run))
@@ -278,7 +280,7 @@ public sealed class StartupRegistryTests : IDisposable
         }
 
         Assert.Equal(CheckStatus.Pass,
-            SignIn(supervised, false, winshell, root, Exists, projectFolder: project).Status);
+            SignIn(supervised, false, winshell, root, Exists, projectFile: workFile).Status);
 
         var playCommand = SignInEntry.CommandFor(winshell, ["run", "-p", play]);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
@@ -290,7 +292,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
         var otherConfiguration =
-            SignIn(playCommand, false, winshell, root, Exists, projectFolder: project);
+            SignIn(playCommand, false, winshell, root, Exists, projectFile: workFile);
         Assert.Equal(CheckStatus.Warn, otherConfiguration.Status);
         Assert.Equal("The sign-in entry does not start this configuration.", otherConfiguration.Message);
 
@@ -304,7 +306,7 @@ public sealed class StartupRegistryTests : IDisposable
         var playStartup = new StartupService(_log, playRegistry);
         Assert.False(playStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Warn,
-            SignIn(install, false, winshell, root, Exists, projectFolder: play).Status);
+            SignIn(install, false, winshell, root, Exists, projectFile: playFile).Status);
 
         var otherInstall =
             $"{conhost} --headless {otherExe} run -p {SignInEntry.Quote(project)} --no-build --no-duplicate";
@@ -316,7 +318,7 @@ public sealed class StartupRegistryTests : IDisposable
         startup.Refresh();
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
-        var other = SignIn(otherInstall, false, winshell, root, Exists, projectFolder: project);
+        var other = SignIn(otherInstall, false, winshell, root, Exists, projectFile: workFile);
         Assert.Equal(CheckStatus.Warn, other.Status);
         Assert.Contains("another winshell.exe", other.Message, StringComparison.Ordinal);
 
@@ -331,7 +333,7 @@ public sealed class StartupRegistryTests : IDisposable
         var namedStartup = new StartupService(_log, named);
         Assert.True(namedStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Pass,
-            SignIn(byName, false, winshell, root, Exists, projectFolder: project).Status);
+            SignIn(byName, false, winshell, root, Exists, projectFile: workFile).Status);
 
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
@@ -343,7 +345,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.False(namedStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Warn,
             SignIn(SignInEntry.CommandFor(winshell, ["run", "-c", "play"]), false, winshell, root, Exists,
-                projectFolder: project).Status);
+                projectFile: workFile).Status);
     }
 
     [Fact]
@@ -368,6 +370,39 @@ public sealed class StartupRegistryTests : IDisposable
         startup.Refresh();
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
+    }
+
+    [Fact]
+    public void A_project_that_shares_its_folder_signs_in_by_its_project_file()
+    {
+        const string winshell = @"C:\Program Files\Winshell\winshell.exe";
+        var folder = Configuration(_configRoot.Path, "work");
+        var alone = StartupService.SignInCommand(Path.Combine(folder, "bin", "shell", "work.exe"), winshell)!;
+        var play = Path.Combine(folder, "play.csproj");
+        File.WriteAllText(play, "<Project />");
+        var run = _testKey + @"\Run";
+        var approved = _testKey + @"\StartupApproved";
+
+        StartupService Startup(string program)
+        {
+            var command = StartupService.SignInCommand(Path.Combine(folder, "bin", "shell", program), winshell)!;
+            return new StartupService(_log, new WindowsStartupRegistry(command, _configRoot.Path, run, approved));
+        }
+
+        var playing = Startup("play.exe");
+        playing.RunAtSignIn = true;
+        var working = Startup("work.exe");
+
+        Assert.Equal(folder, SignInEntry.Read(alone).Path);
+        using (var key = Registry.CurrentUser.OpenSubKey(run)!)
+        {
+            var launch = SignInEntry.Read((string)key.GetValue(SignInEntry.Name)!);
+            Assert.Equal(play, ConfigurationProject.Find(launch.Path, null, _configRoot.Path, out _)?.ProjectFile);
+        }
+
+        Assert.True(playing.RunAtSignIn);
+        Assert.False(working.RunAtSignIn);
+        Assert.True(working.RegisteredElsewhere);
     }
 
     [Fact]

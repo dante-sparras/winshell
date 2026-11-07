@@ -38,8 +38,8 @@ public sealed class StartupService : ObservableObject
     /// </summary>
     internal static string? SignInCommand(string program, string? supervisor)
     {
-        if (ConfigurationProject.FolderOf(program) is not { } project || supervisor is null ||
-            !WinshellHost.Is(supervisor))
+        if (supervisor is null || !WinshellHost.Is(supervisor) ||
+            ConfigurationProject.RunPath(program) is not { } project)
             return null;
         return SignInEntry.CommandFor(supervisor, [CommandWords.Run, CommandWords.Path.Short, project]);
     }
