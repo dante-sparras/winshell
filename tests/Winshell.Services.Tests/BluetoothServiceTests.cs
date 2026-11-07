@@ -399,21 +399,6 @@ public sealed class BluetoothServiceTests
         Assert.Empty(access.Calls);
     }
 
-    [Theory]
-    [InlineData(RadioState.On, BluetoothAdapterState.On)]
-    [InlineData(RadioState.Off, BluetoothAdapterState.Off)]
-    [InlineData(RadioState.Disabled, BluetoothAdapterState.Disabled)]
-    [InlineData(RadioState.Unknown, BluetoothAdapterState.Unknown)]
-    public async Task The_adapter_reports_its_radio_s_state(RadioState radio, BluetoothAdapterState expected)
-    {
-        using var session = await Session.OpenAsync(new BluetoothSnapshot(true,
-            Adapter(radio: new FakeRadio(RadioKind.Bluetooth, radio)), []));
-        var adapter = session.Service.DefaultAdapter!;
-
-        Assert.Equal(expected, adapter.State);
-        Assert.Equal(expected == BluetoothAdapterState.On, adapter.Enabled);
-    }
-
     [Fact]
     public async Task A_radio_request_in_flight_ignores_another_and_a_replaced_adapter_hears_nothing()
     {

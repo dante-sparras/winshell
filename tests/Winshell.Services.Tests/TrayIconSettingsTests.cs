@@ -1,3 +1,4 @@
+using Microsoft.Win32;
 using Winshell.Tray;
 
 namespace Winshell.Services.Tests;
@@ -28,11 +29,39 @@ public sealed class TrayIconSettingsTests
     }
 
     [Fact]
-    public void Windows_settings_read_with_known_folders_expanded()
+    public void Explorer_s_keys_read_as_choices_with_known_folders_expanded()
     {
-        // Read-only: the choices Explorer has stored for this user.
-        var settings = TrayIconSettings.Read();
-        Assert.All(settings.Where(s => s.ExecutablePath.Length > 0),
-            s => Assert.False(s.ExecutablePath.StartsWith('{'), s.ExecutablePath));
+        // As Explorer writes HKCU\Control Panel\NotifyIconSettings, in a key of the test's own.
+        var path = @"Software\Winshell\Tests\" + Guid.NewGuid().ToString("N");
+        var guid = Guid.NewGuid();
+        try
+        {
+            using (var root = Registry.CurrentUser.CreateSubKey(path))
+            {
+                using (var byGuid = root.CreateSubKey("1"))
+                {
+                    byGuid.SetValue("IconGuid", guid.ToString("B"));
+                    byGuid.SetValue("IsPromoted", 1, RegistryValueKind.DWord);
+                }
+
+                using var byProgram = root.CreateSubKey("2");
+                byProgram.SetValue("ExecutablePath", @"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe");
+                byProgram.SetValue("UID", unchecked((int)0x80000001), RegistryValueKind.DWord);
+            }
+
+            using var key = Registry.CurrentUser.OpenSubKey(path)!;
+            var settings = TrayIconSettings.Read(key).OrderBy(s => s.Guid == Guid.Empty).ToList();
+
+            Assert.Equal(new TrayIconSetting(guid, "", null, true), settings[0]);
+            Assert.Equal(Guid.Empty, settings[1].Guid);
+            Assert.Equal(Path.Combine(Environment.SystemDirectory, "notepad.exe"), settings[1].ExecutablePath,
+                StringComparer.OrdinalIgnoreCase);
+            Assert.Equal(0x80000001u, settings[1].Id);
+            Assert.False(settings[1].Promoted);
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(path, false);
+        }
     }
 }

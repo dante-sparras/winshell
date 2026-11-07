@@ -31,8 +31,6 @@ internal sealed class WindowsStartupRegistry(
     string command,
     string runKey = SignInEntry.RunKey,
     string approvedKey = SignInEntry.ApprovedKey,
-    string? bareFolder = null,
-    string? configRoot = null,
     Func<string?>? bareFolderOf = null,
     Func<string>? configRootOf = null) : IStartupRegistry
 {
@@ -55,12 +53,12 @@ internal sealed class WindowsStartupRegistry(
     /// </summary>
     private string? BareFolder()
     {
-        return bareFolderOf is null ? bareFolder : bareFolderOf();
+        return bareFolderOf?.Invoke();
     }
 
     private string? ConfigRoot()
     {
-        return configRootOf is null ? configRoot : configRootOf();
+        return configRootOf?.Invoke();
     }
 
     public bool TurnedOffInWindows()

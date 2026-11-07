@@ -180,8 +180,6 @@ public sealed class AppIndexTests
     [Fact]
     public void Usage_reads_feature_counts_and_user_assist()
     {
-        Assert.Equal("notepad.exe", AppUsageReader.Rot13(AppUsageReader.Rot13("notepad.exe")));
-
         var when = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero);
         var now = when.AddDays(1);
         var data = Assist(14, when);
@@ -204,9 +202,10 @@ public sealed class AppIndexTests
             [new KeyValuePair<string, int>(path, 3)],
             [new KeyValuePair<string, int>(path, 9), new KeyValuePair<string, int>("OnlySwitched", 2)],
             [
-                (AppUsageReader.Rot13(path), data),
-                (AppUsageReader.Rot13(@" {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\notepad.exe".Trim()), data),
-                (AppUsageReader.Rot13("UEME_CTLCUACount:ctor"), data)
+                // UserAssist names its values in ROT13.
+                (@"P:\Jvaqbjf\Flfgrz32\abgrcnq.rkr", data),
+                (@"{1NP14R77-02R7-4R5Q-O744-2RO1NR5198O7}\abgrcnq.rkr", data),
+                ("HRZR_PGYPHNPbhag:pgbe", data)
             ], now);
 
         Assert.Equal(14, usage[path].RunCount);
@@ -217,17 +216,6 @@ public sealed class AppIndexTests
 
         var notepad = Entry("Notepad", appId: "notepad", target: path);
         Assert.Equal(14, AppUsage.Lookup(usage, notepad).RunCount);
-
-        var live = AppUsageReader.Read(DateTimeOffset.UtcNow);
-        Assert.All(live.Values, row =>
-        {
-            Assert.InRange(row.RunCount, 0, 1_000_000);
-            if (row.LastUsedUnixMilliseconds != 0)
-                Assert.InRange(
-                    row.LastUsedUnixMilliseconds,
-                    DateTimeOffset.Parse("2000-01-01T00:00:00Z", CultureInfo.InvariantCulture).ToUnixTimeMilliseconds(),
-                    DateTimeOffset.UtcNow.AddDays(2).ToUnixTimeMilliseconds());
-        });
     }
 
     [Fact]

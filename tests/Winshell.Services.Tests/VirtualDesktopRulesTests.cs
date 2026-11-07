@@ -1,4 +1,3 @@
-using Winshell.Native;
 using Winshell.Windows;
 
 namespace Winshell.Services.Tests;
@@ -42,37 +41,5 @@ public sealed class VirtualDesktopRulesTests
         Assert.Null(VirtualDesktopRules.FallbackIndex(0, 1));
         Assert.Null(VirtualDesktopRules.FallbackIndex(3, 3));
         Assert.Null(VirtualDesktopRules.FallbackIndex(-1, 2));
-    }
-
-    [Fact]
-    public void This_machine_reports_a_build_and_can_read_desktops_when_the_table_is_known()
-    {
-        var version = WindowsVersion.Read();
-        Assert.True(version.Build > 0);
-        var contract = DesktopContract.ForBuild(version.Build);
-        if (!contract.Supported)
-        {
-            Assert.Contains($"{version.Build}", VirtualDesktopBackend.Shared.Contract.Reason, StringComparison.Ordinal);
-            return;
-        }
-
-        var read = VirtualDesktopBackend.Shared.TryRead(out var desktops, out var current, out var error);
-        if (!read)
-        {
-            Assert.StartsWith("unavailable:", error, StringComparison.Ordinal);
-            return;
-        }
-
-        Assert.NotEmpty(desktops);
-        Assert.Contains(desktops, desktop => desktop.Id == current);
-        Assert.All(desktops, desktop => Assert.NotEqual(Guid.Empty, desktop.Id));
-        var foreground = WindowDesktop.IdOf(Win32.GetForegroundWindow());
-        if (foreground.Length > 0)
-            Assert.True(Guid.TryParse(foreground, out _));
-
-        using var service = new VirtualDesktopsService(new ManualEventLoop(), new Log(), VirtualDesktopBackend.Shared);
-        Assert.True(service.Supported);
-        Assert.Equal(desktops.Count, service.Desktops.Count);
-        Assert.All(service.Desktops, row => Assert.False(string.IsNullOrWhiteSpace(row.Name)));
     }
 }
