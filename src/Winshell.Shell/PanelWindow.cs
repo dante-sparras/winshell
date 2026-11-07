@@ -89,7 +89,7 @@ public sealed class PanelWindow : ShellWindow
         set
         {
             if (Set(ref _focusable, value))
-                OnPlacementChanged();
+                Host?.Focus.SetPanel(value);
         }
     }
 
@@ -106,7 +106,11 @@ public sealed class PanelWindow : ShellWindow
             double.IsNaN(Height) ? 100 : Height,
             _coversScreen,
             _reservedSize,
-            _aboveWindows,
-            _focusable));
+            _aboveWindows));
+    }
+
+    private protected override void ApplyFocus()
+    {
+        Host!.Focus.SetPanel(_focusable);
     }
 }

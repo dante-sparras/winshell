@@ -118,7 +118,7 @@ public class PanelEdgeDecisionTests
         double reserved = 48)
     {
         return new PanelPlacement(screen is null ? null : Screen(screen), anchors, 0, 0, 0, 0, 320, 48, covers,
-            reserved, above, false);
+            reserved, above);
     }
 
     private static ScreenInfo Screen(string id)
@@ -129,7 +129,7 @@ public class PanelEdgeDecisionTests
     private static PanelPlacement Anchored(Edges anchors, double width = 0, double height = 0, double left = 0,
         double top = 0, double right = 0, double bottom = 0)
     {
-        return new PanelPlacement(null, anchors, left, top, right, bottom, width, height, false, 0, true, false);
+        return new PanelPlacement(null, anchors, left, top, right, bottom, width, height, false, 0, true);
     }
 
     /// <summary>Where a panel that reserves nothing goes on a monitor with this work area, in physical pixels.</summary>

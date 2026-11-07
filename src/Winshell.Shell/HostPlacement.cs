@@ -4,7 +4,7 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>Where a popup sits, in screen coordinates.</summary>
-internal sealed record PopupPlacement(ScreenInfo? Screen, Rect Rect, bool GrabFocus);
+internal sealed record PopupPlacement(ScreenInfo? Screen, Rect Rect);
 
 /// <summary>
 /// Where a native window is and whether it shows: its screen, scale, size and place, its z-order, and the parts of it
@@ -54,7 +54,6 @@ internal sealed class HostPlacement
     public void SetPanel(PanelPlacement placement)
     {
         Panel = placement;
-        _host.Focus.SetPanel(placement.Focusable);
         PlacePanel();
     }
 
@@ -67,7 +66,6 @@ internal sealed class HostPlacement
     public void SetPopup(PopupPlacement placement)
     {
         Popup = placement;
-        _host.Focus.SetPopup(placement.GrabFocus);
         // The rect is relative to the parent window's screen, so it maps back through that screen's scale.
         var monitors = Screens.Enumerate();
         var at = DesktopSpace.MonitorAt(new Point(placement.Rect.X, placement.Rect.Y),
