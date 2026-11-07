@@ -1,15 +1,12 @@
-using System.Runtime.InteropServices;
 using Windows.Graphics;
 using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
-using SharpGen.Runtime;
 using Vortice.Direct3D11;
 using Vortice.Direct3D;
 using Vortice.DXGI;
 using Vortice.Mathematics;
 using Winshell.Native;
-using MapFlags = Vortice.Direct3D11.MapFlags;
 
 namespace Winshell.Capture;
 
@@ -37,7 +34,7 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
         if (!GraphicsCaptureSession.IsSupported())
             throw new NotSupportedException("Windows Graphics Capture is unavailable in this session.");
         _closed = closed;
-        var monitor = target.Window == 0 ? Screens.Find(target.MonitorId)?.Handle ?? 0 : 0;
+        var monitor = target.Window == 0 ? MonitorHandle(target.MonitorId) : 0;
         if (target.Window == 0 && monitor == 0)
             throw new ArgumentException("The selected monitor is no longer connected.", nameof(target));
         _item = CaptureInterop.CreateItem(target.Window, monitor);
@@ -51,8 +48,7 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
         if (result.Failure)
             D3D11.D3D11CreateDevice((IDXGIAdapter?)null, DriverType.Warp,
                 DeviceCreationFlags.BgraSupport, levels, out _device, out _context).CheckError();
-        using var dxgi = _device!.QueryInterface<IDXGIDevice>();
-        _winrtDevice = CaptureInterop.CreateDevice(dxgi.NativePointer);
+        _winrtDevice = CaptureInterop.CreateDevice(_device!);
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice, DirectXPixelFormat.B8G8R8A8UIntNormalized,
             2, _size);
         _session = _pool.CreateCaptureSession(_item);
@@ -60,6 +56,14 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
         _session.IsCursorCaptureEnabled = includeCursor;
         _item.Closed += OnClosed;
         _session.StartCapture();
+    }
+
+    private static nint MonitorHandle(string device)
+    {
+        foreach (var handle in Monitors.List())
+            if (Monitors.TryRead(handle, out var monitor) && monitor.Device == device)
+                return handle;
+        return 0;
     }
 
     private void OnClosed(GraphicsCaptureItem sender, object args)
@@ -118,8 +122,7 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
                 return ready;
             }
 
-            using var texture =
-                new ID3D11Texture2D(CaptureInterop.GetDxgiInterface(latest.Surface, typeof(ID3D11Texture2D).GUID));
+            using var texture = CaptureInterop.Texture(latest.Surface);
             var desc = texture.Description;
             if (desc.Width < size.Width || desc.Height < size.Height)
                 return ready;
@@ -150,22 +153,10 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
 
     private PixelImage? Readback()
     {
-        var result = _context!.Map(_staging!, 0, MapMode.Read, MapFlags.DoNotWait, out var mapped);
-        if (result.Code == unchecked((int)0x887a000a)) // DXGI_ERROR_WAS_STILL_DRAWING
+        if (CaptureInterop.Read(_context!, _staging!, _size.Width, _size.Height) is not { } pixels)
             return null;
-        result.CheckError();
         _readbackPending = false;
-        try
-        {
-            var pixels = new byte[checked(_size.Width * _size.Height * 4)];
-            CaptureInterop.CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), pixels, _size.Width * 4,
-                _size.Width, _size.Height);
-            return new PixelImage(_size.Width, _size.Height, pixels, true);
-        }
-        finally
-        {
-            _context.Unmap(_staging!, 0);
-        }
+        return new PixelImage(_size.Width, _size.Height, pixels, true);
     }
 
     private void RecreatePool(SizeInt32 size, bool cursor)
@@ -175,7 +166,7 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
         _session = null;
         _pool = null;
         Interlocked.Increment(ref _poolGeneration);
-        ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame(), log);
+        ReleaseSessionAndPool(session, pool);
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized,
             2, size);
         _session = _pool.CreateCaptureSession(_item!);
@@ -187,8 +178,7 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
     /// Stops capture, releases frames the pool still holds, then disposes the pool.
     /// A free-threaded pool can still be producing a buffer after the UI thread decides to drop it.
     /// </summary>
-    internal static void ReleaseSessionAndPool(IDisposable? session, IDisposable? pool, Func<IDisposable?>? nextFrame,
-        Log log)
+    private void ReleaseSessionAndPool(GraphicsCaptureSession? session, Direct3D11CaptureFramePool? pool)
     {
         try
         {
@@ -196,19 +186,20 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
             {
                 session?.Dispose();
             }
-            catch (Exception e) when (IsTeardown(e))
+            catch (Exception e) when (CaptureFailure.IsExpected(e))
             {
                 log.Warn("capture", $"Capture teardown: {e.Message}");
             }
 
-            if (nextFrame is not null)
-                for (var i = 0; i < 2; i++)
-                {
-                    var frame = nextFrame();
-                    if (frame is null)
-                        break;
+            try
+            {
+                for (var i = 0; i < 2 && pool?.TryGetNextFrame() is { } frame; i++)
                     frame.Dispose();
-                }
+            }
+            catch (Exception e) when (CaptureFailure.IsExpected(e))
+            {
+                log.Warn("capture", $"Capture teardown: {e.Message}");
+            }
         }
         finally
         {
@@ -216,16 +207,11 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
             {
                 pool?.Dispose();
             }
-            catch (Exception e) when (IsTeardown(e))
+            catch (Exception e) when (CaptureFailure.IsExpected(e))
             {
                 log.Warn("capture", $"Capture teardown: {e.Message}");
             }
         }
-    }
-
-    private static bool IsTeardown(Exception e)
-    {
-        return e is COMException or SharpGenException;
     }
 
     public void Dispose()
@@ -252,13 +238,13 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
         finally
         {
             // A lost device must not prevent the rest of the session's resources from being released.
-            ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame(), log);
+            ReleaseSessionAndPool(session, pool);
             foreach (var resource in resources)
                 try
                 {
                     resource?.Dispose();
                 }
-                catch (Exception e) when (IsTeardown(e))
+                catch (Exception e) when (CaptureFailure.IsExpected(e))
                 {
                     log.Warn("capture", $"Capture teardown: {e.Message}");
                 }

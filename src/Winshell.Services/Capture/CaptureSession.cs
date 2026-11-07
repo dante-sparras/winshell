@@ -1,7 +1,4 @@
-using System.ComponentModel;
-using System.Runtime.InteropServices;
 using Windows.Foundation;
-using SharpGen.Runtime;
 using Winshell.Windows;
 
 namespace Winshell.Capture;
@@ -11,7 +8,6 @@ public sealed class CaptureSession : ObservableObject, IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly Func<ICaptureBackend> _create;
-    private readonly Action<PixelImage, nint> _copy;
     private ICaptureBackend? _backend;
     private IDisposable? _timer;
     private CaptureTarget? _target;
@@ -33,11 +29,10 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     {
     }
 
-    internal CaptureSession(IEventLoop loop, Func<ICaptureBackend> create, Action<PixelImage, nint>? copy = null)
+    internal CaptureSession(IEventLoop loop, Func<ICaptureBackend> create)
     {
         _loop = loop;
         _create = create;
-        _copy = copy ?? CaptureClipboard.Copy;
     }
 
     /// <summary>A new frame arrived. <see cref="Frame"/> is that frame.</summary>
@@ -115,7 +110,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
                 Schedule(generation);
             return Running;
         }
-        catch (Exception e) when (IsCaptureError(e))
+        catch (Exception e) when (CaptureFailure.IsExpected(e))
         {
             Fail(e);
             return false;
@@ -137,7 +132,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
                     FrameReady?.Invoke();
                 }
             }
-            catch (Exception e) when (IsCaptureError(e))
+            catch (Exception e) when (CaptureFailure.IsExpected(e))
             {
                 Fail(e);
             }
@@ -161,7 +156,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         {
             backend?.Dispose();
         }
-        catch (Exception e) when (IsCaptureError(e))
+        catch (Exception e) when (CaptureFailure.IsExpected(e))
         {
             Set(ref _error, e.Message, nameof(Error));
         }
@@ -189,7 +184,7 @@ public sealed class CaptureSession : ObservableObject, IDisposable
             Set(ref _error, "", nameof(Error));
             return true;
         }
-        catch (Exception e) when (IsCaptureError(e))
+        catch (Exception e) when (CaptureFailure.IsExpected(e))
         {
             Set(ref _error, e.Message, nameof(Error));
             return false;
@@ -203,11 +198,11 @@ public sealed class CaptureSession : ObservableObject, IDisposable
         {
             if (_frame is null || owner == 0)
                 throw new InvalidOperationException("A capture frame and an open window are required.");
-            _copy(_frame, owner);
+            CaptureClipboard.Copy(_frame, owner);
             Set(ref _error, "", nameof(Error));
             return true;
         }
-        catch (Exception e) when (IsCaptureError(e))
+        catch (Exception e) when (CaptureFailure.IsExpected(e))
         {
             Set(ref _error, e.Message, nameof(Error));
             return false;
@@ -238,13 +233,6 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     {
         Stop();
         Set(ref _error, error.Message, nameof(Error));
-    }
-
-    private static bool IsCaptureError(Exception e)
-    {
-        return e is COMException or UnauthorizedAccessException or
-            InvalidOperationException or ArgumentException or IOException or NotSupportedException or Win32Exception or
-            SharpGenException;
     }
 
     private void Watch(AppWindow? window)

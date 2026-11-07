@@ -3,16 +3,19 @@ using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Win32;
 using Windows.Win32.Foundation;
-using Windows.Win32.Graphics.Dxgi;
 using Windows.Win32.Graphics.Gdi;
-using Windows.Win32.System.WinRT.Direct3D11;
 using Windows.Win32.System.WinRT.Graphics.Capture;
+using Vortice.Direct3D11;
+using Vortice.DXGI;
 using WinRT;
 using IInspectable = Windows.Win32.System.WinRT.IInspectable;
+using DxgiInterfaceAccess = Windows.Win32.System.WinRT.Direct3D11.IDirect3DDxgiInterfaceAccess;
+using MapFlags = Vortice.Direct3D11.MapFlags;
+using ResultCode = Vortice.DXGI.ResultCode;
 
 namespace Winshell.Native;
 
-/// <summary>The desktop capture and DXGI WinRT bridges. Every ABI pointer has one explicit release.</summary>
+/// <summary>The desktop capture, DXGI and Direct3D readback bridges. Every ABI pointer has one explicit release.</summary>
 internal static unsafe class CaptureInterop
 {
     private static readonly Guid GraphicsCaptureItemId = new("79c3f95b-31f7-4ec2-a464-632ef5d30760");
@@ -40,40 +43,62 @@ internal static unsafe class CaptureInterop
         }
     }
 
-    /// <summary>A WinRT Direct3D device over <paramref name="dxgiDevice"/>, an IDXGIDevice the caller keeps owning.</summary>
-    public static IDirect3DDevice CreateDevice(nint dxgiDevice)
+    /// <summary>A WinRT Direct3D device over <paramref name="device"/>, which the caller keeps owning.</summary>
+    public static IDirect3DDevice CreateDevice(ID3D11Device device)
     {
-        IInspectable* device = null;
-        PInvoke.CreateDirect3D11DeviceFromDXGIDevice((IDXGIDevice*)dxgiDevice, &device).ThrowOnFailure();
+        using var dxgi = device.QueryInterface<IDXGIDevice>();
+        IInspectable* winrt = null;
+        PInvoke.CreateDirect3D11DeviceFromDXGIDevice((Windows.Win32.Graphics.Dxgi.IDXGIDevice*)dxgi.NativePointer,
+            &winrt).ThrowOnFailure();
         try
         {
-            return MarshalInspectable<IDirect3DDevice>.FromAbi((nint)device);
+            return MarshalInspectable<IDirect3DDevice>.FromAbi((nint)winrt);
         }
         finally
         {
-            Marshal.Release((nint)device);
+            Marshal.Release((nint)winrt);
         }
     }
 
-    /// <summary>
-    /// The DXGI interface <paramref name="iid"/> behind a WinRT surface, such as its texture. The caller owns the
-    /// returned reference and releases it once.
-    /// </summary>
-    public static nint GetDxgiInterface(IDirect3DSurface surface, Guid iid)
+    /// <summary>The texture behind a capture frame's surface. The caller disposes it.</summary>
+    public static ID3D11Texture2D Texture(IDirect3DSurface surface)
     {
         using var marshaler = MarshalInspectable<IDirect3DSurface>.CreateMarshaler(surface);
-        Marshal.ThrowExceptionForHR(Marshal.QueryInterface(marshaler.ThisPtr, typeof(IDirect3DDxgiInterfaceAccess).GUID,
+        Marshal.ThrowExceptionForHR(Marshal.QueryInterface(marshaler.ThisPtr, typeof(DxgiInterfaceAccess).GUID,
             out var pointer));
-        var access = (IDirect3DDxgiInterfaceAccess*)pointer;
+        var access = (DxgiInterfaceAccess*)pointer;
         try
         {
-            void* result = null;
-            access->GetInterface(&iid, &result);
-            return (nint)result;
+            var iid = typeof(ID3D11Texture2D).GUID;
+            void* texture = null;
+            access->GetInterface(&iid, &texture);
+            return new ID3D11Texture2D((nint)texture);
         }
         finally
         {
             access->Release();
+        }
+    }
+
+    /// <summary>
+    /// The <paramref name="width"/> by <paramref name="height"/> 32-bit pixels of <paramref name="staging"/>, a CPU-readable
+    /// texture, or null while the GPU is still writing it. Never waits for the GPU.
+    /// </summary>
+    public static byte[]? Read(ID3D11DeviceContext context, ID3D11Texture2D staging, int width, int height)
+    {
+        var result = context.Map(staging, 0, MapMode.Read, MapFlags.DoNotWait, out var mapped);
+        if (result == ResultCode.WasStillDrawing)
+            return null;
+        result.CheckError();
+        try
+        {
+            var pixels = new byte[checked(width * height * 4)];
+            CopyRows(mapped.DataPointer, checked((int)mapped.RowPitch), pixels, width * 4, width, height);
+            return pixels;
+        }
+        finally
+        {
+            context.Unmap(staging, 0);
         }
     }
 
