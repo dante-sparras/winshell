@@ -28,11 +28,22 @@ internal sealed class FakeWindowBackend : IWindowBackend
     /// <summary>Runs inside each read, with the window being read, as a message pumped during the read would.</summary>
     public Action<nint>? Reading { get; set; }
 
-    public bool HasListeners => WinEvent is not null || Flashed is not null;
+    private readonly List<Action<uint, nint, int, int>> _winEvents = [];
+    private readonly List<Action<nint>> _flashes = [];
 
-    public event Action<uint, nint, int, int>? WinEvent;
+    public bool HasListeners => _winEvents.Count > 0 || _flashes.Count > 0;
 
-    public event Action<nint>? Flashed;
+    public IDisposable ListenWinEvents(Action<uint, nint, int, int> handler, Action<Exception> failed)
+    {
+        _winEvents.Add(handler);
+        return new DisposeAction(() => _winEvents.Remove(handler));
+    }
+
+    public IDisposable ListenFlashes(Action<nint> handler, Action<Exception> failed)
+    {
+        _flashes.Add(handler);
+        return new DisposeAction(() => _flashes.Remove(handler));
+    }
 
     /// <summary>The facts of a normal window with a title: the taskbar lists it.</summary>
     public static TaskbarWindowFacts Normal { get; } =
@@ -77,20 +88,24 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public void Flash(nint hwnd)
     {
-        Flashed?.Invoke(hwnd);
+        foreach (var handler in _flashes.ToList())
+            handler(hwnd);
     }
 
     private void Raise(uint eventType, nint hwnd)
     {
-        WinEvent?.Invoke(eventType, hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF);
+        foreach (var handler in _winEvents.ToList())
+            handler(eventType, hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF);
     }
 
-    public void Start(Log log)
+    public IReadOnlyList<string> Start()
     {
+        return [];
     }
 
-    public void WatchForeground(Log log)
+    public IReadOnlyList<string> WatchForeground()
     {
+        return [];
     }
 
     public IReadOnlySet<string> FullscreenScreens()
@@ -140,8 +155,9 @@ internal sealed class FakeWindowBackend : IWindowBackend
         return DesktopIds.GetValueOrDefault(hwnd, "");
     }
 
-    public bool MoveToDesktop(nint hwnd, Guid desktop)
+    public bool MoveToDesktop(nint hwnd, Guid desktop, out string problem)
     {
+        problem = "";
         DesktopIds[hwnd] = desktop.ToString("D");
         return true;
     }

@@ -40,25 +40,37 @@ internal sealed record WindowRead(
 internal interface IWindowBackend
 {
     /// <summary>
-    /// A WinEvent: its type, window, object id and child id. Each hook raises it on the thread that set it, so
-    /// <see cref="WatchForeground"/> and <see cref="Start"/> are called on one thread.
+    /// Calls <paramref name="handler"/> with each WinEvent the hooks see, until disposed: its type, window, object id
+    /// and child id. Each hook calls it on the thread that set it, so <see cref="WatchForeground"/> and
+    /// <see cref="Start"/> are called on one thread.
     /// </summary>
-    event Action<uint, nint, int, int>? WinEvent;
+    /// <param name="handler">Gets the events.</param>
+    /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
+    IDisposable ListenWinEvents(Action<uint, nint, int, int> handler, Action<Exception> failed);
 
-    /// <summary>A window flashed to ask for attention. Raised on the thread that called <see cref="Start"/>.</summary>
-    event Action<nint>? Flashed;
+    /// <summary>
+    /// Calls <paramref name="handler"/> with each window that flashes to ask for attention, until disposed, on the
+    /// thread that called <see cref="Start"/>.
+    /// </summary>
+    /// <param name="handler">Gets the window.</param>
+    /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
+    IDisposable ListenFlashes(Action<nint> handler, Action<Exception> failed);
 
     /// <summary>The window that has the foreground. Zero when none.</summary>
     nint Foreground { get; }
 
-    /// <summary>Starts raising <see cref="WinEvent"/> and <see cref="Flashed"/>, once. The thread must pump messages.</summary>
-    void Start(Log log);
+    /// <summary>
+    /// Sets the hooks for every WinEvent the window list reads, and for flashes, once. The thread must pump messages.
+    /// </summary>
+    /// <returns>What Windows refused, for the caller to report. Empty when every hook is set, or was already.</returns>
+    IReadOnlyList<string> Start();
 
     /// <summary>
-    /// Starts raising <see cref="WinEvent"/> for a new foreground and for windows that move or resize, once, without
-    /// the rest <see cref="Start"/> watches. The thread must pump messages.
+    /// Sets the hooks for a new foreground and for windows that move or resize, once, without the rest
+    /// <see cref="Start"/> sets. The thread must pump messages.
     /// </summary>
-    void WatchForeground(Log log);
+    /// <returns>What Windows refused, for the caller to report. Empty when every hook is set, or was already.</returns>
+    IReadOnlyList<string> WatchForeground();
 
     /// <summary>
     /// The monitors the foreground window covers, as a fullscreen game or video does. None when the foreground is the
@@ -92,7 +104,8 @@ internal interface IWindowBackend
 
     string DesktopId(nint hwnd);
 
-    bool MoveToDesktop(nint hwnd, Guid desktop);
+    /// <summary>Moves the window to that desktop. False, with why, when Windows refuses.</summary>
+    bool MoveToDesktop(nint hwnd, Guid desktop, out string problem);
 
     void Activate(nint hwnd);
 
@@ -111,8 +124,14 @@ internal interface IWindowBackend
 /// </summary>
 internal sealed class WindowBackend : IWindowBackend
 {
+    // Listeners hands a handler's failure to the service that added it. Only a reporter that throws gets here, and
+    // Callback would drop that failure anyway.
+    private static readonly Action<Exception> Unreported = static _ => { };
+
     public static WindowBackend Shared { get; } = new();
 
+    private readonly Listeners<Action<uint, nint, int, int>> _winEvents = new();
+    private readonly Listeners<Action<nint>> _flashes = new();
     private bool _started;
     private bool _foregroundWatched;
 
@@ -120,9 +139,15 @@ internal sealed class WindowBackend : IWindowBackend
     {
     }
 
-    public event Action<uint, nint, int, int>? WinEvent;
+    public IDisposable ListenWinEvents(Action<uint, nint, int, int> handler, Action<Exception> failed)
+    {
+        return _winEvents.Add(handler, failed);
+    }
 
-    public event Action<nint>? Flashed;
+    public IDisposable ListenFlashes(Action<nint> handler, Action<Exception> failed)
+    {
+        return _flashes.Add(handler, failed);
+    }
 
     public nint Foreground => Win32.GetForegroundWindow();
 
@@ -151,57 +176,54 @@ internal sealed class WindowBackend : IWindowBackend
         return WindowDesktop.IdOf(hwnd);
     }
 
-    public bool MoveToDesktop(nint hwnd, Guid desktop)
+    public bool MoveToDesktop(nint hwnd, Guid desktop, out string problem)
     {
-        return WindowDesktop.Move(hwnd, desktop);
+        return WindowDesktop.Move(hwnd, desktop, out problem);
     }
 
-    public void WatchForeground(Log log)
+    public IReadOnlyList<string> WatchForeground()
     {
+        List<string> refused = [];
         if (_foregroundWatched)
-            return;
+            return refused;
         _foregroundWatched = true;
-        Hook(log, Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND);
-        Hook(log, Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_LOCATIONCHANGE);
+        Hook(refused, Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND);
+        Hook(refused, Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_LOCATIONCHANGE);
+        return refused;
     }
 
-    public void Start(Log log)
+    public IReadOnlyList<string> Start()
     {
         if (_started)
-            return;
+            return [];
         _started = true;
-        WatchForeground(log);
-        Hook(log, Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND);
-        Hook(log, Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE);
-        Hook(log, Win32.EVENT_OBJECT_NAMECHANGE, Win32.EVENT_OBJECT_NAMECHANGE);
-        Hook(log, Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED);
+        var refused = WatchForeground().ToList();
+        Hook(refused, Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND);
+        Hook(refused, Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE);
+        Hook(refused, Win32.EVENT_OBJECT_NAMECHANGE, Win32.EVENT_OBJECT_NAMECHANGE);
+        Hook(refused, Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED);
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
-        if (!ShellHookWindow.Start(OnShellHook, Failed))
-            log.Warn("windows",
-                "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+        if (!ShellHookWindow.Start(OnShellHook, Unreported))
+            refused.Add("RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+        return refused;
     }
 
-    private void Hook(Log log, uint min, uint max)
+    private void Hook(List<string> refused, uint min, uint max)
     {
-        if (WinEventHook.Start(min, max, OnWinEvent, Failed) is null)
-            log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
-    }
-
-    private static void Failed(Exception e)
-    {
-        Log.Default.Warn("windows", e.Message);
+        if (WinEventHook.Start(min, max, OnWinEvent, Unreported) is null)
+            refused.Add($"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
     }
 
     private void OnShellHook(nint code, nint hwnd)
     {
         if (WindowRules.IsFlash(code) && hwnd != 0)
-            Flashed?.Invoke(hwnd);
+            _flashes.Raise(handler => handler(hwnd));
     }
 
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        WinEvent?.Invoke(eventType, hwnd, idObject, idChild);
+        _winEvents.Raise(handler => handler(eventType, hwnd, idObject, idChild));
     }
 
     public TaskbarWindowFacts TaskbarFacts(nint hwnd)

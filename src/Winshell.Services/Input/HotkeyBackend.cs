@@ -7,7 +7,9 @@ namespace Winshell.Input;
 /// loop's thread, which receives <c>WM_HOTKEY</c> there and exists only while a chord is registered. The hook is
 /// <see cref="LowLevelKeyboard"/>.
 /// </summary>
-internal sealed class HotkeyBackend(IEventLoop loop) : IHotkeyBackend
+/// <param name="loop">The loop the chords are registered on.</param>
+/// <param name="failed">Gets each exception a Windows callback throws.</param>
+internal sealed class HotkeyBackend(IEventLoop loop, Action<Exception> failed) : IHotkeyBackend
 {
     private const int ErrorAlreadyRegistered = 1409;
     private const uint ModNoRepeat = 0x4000;
@@ -27,7 +29,7 @@ internal sealed class HotkeyBackend(IEventLoop loop) : IHotkeyBackend
     {
         if (_nextId > LastId)
             return HotkeyClaim.Invalid($"{chord.Text} could not be registered (no id).");
-        _target ??= HotkeyTarget.Create(OnHotkey, Warn);
+        _target ??= HotkeyTarget.Create(OnHotkey, failed);
         if (_target is null)
             return HotkeyClaim.Invalid($"{chord.Text} could not be registered (0).");
         var id = _nextId;
@@ -60,7 +62,7 @@ internal sealed class HotkeyBackend(IEventLoop loop) : IHotkeyBackend
         if (_hook is not null)
             return true;
         IDisposable? hook = null;
-        hook = LowLevelKeyboard.Start(key => onKey(key.VirtualKey, key.Up), Warn, () => loop.Post(() =>
+        hook = LowLevelKeyboard.Start(key => onKey(key.VirtualKey, key.Up), failed, () => loop.Post(() =>
         {
             if (hook is null || !ReferenceEquals(_hook, hook))
                 return;
@@ -107,10 +109,5 @@ internal sealed class HotkeyBackend(IEventLoop loop) : IHotkeyBackend
     {
         if (_chords.TryGetValue(id, out var chord))
             loop.Post(() => ChordPressed?.Invoke(chord));
-    }
-
-    private static void Warn(Exception e)
-    {
-        Log.Default.Warn("hotkey", e.Message);
     }
 }

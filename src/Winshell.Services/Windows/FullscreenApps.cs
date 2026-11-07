@@ -10,6 +10,7 @@ internal sealed class FullscreenApps : IDisposable
 {
     private readonly IEventLoop _loop;
     private readonly IWindowBackend _backend;
+    private readonly IDisposable _winEvents;
     private IReadOnlySet<string> _screens;
     private bool _readPosted;
     private bool _disposed;
@@ -19,8 +20,9 @@ internal sealed class FullscreenApps : IDisposable
     {
         _loop = loop;
         _backend = backend ?? WindowBackend.Shared;
-        _backend.WinEvent += OnWinEvent;
-        _backend.WatchForeground(log);
+        _winEvents = _backend.ListenWinEvents(OnWinEvent, e => log.Warn("windows", e.Message));
+        foreach (var refused in _backend.WatchForeground())
+            log.Warn("windows", refused);
         _screens = _backend.FullscreenScreens();
     }
 
@@ -61,6 +63,6 @@ internal sealed class FullscreenApps : IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _backend.WinEvent -= OnWinEvent;
+        _winEvents.Dispose();
     }
 }

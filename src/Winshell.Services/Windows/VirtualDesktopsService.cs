@@ -24,6 +24,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     private string _reason = "";
     private string _stamp = "";
     private IDisposable? _reread;
+    private IDisposable? _switched;
 
     internal VirtualDesktopsService(IEventLoop loop, Log log, IVirtualDesktopBackend? backend = null)
     {
@@ -37,7 +38,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
             return;
         }
 
-        _backend.Switched += OnSwitched;
+        _switched = _backend.ListenSwitched(OnSwitched, e => log.Warn("desktops", e.Message));
         if (!_backend.StartWatching())
             log.Warn("desktops",
                 "SetWinEventHook failed for a desktop switch; the list updates only after Winshell changes a desktop");
@@ -70,9 +71,9 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (!CanChange("switch") || desktop is null || !Guid.TryParse(desktop.Id, out var id))
             return;
-        if (!_backend.SwitchTo(id))
+        if (!_backend.SwitchTo(id, out var problem))
         {
-            _log.Warn("desktops", "The desktop did not change.");
+            _log.Warn("desktops", $"The desktop did not change: {problem}");
             return;
         }
 
@@ -85,9 +86,9 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
     {
         if (!CanChange("create a desktop"))
             return null;
-        if (_backend.Create() is not { } id)
+        if (_backend.Create(out var problem) is not { } id)
         {
-            _log.Warn("desktops", "The desktop was not created.");
+            _log.Warn("desktops", $"The desktop was not created: {problem}");
             return null;
         }
 
@@ -109,10 +110,12 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
             return;
         }
 
+        var problem = "";
         if (!Guid.TryParse(desktop.Id, out var id) || !Guid.TryParse(Desktops[fallback].Id, out var fallbackId) ||
-            !_backend.Remove(id, fallbackId))
+            !_backend.Remove(id, fallbackId, out problem))
         {
-            _log.Warn("desktops", "The desktop was not removed.");
+            _log.Warn("desktops",
+                problem.Length == 0 ? "The desktop was not removed." : $"The desktop was not removed: {problem}");
             return;
         }
 
@@ -207,7 +210,7 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
         _disposed = true;
         _reread?.Dispose();
         _reread = null;
-        _backend.Switched -= OnSwitched;
+        _switched?.Dispose();
     }
 
     private readonly record struct DesktopRow(string Id, string Name, int Index);

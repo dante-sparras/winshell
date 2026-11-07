@@ -10,10 +10,15 @@ internal interface IVirtualDesktopBackend
 {
     DesktopContract Contract { get; }
 
-    /// <summary>Windows switched virtual desktop. Raised on the thread that first called <see cref="StartWatching"/>.</summary>
-    event Action? Switched;
+    /// <summary>
+    /// Calls <paramref name="handler"/> each time Windows switches virtual desktop, until disposed, on the thread that
+    /// first called <see cref="StartWatching"/>.
+    /// </summary>
+    /// <param name="handler">Runs for each switch.</param>
+    /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
+    IDisposable ListenSwitched(Action handler, Action<Exception> failed);
 
-    /// <summary>Starts raising <see cref="Switched"/>. False when Windows will not report a switch.</summary>
+    /// <summary>Starts calling the switch handlers. False when Windows will not report a switch.</summary>
     bool StartWatching();
 
     /// <summary>Changes when a desktop is added or removed. Reading it makes no call into Explorer.</summary>
@@ -21,11 +26,14 @@ internal interface IVirtualDesktopBackend
 
     bool TryRead(out IReadOnlyList<DesktopRecord> desktops, out Guid current, out string error);
 
-    bool SwitchTo(Guid id);
+    /// <summary>Switches to the desktop. False, with why, when it did not.</summary>
+    bool SwitchTo(Guid id, out string problem);
 
-    Guid? Create();
+    /// <summary>Adds a desktop. Null, with why, when it was not added.</summary>
+    Guid? Create(out string problem);
 
-    bool Remove(Guid id, Guid fallback);
+    /// <summary>Removes the desktop, moving its windows to <paramref name="fallback"/>. False, with why, when it did not.</summary>
+    bool Remove(Guid id, Guid fallback, out string problem);
 }
 
 /// <summary>The build Windows reports, from <c>RtlGetVersion</c> rather than the version a manifest can change.</summary>
@@ -73,15 +81,23 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
 /// </summary>
 internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 {
+    // Listeners hands a handler's failure to the service that added it. Only a reporter that throws gets here, and
+    // Callback would drop that failure anyway.
+    private static readonly Action<Exception> Unreported = static _ => { };
+
     public static VirtualDesktopBackend Shared { get; } = new();
 
+    private readonly Listeners<Action> _switched = new();
     private WinEventHook? _hook;
 
     private VirtualDesktopBackend()
     {
     }
 
-    public event Action? Switched;
+    public IDisposable ListenSwitched(Action handler, Action<Exception> failed)
+    {
+        return _switched.Add(handler, failed);
+    }
 
     public DesktopContract Contract
     {
@@ -98,14 +114,13 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 
     public bool StartWatching()
     {
-        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent,
-            e => Log.Default.Warn("desktops", e.Message));
+        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent, Unreported);
         return _hook is not null;
     }
 
     private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        Switched?.Invoke();
+        _switched.Raise(static handler => handler());
     }
 
     public string ListStamp =>
@@ -123,29 +138,30 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
         return true;
     }
 
-    public bool SwitchTo(Guid id)
+    public bool SwitchTo(Guid id, out string problem)
     {
-        if (ImmersiveDesktops.SwitchTo(id, out var problem))
+        if (ImmersiveDesktops.SwitchTo(id, out problem))
             return true;
-        Log.Default.Warn("desktops", $"SwitchDesktop {problem}.");
+        problem = $"SwitchDesktop {problem}.";
         return false;
     }
 
-    public Guid? Create()
+    public Guid? Create(out string problem)
     {
-        if (ImmersiveDesktops.Create(out var problem) is { } id)
+        if (ImmersiveDesktops.Create(out problem) is { } id)
             return id;
-        Log.Default.Warn("desktops", $"CreateDesktop {problem}.");
+        problem = $"CreateDesktop {problem}.";
         return null;
     }
 
-    public bool Remove(Guid id, Guid fallback)
+    public bool Remove(Guid id, Guid fallback, out string problem)
     {
+        problem = "";
         if (id == Guid.Empty || fallback == Guid.Empty || id == fallback)
             return false;
-        if (ImmersiveDesktops.Remove(id, fallback, out var problem))
+        if (ImmersiveDesktops.Remove(id, fallback, out problem))
             return true;
-        Log.Default.Warn("desktops", $"RemoveDesktop {problem}.");
+        problem = $"RemoveDesktop {problem}.";
         return false;
     }
 }

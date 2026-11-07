@@ -1,18 +1,15 @@
-using System.Runtime.CompilerServices;
-
 namespace Winshell.Input;
 
 /// <summary>
-/// The claim rules for the hotkeys on one loop: chords are shared, an unused chord is given back, the keyboard hook
+/// The claim rules for a shell's hotkeys, on its loop: chords are shared, an unused chord is given back, the keyboard hook
 /// is installed only while a Windows-key hotkey or a waiting sequence needs it, and a sequence that is not finished
 /// in time is dropped. Windows is reached through <see cref="IHotkeyBackend"/>.
 /// </summary>
 internal sealed class HotkeyRegistrar : IDisposable
 {
-    private static readonly ConditionalWeakTable<IEventLoop, HotkeyRegistrar> PerLoop = new();
-
     private readonly object _bookLock = new();
     private readonly IEventLoop _loop;
+    private readonly Log _log;
     private readonly IHotkeyBackend _backend;
     private readonly HotkeyBook _book = new();
     private readonly long _started;
@@ -20,23 +17,20 @@ internal sealed class HotkeyRegistrar : IDisposable
     private int _syncPosted;
     private bool _disposed;
 
-    public HotkeyRegistrar(IEventLoop loop)
-        : this(loop, new HotkeyBackend(loop))
+    /// <param name="loop">The loop the hotkeys live on.</param>
+    /// <param name="log">Where a hotkey whose handler throws, and a failed Windows callback, are reported.</param>
+    public HotkeyRegistrar(IEventLoop loop, Log log)
+        : this(loop, log, new HotkeyBackend(loop, e => log.Warn("hotkey", e.Message)))
     {
     }
 
-    internal HotkeyRegistrar(IEventLoop loop, IHotkeyBackend backend)
+    internal HotkeyRegistrar(IEventLoop loop, Log log, IHotkeyBackend backend)
     {
         _loop = loop;
+        _log = log;
         _started = loop.Time.GetTimestamp();
         _backend = backend;
         _backend.ChordPressed += OnChord;
-    }
-
-    /// <summary>The registrar the hotkeys on a loop share. With nothing claimed, it holds no window and no hook.</summary>
-    public static HotkeyRegistrar For(IEventLoop loop)
-    {
-        return PerLoop.GetValue(loop, static l => new HotkeyRegistrar(l));
     }
 
     internal bool NeedsHook
@@ -174,7 +168,7 @@ internal sealed class HotkeyRegistrar : IDisposable
             }
             catch (Exception e)
             {
-                Log.Default.Warn("hotkey", e.Message);
+                _log.Warn("hotkey", e.Message);
             }
 
         foreach (var arm in result.Armed)

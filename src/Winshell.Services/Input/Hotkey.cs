@@ -23,11 +23,6 @@ public sealed class Hotkey : ObservableObject, IHotkeyListener, IDisposable
     private int _polls;
     private bool _disposed;
 
-    internal Hotkey(IEventLoop loop)
-        : this(loop, Log.Default, HotkeyRegistrar.For(loop))
-    {
-    }
-
     /// <param name="loop">The loop the hotkey lives on.</param>
     /// <param name="log">Where a hotkey that is not active is reported.</param>
     /// <param name="registrar">Claims the keys, and reads whether a key is down.</param>

@@ -22,6 +22,7 @@ public sealed partial class Shell
     private BluetoothService? _bluetooth;
     private BrightnessService? _brightness;
     private ExplorerTaskbarService? _explorerTaskbar;
+    private HotkeyRegistrar? _hotkeys;
     private JumpListService? _jumpLists;
     private MediaService? _media;
     private NetworkingService? _networking;
@@ -97,7 +98,7 @@ public sealed partial class Shell
     /// <summary>A hotkey that works anywhere in Windows. Set its <see cref="Hotkey.Sequence"/>, and dispose it to give the keys back.</summary>
     public Hotkey NewHotkey()
     {
-        return new Hotkey(Loop);
+        return new Hotkey(Loop, Log, _hotkeys ??= new HotkeyRegistrar(Loop, Log));
     }
 
     /// <summary>Tells when there has been no input for a while.</summary>
@@ -122,7 +123,7 @@ public sealed partial class Shell
         IDisposable?[] services =
         [
             _winland, _windows, _virtualDesktops, _apps, _audio, _bluetooth, _brightness, _explorerTaskbar, _media,
-            _networking, _notifications, _power, _powerMode, _systemTray
+            _networking, _notifications, _power, _powerMode, _systemTray, _hotkeys
         ];
         foreach (var service in services)
             service?.Dispose();

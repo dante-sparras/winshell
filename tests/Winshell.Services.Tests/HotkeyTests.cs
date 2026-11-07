@@ -11,10 +11,12 @@ public sealed class HotkeyTests : IDisposable
     private readonly FakeBackend _backend = new();
     private readonly HotkeyRegistrar _registrar;
     private readonly List<string> _warnings = [];
+    private readonly Log _log;
 
     public HotkeyTests()
     {
-        _registrar = new HotkeyRegistrar(_loop, _backend);
+        _log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
+        _registrar = new HotkeyRegistrar(_loop, _log, _backend);
     }
 
     public void Dispose()
@@ -24,8 +26,7 @@ public sealed class HotkeyTests : IDisposable
 
     private Hotkey Create()
     {
-        return new Hotkey(_loop, new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") },
-            _registrar);
+        return new Hotkey(_loop, _log, _registrar);
     }
 
     [Fact]
@@ -330,16 +331,6 @@ public sealed class HotkeyTests : IDisposable
         Assert.Empty(_backend.Registered);
         Assert.Equal(0, released);
         Assert.Null(_loop.NextDue);
-    }
-
-    [Fact]
-    public void Hotkeys_on_a_loop_share_a_registrar_that_holds_nothing_until_a_claim()
-    {
-        var registrar = HotkeyRegistrar.For(_loop);
-
-        Assert.Same(registrar, HotkeyRegistrar.For(_loop));
-        Assert.NotSame(registrar, HotkeyRegistrar.For(new ManualEventLoop()));
-        Assert.False(registrar.NeedsHook);
     }
 
     private static OsChord Key(string text)
