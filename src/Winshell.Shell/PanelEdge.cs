@@ -111,10 +111,7 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     {
         if (!_registered)
             return;
-        using (desktop.Explorer())
-        {
-            desktop.Remove();
-        }
+        desktop.Remove();
 
         _registered = false;
         Held.TryRemove(desktop, out _);
@@ -125,17 +122,9 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     /// <summary>Gives every edge back. Safe from any thread, so a crash on one can.</summary>
     internal static void ReleaseAll()
     {
-        var held = new List<IPanelDesktop>();
         foreach (var pair in Held)
             if (Held.TryRemove(pair.Key, out _))
-                held.Add(pair.Key);
-        if (held.Count == 0)
-            return;
-        using (held[0].Explorer())
-        {
-            foreach (var owner in held)
-                owner.Remove();
-        }
+                pair.Key.Remove();
     }
 
     /// <summary>Handles Explorer's notices to the app bar. Returns null for any other message.</summary>
@@ -244,7 +233,6 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     /// <summary>Reserves <paramref name="thickness"/> pixels along an edge of a monitor. Returns the area the panel lays out in.</summary>
     private RECT Reserve(Edges edge, int thickness, RECT monitor)
     {
-        using var explorer = desktop.Explorer();
         var side = Side(edge);
         if (!_registered)
         {

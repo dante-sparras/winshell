@@ -24,12 +24,6 @@ internal interface IPanelDesktop
     /// <summary>Whether another app covers this screen, so a panel there steps behind it.</summary>
     bool FullscreenOn(string screenId);
 
-    /// <summary>
-    /// Puts Explorer's taskbar in front of this process's trays until disposed, so the app-bar calls inside it reach
-    /// Explorer.
-    /// </summary>
-    IDisposable Explorer();
-
     /// <summary>Registers the window as an app bar, so Explorer posts <paramref name="callback"/> to it. False when no host answers.</summary>
     bool Register(uint callback);
 

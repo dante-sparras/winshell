@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using Winshell.Apps;
 
@@ -30,8 +29,6 @@ public enum BalloonIcon
 /// </summary>
 public sealed class SystemTray : ObservableObject, IDisposable
 {
-    private static readonly ConcurrentDictionary<SystemTray, byte> Opened = new();
-
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly ITrayBackend _backend;
@@ -65,27 +62,6 @@ public sealed class SystemTray : ObservableObject, IDisposable
     /// <summary>The icons apps show, in the order they were added. Empty while another instance has the tray.</summary>
     public ObservableCollection<SystemTrayItem> Items { get; } = [];
 
-    /// <summary>
-    /// Puts Explorer's taskbar in front of this process's trays until disposed, so an app bar request this process
-    /// sends reaches Explorer itself. When the first <c>Shell_TrayWnd</c> belongs to the calling process,
-    /// <c>SHAppBarMessage</c> passes the rectangle by an address in that process, which Explorer cannot use once a tray
-    /// passes the message on: <c>ABM_QUERYPOS</c> and <c>ABM_SETPOS</c> then do nothing, and the work area stays as it was.
-    /// </summary>
-    internal static IDisposable ExplorerFirst()
-    {
-        return new Restore([.. Opened.Keys.Where(tray => tray._backend.Lower())]);
-    }
-
-    private sealed class Restore(List<SystemTray> trays) : IDisposable
-    {
-        public void Dispose()
-        {
-            foreach (var tray in trays)
-                if (Opened.ContainsKey(tray))
-                    tray._backend.Raise();
-        }
-    }
-
     /// <summary>Becomes the notification area, or waits for the instance that has it to exit.</summary>
     private void Start()
     {
@@ -111,7 +87,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
         }
 
         _open = true;
-        Opened[this] = 0;
+        AppBarMessages.Opened(_backend);
         _answered = _backend.Explorer;
         UseSettings();
         KeepInFront();
@@ -218,7 +194,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
         _answer?.Dispose();
         _timer = _answer = null;
         _clicker.Dispose();
-        Opened.TryRemove(this, out _);
+        AppBarMessages.Closed(_backend);
         // The window goes, the next instance may take over, and apps are asked to add their icons again to whichever
         // taskbar window is first now.
         _backend.Close();
