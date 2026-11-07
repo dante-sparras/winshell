@@ -38,8 +38,9 @@ internal sealed class AppSnapshot
 }
 
 /// <summary>
-/// The Start menu of some Programs folders and the installed packages, and how its apps open. Each scan reads the
-/// folders, the packages and the usage; a read that fails keeps what the last good one found.
+/// The Start menu of some Programs folders and the installed packages, and how its apps open. Each scan reads each
+/// folder, the packages and the usage; a read that fails keeps what the last good one found, and is warned once until
+/// it reads again.
 /// </summary>
 /// <param name="log">Where failed reads are reported.</param>
 /// <param name="folders">The Programs folders, the common one first: <see cref="ProgramsFolders"/>.</param>
@@ -74,8 +75,18 @@ internal sealed class AppCatalog(
     private bool _started, _disposed;
     private volatile bool _stop;
     private volatile AppSnapshot _snapshot = AppSnapshot.Empty;
-    private IReadOnlyList<AppRecord> _packagedApps = AppSnapshot.Empty.Entries;
-    private IReadOnlyDictionary<string, AppUsage> _usage = AppSnapshot.Empty.Usage;
+
+    private readonly Source<IReadOnlyList<AppRecord>>[] _shortcuts =
+    [
+        .. folders.Select(folder => new Source<IReadOnlyList<AppRecord>>(log, "Could not read the shortcuts",
+            () => AppIndex.Shortcuts(folder), AppSnapshot.Empty.Entries))
+    ];
+
+    private readonly Source<IReadOnlyList<AppRecord>> _packaged =
+        new(log, "Could not read the installed apps", packaged, AppSnapshot.Empty.Entries);
+
+    private readonly Source<IReadOnlyDictionary<string, AppUsage>> _usage =
+        new(log, "Could not read how often apps are used", usage, AppSnapshot.Empty.Usage);
 
     /// <summary>Raised on a background thread after a scan changed the list or the usage.</summary>
     public event Action? Changed;
@@ -278,26 +289,9 @@ internal sealed class AppCatalog(
 
     private AppSnapshot Take()
     {
-        try
-        {
-            _packagedApps = packaged();
-        }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException
-                                      or InvalidOperationException)
-        {
-            log.Warn("apps", $"Could not read the installed apps: {e.Message}");
-        }
-
-        try
-        {
-            _usage = usage();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
-        {
-            log.Warn("apps", $"Could not read how often apps are used: {e.Message}");
-        }
-
-        return new AppSnapshot(AppIndex.Combine(AppIndex.Shortcuts(folders), _packagedApps), _usage);
+        // The user's folder comes after the common one, so Combine keeps its shortcut of an id both have.
+        var shortcuts = _shortcuts.SelectMany(folder => folder.Read()).ToList();
+        return new AppSnapshot(AppIndex.Combine(shortcuts, _packaged.Read()), _usage.Read());
     }
 
     public string? OpenShortcut(string path, string startIn)
@@ -342,6 +336,29 @@ internal sealed class AppCatalog(
     public string? OpenAppsFolder(string appUserModelId)
     {
         return AppIdentity.OpenAppsFolder(appUserModelId);
+    }
+
+    /// <summary>One read of a scan, and what its last good read found.</summary>
+    private sealed class Source<T>(Log log, string what, Func<T> read, T empty)
+    {
+        private readonly MonitorWarning _warning = new(log, "apps", what);
+        private T _found = empty;
+
+        public T Read()
+        {
+            try
+            {
+                _found = read();
+                _warning.Succeeded();
+            }
+            catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException
+                                          or InvalidOperationException or SecurityException)
+            {
+                _warning.Failed(e);
+            }
+
+            return _found;
+        }
     }
 }
 

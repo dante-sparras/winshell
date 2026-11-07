@@ -185,23 +185,24 @@ internal static class AppRank
 /// <summary>Builds the Start menu index and answers find, search, recent, and frequent.</summary>
 internal static class AppIndex
 {
-    public static List<AppRecord> Shortcuts(IEnumerable<string> folders)
+    /// <summary>
+    /// The shortcuts of one Programs folder. A folder that is gone has none; one that can't be read throws. A subfolder
+    /// that can't be read is left out.
+    /// </summary>
+    public static List<AppRecord> Shortcuts(string folder)
     {
-        var byId = new Dictionary<string, AppRecord>(StringComparer.OrdinalIgnoreCase);
-        foreach (var folder in folders)
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+            return [];
+        var apps = new List<AppRecord>();
+        foreach (var path in Files(folder))
         {
-            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+            if (InStartup(folder, path))
                 continue;
-            foreach (var path in Files(folder))
-            {
-                if (InStartup(folder, path))
-                    continue;
-                if (FromShortcut(folder, path) is { } entry)
-                    byId[entry.Id] = entry;
-            }
+            if (FromShortcut(folder, path) is { } entry)
+                apps.Add(entry);
         }
 
-        return byId.Values.ToList();
+        return apps;
     }
 
     /// <summary>A packaged app, or null when Windows did not give it an id and a name.</summary>
@@ -220,8 +221,8 @@ internal static class AppIndex
 
     /// <summary>
     /// Shortcuts first, then packaged apps. A shortcut whose app id is a packaged app is dropped, so the app is
-    /// listed once and launches by its AppUserModelID. The user's folder is later in <paramref name="shortcuts"/>,
-    /// so it already replaced the common shortcut of the same id.
+    /// listed once and launches by its AppUserModelID. Of two shortcuts with the same id, the later one is kept, so
+    /// the user's folder, read after the common one, wins.
     /// </summary>
     public static List<AppRecord> Combine(IEnumerable<AppRecord> shortcuts, IEnumerable<AppRecord> packaged)
     {
@@ -299,10 +300,15 @@ internal static class AppIndex
             .ToList();
     }
 
-    private static IEnumerable<string> Files(string folder)
+    private static List<string> Files(string folder)
     {
         try
         {
+            // IgnoreInaccessible also passes over the folder itself, so open it on its own first.
+            using (Directory.EnumerateFileSystemEntries(folder).GetEnumerator())
+            {
+            }
+
             return Directory.EnumerateFiles(folder, "*.lnk", new EnumerationOptions
             {
                 RecurseSubdirectories = true,
@@ -310,7 +316,7 @@ internal static class AppIndex
                 AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
             }).ToList();
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (DirectoryNotFoundException)
         {
             return [];
         }
