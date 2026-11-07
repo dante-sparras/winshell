@@ -67,3 +67,19 @@ Describe 'The binaries Winshell signs' {
         foreach ($assembly in $assemblies) { $ownBinaries | Should -Contain $assembly }
     }
 }
+
+Describe 'The oldest Windows a release runs on' {
+    It 'is one build, Windows 11 22H2, in every project, the package props, the winget manifest and the Store manifest' {
+        $root = Join-Path $PSScriptRoot '../..'
+        $projects = Get-ChildItem -LiteralPath (Join-Path $root 'src'), (Join-Path $root 'tests') -Recurse -File -Include '*.csproj', '*.props' |
+            Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
+        $declared = @(
+            $projects | Select-String -Pattern '<SupportedOSPlatformVersion>([^<]+)<' | ForEach-Object { $_.Matches[0].Groups[1].Value }
+            (Select-String -LiteralPath (Join-Path $root 'scripts/package.ps1') -Pattern '^MinimumOSVersion: (\S+)').Matches[0].Groups[1].Value
+            ([xml] (Get-Content -Raw -LiteralPath (Join-Path $root 'packaging/msix/AppxManifest.xml'))).Package.Dependencies.TargetDeviceFamily.MinVersion
+        )
+
+        $declared.Count | Should -BeGreaterThan 3
+        $declared | Select-Object -Unique | Should -Be '10.0.22621.0'
+    }
+}
