@@ -3,13 +3,13 @@ using Winshell.Native;
 namespace Winshell;
 
 /// <summary>What a native window does with each message Windows sends it.</summary>
-internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Action dismissMenu)
+internal sealed class HostMessages(HostWindow host, ShellPlatform platform)
 {
     /// <summary>A panel or popup press ends another app's native menu before its control handles the click.</summary>
     internal void Press()
     {
         if (host.Kind is WindowKind.Panel or WindowKind.Popup)
-            dismissMenu();
+            NativeMenu.Dismiss();
     }
 
     /// <summary>The window's own handling first. What it leaves to Windows goes to the kind's placer.</summary>

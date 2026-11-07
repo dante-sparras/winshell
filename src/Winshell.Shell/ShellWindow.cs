@@ -7,7 +7,7 @@ namespace Winshell;
 /// A top-level surface of the shell. Set <see cref="Content"/> to any <see cref="UIElement"/>: XAML, or a
 /// <c>ReactorHostControl</c>. Its background stays transparent, so <see cref="Backdrop"/> shows through.
 /// </summary>
-public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
+public abstract class ShellWindow : ObservableObject, IDisposable
 {
     private readonly Shell _shell;
     private HostWindow? _host;
@@ -44,8 +44,6 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
     private protected abstract WindowKind Kind { get; }
 
     internal HostWindow? Host => _host;
-
-    internal Shell Shell => _shell;
 
     /// <summary>What the window shows: any <see cref="UIElement"/>, or null for nothing.</summary>
     public UIElement? Content
@@ -267,73 +265,63 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             ApplyPlacement();
     }
 
-    /// <summary>The window lost focus or was dismissed by a click elsewhere.</summary>
-    private protected virtual void OnDismissed()
+    // What the native window tells it.
+
+    /// <summary>A click elsewhere, or Esc, dismissed a window that grabs focus.</summary>
+    internal virtual void OnDismissed()
     {
     }
 
-    private protected virtual void OnStateChanged(bool maximized, bool minimized)
+    internal virtual void OnStateChanged(bool maximized, bool minimized)
     {
     }
 
-    private protected virtual void OnFullscreenChanged(bool fullscreen)
+    internal virtual void OnFullscreenChanged(bool fullscreen)
     {
     }
 
-    void IHostClient.OnResized(double width, double height, double scale)
+    /// <summary>The window's size changed, in logical pixels, or its scale did.</summary>
+    internal void OnResized(double width, double height, double scale)
     {
         Set(ref _actualWidth, width, nameof(ActualWidth));
         Set(ref _actualHeight, height, nameof(ActualHeight));
         Set(ref _scale, scale, nameof(Scale));
     }
 
-    void IHostClient.OnMoved(double x, double y)
+    internal void OnMoved()
     {
         Changed(nameof(Origin));
     }
 
-    void IHostClient.OnClosed()
+    internal void OnClosed()
     {
         Visible = false;
         Closed?.Invoke();
     }
 
-    void IHostClient.OnActiveChanged(bool active)
+    /// <summary>The native window became the foreground window, or stopped being it.</summary>
+    internal void OnActiveChanged(bool active)
     {
         Set(ref _active, active, nameof(Active));
     }
 
-    void IHostClient.OnScreenChanged(string screenId)
+    /// <summary>A window that was not asked for a screen moved to another one.</summary>
+    internal void OnScreenChanged(string screenId)
     {
-        var screen = _shell.Platform.Screens.FirstOrDefault(s => s.Id == screenId);
-        if (screen is not null && screen != _screen && _screen is null)
+        if (_screen is null && _shell.Platform.Screens.Any(s => s.Id == screenId))
             Changed(nameof(Screen));
     }
 
-    void IHostClient.OnDismissed()
-    {
-        OnDismissed();
-    }
-
-    void IHostClient.OnStateChanged(bool maximized, bool minimized)
-    {
-        OnStateChanged(maximized, minimized);
-    }
-
-    void IHostClient.OnFullscreenChanged(bool fullscreen)
-    {
-        OnFullscreenChanged(fullscreen);
-    }
-
     /// <summary>Windows destroyed the native window, because its owner closed. To the app that is this window closing.</summary>
-    void IHostClient.OnBackingDestroyed()
+    internal void OnBackingDestroyed()
     {
         _host = null;
         if (Set(ref _visible, false, nameof(Visible)))
             Closed?.Invoke();
     }
 
-    void IHostClient.OnFailed(Exception error)
+    /// <summary>The native window threw while handling a message, and stopped handling them. Called on the loop, once.</summary>
+    internal void OnFailed(Exception error)
     {
         _shell.Log.Error("window", error.ToString());
         var host = _host;

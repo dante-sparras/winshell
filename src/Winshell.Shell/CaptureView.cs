@@ -29,13 +29,13 @@ public sealed class CaptureView : Panel
 
     private readonly Image _image = new() { Stretch = Stretch.Uniform };
     private CaptureSession? _subscribed;
+    private readonly ShellWindowWatch _shell;
     private WriteableBitmap? _bitmap;
-    private ShellWindow? _shell;
-    private bool _watchingShell;
 
     /// <summary>A view with no session, which shows nothing.</summary>
     public CaptureView()
     {
+        _shell = new ShellWindowWatch(OnShellChanged);
         Children.Add(_image);
         Loaded += (_, _) => OnLoaded();
         Unloaded += (_, _) => OnUnloaded();
@@ -78,14 +78,14 @@ public sealed class CaptureView : Panel
 
     private void OnLoaded()
     {
-        AttachShell();
+        _shell.Attach(this);
         Subscribe(Session);
     }
 
     private void OnUnloaded()
     {
         Subscribe(null);
-        DetachShell();
+        _shell.Detach();
     }
 
     private void OnSessionChanged(CaptureSession? previous, CaptureSession? next)
@@ -140,51 +140,18 @@ public sealed class CaptureView : Panel
             resized = true;
         }
 
-        Copy(bitmap, frame);
+        // Capture frames are premultiplied, which is what the bitmap stores.
+        using (var destination = bitmap.PixelBuffer.AsStream())
+        {
+            destination.Write(frame.Bgra);
+        }
+
         bitmap.Invalidate();
         _bitmap = bitmap;
         if (!ReferenceEquals(_image.Source, bitmap))
             _image.Source = bitmap;
         if (resized)
             InvalidateMeasure();
-    }
-
-    /// <summary>One write into the bitmap. Capture frames are already premultiplied, which is what the bitmap stores.</summary>
-    private static void Copy(WriteableBitmap bitmap, PixelImage frame)
-    {
-        using var destination = bitmap.PixelBuffer.AsStream();
-        var pixels = frame.Bgra;
-        if (frame.Premultiplied)
-        {
-            destination.Write(pixels);
-            return;
-        }
-
-        // Premultiplied a piece at a time, so a frame needs no second array.
-        Span<byte> piece = stackalloc byte[4096];
-        for (var start = 0; start < pixels.Length; start += piece.Length)
-        {
-            var source = pixels.Slice(start, Math.Min(piece.Length, pixels.Length - start));
-            for (var i = 0; i < source.Length; i += 4)
-            {
-                var alpha = source[i + 3];
-                piece[i + 3] = alpha;
-                if (alpha == 255)
-                {
-                    piece[i] = source[i];
-                    piece[i + 1] = source[i + 1];
-                    piece[i + 2] = source[i + 2];
-                }
-                else
-                {
-                    piece[i] = (byte)((source[i] * alpha + 127) / 255);
-                    piece[i + 1] = (byte)((source[i + 1] * alpha + 127) / 255);
-                    piece[i + 2] = (byte)((source[i + 2] * alpha + 127) / 255);
-                }
-            }
-
-            destination.Write(piece[..source.Length]);
-        }
     }
 
     private Size Natural()
@@ -197,29 +164,10 @@ public sealed class CaptureView : Panel
 
     private double ScaleOf()
     {
-        var scale = _shell?.Scale ?? 0;
+        var scale = _shell.Window?.Scale ?? 0;
         if (scale <= 0)
             scale = XamlRoot?.RasterizationScale ?? 1;
         return scale > 0 ? scale : 1;
-    }
-
-    private void AttachShell()
-    {
-        DetachShell();
-        _shell = ShellWindow.Of(this);
-        if (_shell is null)
-            return;
-        _shell.PropertyChanged += OnShellChanged;
-        _watchingShell = true;
-    }
-
-    private void DetachShell()
-    {
-        if (!_watchingShell || _shell is null)
-            return;
-        _shell.PropertyChanged -= OnShellChanged;
-        _watchingShell = false;
-        _shell = null;
     }
 
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)

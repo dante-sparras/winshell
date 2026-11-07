@@ -140,9 +140,9 @@ internal sealed class ShellPlatform : IDisposable
 
     public event Action? ThemeChanged;
 
-    public HostWindow CreateWindow(WindowKind kind, IHostClient client)
+    public HostWindow CreateWindow(WindowKind kind, ShellWindow client)
     {
-        var window = new HostWindow(this, kind, client, NativeMenu.Dismiss);
+        var window = new HostWindow(this, kind, client);
         _windows.Add(window);
         return window;
     }

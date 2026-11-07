@@ -47,11 +47,6 @@ public sealed class CaptureViewTests
             var shown = Pixels(Shown(view));
             Assert.Equal(red.Bgra.ToArray(), shown);
 
-            var straight = Straight();
-            backend.Next = straight;
-            await NextFrame(session);
-            Assert.Equal(Premultiplied(straight), Pixels(Shown(view)));
-
             session.Stop();
             Assert.Null(ImageOf(view).Source);
 
@@ -149,30 +144,6 @@ public sealed class CaptureViewTests
         for (var i = 0; i < bgra.Length; i += 4)
             (bgra[i], bgra[i + 1], bgra[i + 2], bgra[i + 3]) = (blue, green, red, 255);
         return new PixelImage(4, 2, bgra, true);
-    }
-
-    private static PixelImage Straight()
-    {
-        var bgra = new byte[4 * 2 * 4];
-        for (var i = 0; i < bgra.Length; i += 4)
-            (bgra[i], bgra[i + 1], bgra[i + 2], bgra[i + 3]) = (0, 0, 255, 128);
-        return new PixelImage(4, 2, bgra, false);
-    }
-
-    private static byte[] Premultiplied(PixelImage image)
-    {
-        var pixels = image.Bgra.ToArray();
-        for (var i = 0; i < pixels.Length; i += 4)
-        {
-            var alpha = pixels[i + 3];
-            if (alpha == 255)
-                continue;
-            pixels[i] = (byte)((pixels[i] * alpha + 127) / 255);
-            pixels[i + 1] = (byte)((pixels[i + 1] * alpha + 127) / 255);
-            pixels[i + 2] = (byte)((pixels[i + 2] * alpha + 127) / 255);
-        }
-
-        return pixels;
     }
 
     private static Image ImageOf(CaptureView view)

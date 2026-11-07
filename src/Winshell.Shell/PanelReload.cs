@@ -26,7 +26,7 @@ internal static class PanelReload
     internal static void Apply(Shell shell, IReadOnlyCollection<Type> updated)
     {
         var edited = updated.Select(Written).ToHashSet();
-        foreach (var window in shell.Platform.Windows.Select(host => host.Client).OfType<ShellWindow>().ToList())
+        foreach (var window in shell.Platform.Windows.Select(host => host.Client).ToList())
             if (window.Content is { } content && Shows(content, edited))
                 Rebuild(shell, window, content);
     }

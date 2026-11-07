@@ -121,8 +121,7 @@ public sealed class FloatingWindow : ShellWindow
         get => _owner;
         set
         {
-            if (ReferenceEquals(_owner, value) || ReferenceEquals(value, this) ||
-                (value is not null && WouldOwn(value)))
+            if (ReferenceEquals(_owner, value) || (value is not null && WouldOwn(value)))
                 return;
             if (_owner is { } previous)
             {
@@ -153,16 +152,12 @@ public sealed class FloatingWindow : ShellWindow
         Changed(nameof(Owner));
     }
 
+    /// <summary>Whether this window is <paramref name="owner"/> or in its chain. The chain never loops, since this refuses each loop.</summary>
     private bool WouldOwn(FloatingWindow owner)
     {
-        var hop = owner;
-        for (var n = 0; hop is not null && n < 16; n++)
-        {
+        for (var hop = owner; hop is not null; hop = hop._owner)
             if (ReferenceEquals(hop, this))
                 return true;
-            hop = hop._owner;
-        }
-
         return false;
     }
 
@@ -183,13 +178,13 @@ public sealed class FloatingWindow : ShellWindow
         _stateRequested = false;
     }
 
-    private protected override void OnStateChanged(bool maximized, bool minimized)
+    internal override void OnStateChanged(bool maximized, bool minimized)
     {
         Set(ref _maximized, maximized, nameof(Maximized));
         Set(ref _minimized, minimized, nameof(Minimized));
     }
 
-    private protected override void OnFullscreenChanged(bool fullscreen)
+    internal override void OnFullscreenChanged(bool fullscreen)
     {
         Set(ref _fullscreen, fullscreen, nameof(Fullscreen));
     }
