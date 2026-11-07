@@ -133,7 +133,7 @@ internal static class AtomicFile
 
     /// <summary>
     /// Replaces <paramref name="path"/> with <paramref name="temp"/>. Antivirus and indexers often hold the new file
-    /// for a moment, so a lock is tried again, waiting at most 375 ms in all. The wait blocks the caller, which may be
+    /// for a moment, so a lock is tried again for a few hundred milliseconds. The wait blocks the caller, which may be
     /// the loop: <see cref="TomlFile.Save"/> promises the file is written when it returns, and a write still on its way
     /// at <see cref="TomlFile.Dispose"/> must land before the process ends.
     /// </summary>
