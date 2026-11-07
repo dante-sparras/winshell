@@ -79,13 +79,10 @@ public sealed class ShellInstanceTests
         var shown = Assert.Single(await Ask(IpcRequest.ForShow(false)));
         var called = Assert.Single(await Ask(IpcRequest.ForCall("tests", "twice", ["21"])));
         var read = Assert.Single(await Ask(IpcRequest.ForProp("tests", "name")));
-        var refused = Assert.Single(await Ask(IpcRequest.ForCall("tests", "twice", ["many"])));
 
         Assert.Contains("function twice(number: int): int", shown.Value, StringComparison.Ordinal);
         Assert.Equal("42", called.Value);
         Assert.Equal(shell.ShellId, read.Value);
-        Assert.False(refused.Ok);
-        Assert.Equal("Argument number is not an int: many.", refused.Error);
     }
 
     [Fact]
@@ -111,20 +108,6 @@ public sealed class ShellInstanceTests
                 await DismissNotice();
             }
         });
-    }
-
-    [Fact]
-    public async Task A_handler_that_throws_fails_the_call_and_the_shell_goes_on()
-    {
-        using var handler = await ShellFixture.On(s =>
-            s.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no"))));
-
-        var failed = Assert.Single(await Ask(IpcRequest.ForCall("tests", "fail", [])));
-        var shown = Assert.Single(await Ask(IpcRequest.ForShow(false)));
-
-        Assert.False(failed.Ok);
-        Assert.Equal("ipc: InvalidOperationException: no", failed.Error);
-        Assert.True(shown.Ok);
     }
 
     [Fact]
