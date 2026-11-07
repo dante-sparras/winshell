@@ -79,9 +79,9 @@ internal static class CoreAudio
     }
 
     /// <summary>
-    /// Releases a COM object's callable wrapper now, not when the GC finds it, with every reference it holds: the audio
-    /// service releases an object once, however many times Windows handed it over, unlike <see cref="Com.Release"/>.
-    /// Does nothing for null.
+    /// Releases a COM object's callable wrapper now, not when the GC finds it, with every hand-out it counts, unlike
+    /// <see cref="Com.Release"/>: the audio service takes the same device again when it rereads the list, and releases
+    /// it once. Does nothing for null.
     /// </summary>
     public static void Release(object? comObject)
     {
@@ -108,6 +108,7 @@ internal static class CoreAudio
         var created = Com.Create<T>(clsid, CLSCTX.CLSCTX_SERVER, out var hr);
         if (created is not null)
             return created;
+        // E_NOINTERFACE becomes InvalidCastException.
         Marshal.ThrowExceptionForHR(hr);
         throw new InvalidCastException();
     }

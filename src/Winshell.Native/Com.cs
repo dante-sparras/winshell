@@ -47,9 +47,9 @@ internal static unsafe class Com
     }
 
     /// <summary>
-    /// Gives back one of the references a wrapper holds, now rather than when the GC finds it. The runtime hands out
-    /// one wrapper per object and counts each hand-out, so another holder keeps its own. Does nothing for null or a
-    /// managed object.
+    /// Gives back one hand-out of a wrapper. The runtime hands out one wrapper per object and counts each hand-out, so
+    /// another holder keeps its own; the last one releases the object now rather than when the GC finds it. Does
+    /// nothing for null or a managed object.
     /// </summary>
     internal static void Release(object? com)
     {
