@@ -124,7 +124,7 @@ internal sealed class PowerBackend : IPowerBackend
 
     private void OnBatteryAdded(DeviceWatcher sender, DeviceInformation info)
     {
-        ServiceSupport.Run("power", () => AddBatteryAsync(sender, info.Id, info.Name));
+        _ = AddBatteryAsync(sender, info.Id, info.Name);
     }
 
     private void OnBatteryRemoved(DeviceWatcher sender, DeviceInformationUpdate update)
@@ -140,19 +140,28 @@ internal sealed class PowerBackend : IPowerBackend
 
     private async Task AddBatteryAsync(DeviceWatcher watcher, string id, string name)
     {
-        var battery = await WinBattery.FromIdAsync(id);
-        if (battery is null)
-            return;
-        lock (_batteriesLock)
+        try
         {
-            // A battery found as the backend stops is not watched.
-            if (!ReferenceEquals(watcher, _watcher))
+            var battery = await WinBattery.FromIdAsync(id);
+            if (battery is null)
                 return;
-            battery.ReportUpdated += OnReportUpdated;
-            _batteries[id] = (battery, name);
-        }
+            lock (_batteriesLock)
+            {
+                // A battery found as the backend stops is not watched.
+                if (!ReferenceEquals(watcher, _watcher))
+                    return;
+                battery.ReportUpdated += OnReportUpdated;
+                _batteries[id] = (battery, name);
+            }
 
-        Changed?.Invoke();
+            Changed?.Invoke();
+        }
+#pragma warning disable CA1031 // Nobody awaits this. A battery Windows cannot open is logged and left out.
+        catch (Exception e)
+#pragma warning restore CA1031
+        {
+            Log.Default.Warn("power", e.Message);
+        }
     }
 
     private PowerSnapshot Read()

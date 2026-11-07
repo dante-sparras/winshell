@@ -305,7 +305,7 @@ internal sealed class NetworkBackend : INetworkBackend
 
             var up = nic.OperationalStatus == OperationalStatus.Up;
             var profile = profiles.FirstOrDefault(p => p.NetworkAdapter.NetworkAdapterId == id);
-            var address = ServiceSupport.FormatMac(nic.GetPhysicalAddress().GetAddressBytes());
+            var address = MacAddress.Format(nic.GetPhysicalAddress().GetAddressBytes());
             var hasLink = row.MediaConnected;
             var speed = (uint)Math.Min(uint.MaxValue, row.LinkSpeed / 1_000_000);
 

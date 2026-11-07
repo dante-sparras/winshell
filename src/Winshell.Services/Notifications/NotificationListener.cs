@@ -328,9 +328,19 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             return;
         _disposed = true;
         _stop.Cancel();
-        ServiceSupport.DisposeAfterMonitor(_stop, _monitorTask);
+        DisposeAfterMonitor(_stop, _monitorTask);
         foreach (var notification in Notifications)
             notification.LetGo();
+    }
+
+    /// <summary>Releases a cancelled monitor's token source only after its task has ended, without waiting.</summary>
+    private static void DisposeAfterMonitor(CancellationTokenSource stop, Task? monitor)
+    {
+        if (monitor is null || monitor.IsCompleted)
+            stop.Dispose();
+        else
+            _ = monitor.ContinueWith(static (_, state) => ((CancellationTokenSource)state!).Dispose(), stop,
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 }
 

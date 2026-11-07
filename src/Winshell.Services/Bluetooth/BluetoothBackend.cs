@@ -214,7 +214,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
                 Discoverable: BluetoothRadios.IsDiscoverable(),
                 Pairable: BluetoothRadios.IsConnectable())).ConfigureAwait(false);
             var adapterInfo = new BluetoothAdapterInfo(adapter.DeviceId, name,
-                ServiceSupport.FormatMac(adapter.BluetoothAddress),
+                MacAddress.Format(adapter.BluetoothAddress),
                 RadioReading.Read(radio is null ? [] : [new WindowsRadio(radio)]),
                 visibility.Discoverable, visibility.Pairable);
             if ((_adapterId is not null && _adapterId != adapter.DeviceId) ||
