@@ -228,10 +228,10 @@ The state of the PC's Wi-Fi radios, taken together.
 
 | Value | Number | Description |
 | --- | --- | --- |
-| `Unknown` | 0 | No Wi-Fi radio was found, or Windows would not list them. |
+| `Unknown` | 0 | No Wi-Fi radio was found, Windows would not list them, or none reports its state. |
 | `On` | 1 | At least one Wi-Fi radio is on. |
 | `Off` | 2 | No Wi-Fi radio is on, and at least one can be turned on. |
-| `Disabled` | 3 | Every Wi-Fi radio is disabled, as by a hardware switch, so software can't turn one on. |
+| `Disabled` | 3 | No Wi-Fi radio is on or off, and at least one is disabled, as by a hardware switch, so software can't turn one on. |
 
 ## WifiSecurityType
 

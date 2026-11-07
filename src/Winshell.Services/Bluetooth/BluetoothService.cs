@@ -267,7 +267,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     {
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.ReportsOn == enabled)
             return;
-        var radios = _snapshot.Adapter?.Radio.Radios ?? [];
+        var radios = _snapshot.Adapter!.Radio.Radios;
         await ChangeAdapterAsync(adapter, _radioChange, async () =>
         {
             var error = await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, radios, enabled, _radioAccess)

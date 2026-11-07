@@ -203,6 +203,8 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             }
             catch (Exception e) when (WindowsFailure.IsExpected(e))
             {
+                // The state is then Unknown, as BluetoothAdapterState documents. Reads repeat every 30 seconds, so a
+                // log line here would repeat with them.
             }
 
             WatchRadio(adapter.DeviceId, radio);

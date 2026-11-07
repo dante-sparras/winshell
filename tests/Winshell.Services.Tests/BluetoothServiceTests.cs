@@ -385,25 +385,34 @@ public sealed class BluetoothServiceTests
     }
 
     [Fact]
-    public async Task Turning_bluetooth_off_changes_only_that_adapter_s_radio()
+    public async Task An_adapter_without_a_radio_reports_it_and_asks_nothing()
     {
-        var own = new FakeRadio(RadioKind.Bluetooth, RadioState.On);
-        using var session =
-            await Session.OpenAsync(new BluetoothSnapshot(true, Adapter(radio: own), []), new FakeAccess());
-        var service = session.Service;
-        var adapter = service.DefaultAdapter!;
+        var access = new FakeAccess();
+        using var session = await Session.OpenAsync(
+            Snapshot() with { Adapter = Adapter() with { Radio = RadioReading.None } }, access);
+        var adapter = session.Service.DefaultAdapter!;
 
-        await service.SetAdapterEnabledAsync(adapter, false);
+        await session.Service.SetAdapterEnabledAsync(adapter, true);
         session.Loop.Process();
 
-        Assert.Equal(RadioState.Off, own.State);
-        Assert.Equal(1, own.Sets);
-
-        await session.ShowAsync(Snapshot() with { Adapter = Adapter() with { Radio = RadioReading.None } });
-        await service.SetAdapterEnabledAsync(adapter, true);
-        session.Loop.Process();
+        Assert.Equal(BluetoothAdapterState.Unknown, adapter.State);
         Assert.Equal(RadioSwitch.Missing(RadioKind.Bluetooth), adapter.Error);
-        Assert.Equal(1, own.Sets);
+        Assert.Empty(access.Calls);
+    }
+
+    [Theory]
+    [InlineData(RadioState.On, BluetoothAdapterState.On)]
+    [InlineData(RadioState.Off, BluetoothAdapterState.Off)]
+    [InlineData(RadioState.Disabled, BluetoothAdapterState.Disabled)]
+    [InlineData(RadioState.Unknown, BluetoothAdapterState.Unknown)]
+    public async Task The_adapter_reports_its_radio_s_state(RadioState radio, BluetoothAdapterState expected)
+    {
+        using var session = await Session.OpenAsync(new BluetoothSnapshot(true,
+            Adapter(radio: new FakeRadio(RadioKind.Bluetooth, radio)), []));
+        var adapter = session.Service.DefaultAdapter!;
+
+        Assert.Equal(expected, adapter.State);
+        Assert.Equal(expected == BluetoothAdapterState.On, adapter.Enabled);
     }
 
     [Fact]

@@ -54,7 +54,7 @@ public enum NetworkAccessStatus
 /// <summary>The state of the PC's Wi-Fi radios, taken together.</summary>
 public enum WifiRadioState
 {
-    /// <summary>No Wi-Fi radio was found, or Windows would not list them.</summary>
+    /// <summary>No Wi-Fi radio was found, Windows would not list them, or none reports its state.</summary>
     Unknown,
 
     /// <summary>At least one Wi-Fi radio is on.</summary>
@@ -63,7 +63,9 @@ public enum WifiRadioState
     /// <summary>No Wi-Fi radio is on, and at least one can be turned on.</summary>
     Off,
 
-    /// <summary>Every Wi-Fi radio is disabled, as by a hardware switch, so software can't turn one on.</summary>
+    /// <summary>
+    /// No Wi-Fi radio is on or off, and at least one is disabled, as by a hardware switch, so software can't turn one on.
+    /// </summary>
     Disabled
 }
 

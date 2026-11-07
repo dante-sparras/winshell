@@ -284,6 +284,20 @@ public sealed class NetworkingServiceTests
         Assert.Equal([nameof(WiredDevice.LinkSpeed), nameof(WiredDevice.HasLink)], wiredChanges);
     }
 
+    [Theory]
+    [InlineData(RadioState.On, WifiRadioState.On, true, true)]
+    [InlineData(RadioState.Off, WifiRadioState.Off, false, true)]
+    [InlineData(RadioState.Disabled, WifiRadioState.Disabled, false, false)]
+    [InlineData(RadioState.Unknown, WifiRadioState.Unknown, false, false)]
+    public void Wifi_reports_its_radios_state(RadioState radio, WifiRadioState expected, bool enabled, bool hardware)
+    {
+        using var session = new Session(Reading(new FakeRadio(RadioKind.WiFi, radio)));
+
+        Assert.Equal(expected, session.Service.WifiState);
+        Assert.Equal(enabled, session.Service.WifiEnabled);
+        Assert.Equal(hardware, session.Service.WifiHardwareEnabled);
+    }
+
     [Fact]
     public async Task Setting_wifi_follows_the_snapshot_and_a_refusal_stays_until_the_radios_change()
     {
