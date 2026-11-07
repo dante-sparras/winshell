@@ -111,32 +111,6 @@ public sealed class CrashReportSafetyTests : IDisposable
         Assert.Contains("CrashReportSafetyTests.cs:line ", text, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void Secrets_in_the_log_are_taken_out()
-    {
-        var log = Path.Combine(_root, "log.txt");
-        File.WriteAllLines(log,
-        [
-            "12:00:01.000  INFO window: opened",
-            "12:00:02.000  WARN scene: App.xaml[3:5]: Error: fetch https://example.com/feed?apikey=SENTINEL-LOG-1 failed",
-            "12:00:03.000  INFO: password = SENTINEL-NO-CATEGORY-2",
-            "    continued: token=SENTINEL-NEXT-LINE-3",
-            "12:00:04.000 ERROR network: Proxy-Authorization: Basic SENTINEL-LOG-4",
-            "12:00:05.000 DEBUG scene: password=SENTINEL-LOG-5",
-            "12:00:06.000  INFO window: closed"
-        ]);
-        var crashes = new CrashReports(Folder(), logPath: log);
-
-        var text = File.ReadAllText(crashes.Write("a window", new InvalidOperationException("x"))!.Path);
-
-        Assert.DoesNotContain("SENTINEL", text, StringComparison.Ordinal);
-        Assert.Contains("12:00:01.000  INFO window: opened", text, StringComparison.Ordinal);
-        Assert.Contains("fetch https://example.com/feed?[redacted] failed", text, StringComparison.Ordinal);
-        Assert.Contains("ERROR network: Proxy-Authorization: [redacted]", text, StringComparison.Ordinal);
-        Assert.Contains("12:00:06.000  INFO window: closed", text, StringComparison.Ordinal);
-        Assert.Contains("last 7 lines", text, StringComparison.Ordinal);
-    }
-
     [Theory]
     [InlineData("Cookie: a=b; c=d", "Cookie: [redacted]")]
     [InlineData("Set-Cookie: session=abc; Path=/; Secure", "Set-Cookie: [redacted]")]

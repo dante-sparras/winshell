@@ -118,11 +118,13 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
-    public void A_secret_in_a_log_line_is_taken_out_of_the_file()
+    public void A_secret_in_a_log_line_is_taken_out_of_the_file_and_of_the_crash_reports_that_copy_it()
     {
         var log = new Log();
         var instance = ShellInstance.Open("mine", Program, log);
         log.Warn("shell", "sync --password SENTINEL-PASSWORD");
+        log.Error("network",
+            "fetch https://example.com/feed?apikey=SENTINEL-QUERY failed\n    continued: token=SENTINEL-NEXT-LINE");
         string text;
         using (var stream = new FileStream(instance.LogPath, FileMode.Open, FileAccess.Read,
                    FileShare.ReadWrite | FileShare.Delete))
@@ -131,10 +133,16 @@ public sealed class ShellInstanceTests
             text = reader.ReadToEnd();
         }
 
+        var report = File.ReadAllText(instance.Crashes.Write("a window", new InvalidOperationException("x"))!.Path);
         instance.Abandon();
 
         Assert.Contains("sync --password [redacted]", text, StringComparison.Ordinal);
         Assert.DoesNotContain("SENTINEL", text, StringComparison.Ordinal);
+        Assert.Contains(" WARN shell: sync --password [redacted]", report, StringComparison.Ordinal);
+        Assert.Contains("ERROR network: fetch https://example.com/feed?[redacted] failed", report,
+            StringComparison.Ordinal);
+        Assert.Contains("    continued: token=[redacted]", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("SENTINEL", report, StringComparison.Ordinal);
     }
 
     [Fact]

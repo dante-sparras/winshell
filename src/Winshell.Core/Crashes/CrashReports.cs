@@ -42,13 +42,13 @@ internal readonly record struct CrashList(
 
 /// <summary>
 /// Writes and reads crash reports: plain text files in one folder on this PC, for a bug report. Nothing is sent
-/// anywhere. A report says where the runtime failed, the exception with its stack, and the end of the instance's log,
-/// with the secrets <see cref="CrashRedaction"/> recognizes taken out. Several instances
-/// can share the folder: each report gets a file of its own, and only files that are Winshell reports are deleted. A
-/// report shows up in the folder only once it is whole and closed. The UTC instant in the file name is when the
-/// report says it was written.
+/// anywhere. A report says where the runtime failed and the exception with its stack, with the secrets
+/// <see cref="CrashRedaction"/> recognizes taken out, and copies the end of the instance's log, which is written with
+/// them taken out already. Several instances can share the folder: each report gets a file of its own, and only files
+/// that are Winshell reports are deleted. A report shows up in the folder only once it is whole and closed. The UTC
+/// instant in the file name is when the report says it was written.
 /// </summary>
-/// <param name="folder">The folder reports go to: <c>ShellLocations.CrashRoot</c> for <c>winshell.exe</c>.</param>
+/// <param name="folder">The folder reports go to: the instance's <c>ShellLocations.CrashRoot</c>.</param>
 /// <param name="log">
 /// Where a report that could not be written, or a handler that threw, is recorded. Null when the caller only needs
 /// the null return.
@@ -328,7 +328,7 @@ internal sealed partial class CrashReports(
         }
     }
 
-    /// <summary>The last lines of the log, cleaned. Only the end of the log is read.</summary>
+    /// <summary>The last lines of the log, as they are. Only the end of the log is read.</summary>
     private List<string> LogTail()
     {
         if (logPath.Length == 0 || !File.Exists(logPath))
@@ -353,7 +353,7 @@ internal sealed partial class CrashReports(
             return [];
         }
 
-        return [.. lines.TakeLast(LogLines).Select(CrashRedaction.Redact)];
+        return [.. lines.TakeLast(LogLines)];
     }
 
     /// <summary>
