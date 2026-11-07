@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Windows.Foundation;
-using Windows.Media;
 using Windows.Media.Control;
 using Windows.Storage.Streams;
 
@@ -17,13 +16,12 @@ internal sealed class SmtcSession
     private double _position;
 
     public SmtcSession(IEventLoop loop, Log log, GlobalSystemMediaTransportControlsSession session, int id,
-        string appName, TimeProvider time)
-        : this(loop, log, id, IdOf(session), appName, time, self => new SmtcSessionLink(loop, log, self, session))
+        string appId, string appName, TimeProvider time)
+        : this(loop, log, id, appId, appName, time, self => new SmtcSessionLink(loop, log, self, session, time))
     {
     }
 
-    // The link is what talks to Windows for this session. A test gives it one that records commands.
-    // The owner supplies the clock, so a test can advance position without waiting on the system clock.
+    // A test gives it a link that records commands, and a clock it advances.
     internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName, TimeProvider time,
         Func<SmtcSession, ISmtcLink> link)
     {
@@ -33,20 +31,24 @@ internal sealed class SmtcSession
         _time = time;
         _positionTime = time.GetUtcNow();
         _art = new SessionArt(loop, reason => log.Warn("media", $"Cannot read art from {AppName}: {reason}"),
-            OnArtChanged);
+            () => Changed?.Invoke());
         _link = link(this);
     }
 
-    /// <summary>The app id Windows reports for a session. The same session gets a new object on every list.</summary>
-    internal static string IdOf(GlobalSystemMediaTransportControlsSession session)
+    /// <summary>
+    /// The app id Windows reports for a session, or null when the session has closed. The same session gets a new
+    /// object on every list.
+    /// </summary>
+    internal static string? IdOf(GlobalSystemMediaTransportControlsSession session)
     {
         try
         {
             return session.SourceAppUserModelId ?? "";
         }
+        // Windows throws COMException for a session whose app closed after the list was taken.
         catch (COMException)
         {
-            return "";
+            return null;
         }
     }
 
@@ -64,7 +66,7 @@ internal sealed class SmtcSession
         if (_released || name.Length == 0 || name == AppName)
             return;
         AppName = name;
-        Changed?.Invoke(["appName"], false);
+        Changed?.Invoke();
     }
 
     public string Title { get; private set; } = "";
@@ -80,9 +82,6 @@ internal sealed class SmtcSession
     public int TrackNumber { get; private set; }
 
     public string ArtUrl => _art.Url;
-
-    /// <summary>An art read is running.</summary>
-    internal bool ArtLoading => _art.Loading;
 
     public uint UniqueId { get; private set; }
 
@@ -108,8 +107,7 @@ internal sealed class SmtcSession
 
     public bool Shuffle { get; private set; }
 
-    /// <summary>The <c>MediaLoopState</c>.</summary>
-    public int LoopState { get; private set; }
+    public MediaLoopState LoopState { get; private set; }
 
     public double Rate { get; private set; } = 1;
 
@@ -124,10 +122,10 @@ internal sealed class SmtcSession
     public TimeSpan StartTime { get; private set; }
 
     /// <summary>
-    /// Values changed: the names of the changed properties, and whether the track changed, in which case
-    /// <c>trackChanged</c> comes before the values and <c>postTrackChanged</c> after.
+    /// Windows reported new values, some of which may be the same as before. A new track has a new
+    /// <see cref="UniqueId"/>.
     /// </summary>
-    public event Action<IReadOnlyList<string>, bool>? Changed;
+    public event Action? Changed;
 
     /// <summary>The position jumped: a seek, a new track, or a pause or play.</summary>
     public event Action? Seeked;
@@ -161,8 +159,6 @@ internal sealed class SmtcSession
         _art.Release();
     }
 
-    // Commands. Each is asynchronous; Windows' events bring the result.
-
     public void Play()
     {
         Send("play", s => s.TryPlayAsync());
@@ -193,9 +189,9 @@ internal sealed class SmtcSession
         Send("set shuffle", s => s.TryChangeShuffleActiveAsync(shuffle));
     }
 
-    public void SetLoopState(int state)
+    public void SetLoopState(MediaLoopState state)
     {
-        Send("set loopState", s => s.TryChangeAutoRepeatModeAsync((MediaPlaybackAutoRepeatMode)state));
+        Send("set loopState", s => s.TryChangeAutoRepeatModeAsync(SmtcPlayback.ModeOf(state)));
     }
 
     public void SetRate(double rate)
@@ -218,8 +214,6 @@ internal sealed class SmtcSession
         _link.Send(what, command);
     }
 
-    // Updates from Windows
-
     internal void ApplyTrack(string title, string artist, string album, string albumArtist, int trackNumber,
         IReadOnlyList<string>? genres,
         IRandomAccessStreamReference? thumbnail)
@@ -233,35 +227,23 @@ internal sealed class SmtcSession
             return;
         }
 
-        var trackChanged = title != Title || artist != Artist || album != Album;
-        var changed = new List<string>();
-        if (trackChanged)
-        {
+        var newTrack = title != Title || artist != Artist || album != Album;
+        if (newTrack)
             UniqueId++;
-            changed.Add("uniqueId");
-        }
-
-        Set(title, Title, v => Title = v, "trackTitle", changed);
-        Set(artist, Artist, v => Artist = v, "trackArtist", changed);
-        Set(album, Album, v => Album = v, "trackAlbum", changed);
-        Set(albumArtist, AlbumArtist, v => AlbumArtist = v, "trackAlbumArtist", changed);
+        Title = title;
+        Artist = artist;
+        Album = album;
+        AlbumArtist = albumArtist;
         Genres = genres?.ToArray() ?? [];
         TrackNumber = trackNumber;
-        changed.Add("metadata");
-        Changed?.Invoke(changed, trackChanged);
-        if (trackChanged)
+        Changed?.Invoke();
+        if (newTrack)
             Seeked?.Invoke();
         _art.Load(thumbnail);
     }
 
-    private void OnArtChanged()
-    {
-        Changed?.Invoke(["trackArtUrl", "metadata"], false);
-    }
-
     internal void ApplyPlayback(SmtcPlayback info)
     {
-        var changed = new List<string>();
         var state = info.Status switch
         {
             GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing => MediaPlaybackState.Playing,
@@ -279,27 +261,20 @@ internal sealed class SmtcSession
             seeked = true;
         }
 
-        Set(state, PlaybackState, v => PlaybackState = v, "playbackState", changed);
-        if (changed.Contains("playbackState"))
-            changed.Add("isPlaying");
-        Set(info.CanPlay, CanPlay, v => CanPlay = v, "canPlay", changed);
-        Set(info.CanPause, CanPause, v => CanPause = v, "canPause", changed);
-        Set(info.CanStop, CanStop, v => CanStop = v, "canStop", changed);
-        Set(info.CanGoNext, CanGoNext, v => CanGoNext = v, "canGoNext", changed);
-        Set(info.CanGoPrevious, CanGoPrevious, v => CanGoPrevious = v, "canGoPrevious", changed);
-        Set(info.CanSeek, CanSeek, v => CanSeek = v, "canSeek", changed);
-        Set(info.ShuffleSupported, ShuffleSupported, v => ShuffleSupported = v, "shuffleSupported", changed);
-        Set(info.LoopSupported, LoopSupported, v => LoopSupported = v, "loopSupported", changed);
-        Set(info.RateSupported, RateSupported, v => RateSupported = v, "minRate", changed);
-        if (changed.Contains("minRate"))
-            changed.Add("maxRate");
-        Set(ShuffleSupported && info.Shuffle, Shuffle, v => Shuffle = v, "shuffle", changed);
-        Set(LoopSupported ? info.LoopState : 0, LoopState, v => LoopState = v, "loopState", changed);
-        Set(info.Rate, Rate, v => Rate = v, "rate", changed);
-        if (changed.Count == 0)
-            return;
-        changed.Add("canTogglePlaying");
-        Changed?.Invoke(changed, false);
+        PlaybackState = state;
+        CanPlay = info.CanPlay;
+        CanPause = info.CanPause;
+        CanStop = info.CanStop;
+        CanGoNext = info.CanGoNext;
+        CanGoPrevious = info.CanGoPrevious;
+        CanSeek = info.CanSeek;
+        ShuffleSupported = info.ShuffleSupported;
+        LoopSupported = info.LoopSupported;
+        RateSupported = info.RateSupported;
+        Shuffle = info.ShuffleSupported && info.Shuffle;
+        LoopState = info.LoopSupported ? info.LoopState : MediaLoopState.None;
+        Rate = info.Rate;
+        Changed?.Invoke();
         if (seeked)
             Seeked?.Invoke();
     }
@@ -314,20 +289,16 @@ internal sealed class SmtcSession
         if (StartTime == start && Length == length && PositionSupported == supported
             && Math.Abs(_position - position) < 0.001)
             return;
-        var changed = new List<string>();
         StartTime = start;
-        Set(supported, PositionSupported, v => PositionSupported = v, "positionSupported", changed);
-        Set(length, Length, v => Length = v, "length", changed);
-        if (changed.Contains("length"))
-            changed.Add("lengthSupported");
+        PositionSupported = supported;
+        Length = length;
         // The app says when it took the position; trust that unless the time is clearly wrong.
         var time = updated.Year > 2000 && updated <= received && received - updated < TimeSpan.FromHours(1)
             ? updated
             : received;
         _position = position;
         _positionTime = time;
-        if (changed.Count > 0)
-            Changed?.Invoke(changed, false);
+        Changed?.Invoke();
         Seeked?.Invoke();
     }
 
@@ -340,13 +311,5 @@ internal sealed class SmtcSession
             if (genres![i] != Genres[i])
                 return false;
         return true;
-    }
-
-    private static void Set<T>(T value, T current, Action<T> assign, string name, List<string> changed)
-    {
-        if (EqualityComparer<T>.Default.Equals(value, current))
-            return;
-        assign(value);
-        changed.Add(name);
     }
 }
