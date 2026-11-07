@@ -8,14 +8,27 @@ internal sealed record PowerModeSnapshot(bool Ready, PowerModeLevel Mode, Effect
         false);
 }
 
+internal interface IPowerModeBackend : IDisposable
+{
+    /// <summary>Windows reported a change, or a write changed something. Raised on any thread.</summary>
+    event Action? Changed;
+
+    /// <summary>Reads the power mode. The first read starts watching Windows until the backend is disposed.</summary>
+    Task<PowerModeSnapshot> ReadAsync(CancellationToken cancellation);
+
+    /// <summary>
+    /// Sets the slider for the supply in use: DC while on battery, AC otherwise. Returns the Windows error, or 0. This
+    /// changes the power mode, not the power plan.
+    /// </summary>
+    uint Set(PowerModeLevel mode);
+}
+
 /// <summary>
 /// The Windows power mode (Settings, System, Power). The slider is the public user-configured AC or DC
 /// mode. The effective mode is what Windows is applying, including energy saver and game mode.
 /// </summary>
-internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
+internal sealed class PowerModeBackend : IPowerModeBackend
 {
-    public static readonly PowerModeBackend Instance = new();
-
     /// <summary><c>GUID_POWER_MODE_BEST_EFFICIENCY</c>.</summary>
     internal static readonly Guid BestEfficiency = new("961cc777-2547-4f9d-8174-7d86181b8a7a");
 
@@ -28,50 +41,49 @@ internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
     /// </summary>
     internal static readonly Guid DeprecatedPerformance = new("3af9b8d9-7c97-431d-ad78-34a8bfea439f");
 
-    private static int _effective = (int)EffectivePowerMode.Balanced;
+    private int _effective = (int)EffectivePowerMode.Balanced;
+    private bool _watching;
 
-    private PowerModeBackend()
-        : base(new PowerModeSnapshot(false, PowerModeLevel.Balanced, EffectivePowerMode.Balanced, false))
+    public event Action? Changed;
+
+    public Task<PowerModeSnapshot> ReadAsync(CancellationToken cancellation)
     {
+        return Task.Run(Read, cancellation);
     }
 
-    protected override string Category => "power";
-
-    protected override async Task StartAsync()
+    private PowerModeSnapshot Read()
     {
-        Listen();
-        await RefreshNowAsync().ConfigureAwait(false);
-    }
-
-    /// <summary>The callback runs once immediately with the current mode, then on each change.</summary>
-    private static void Listen()
-    {
-        PowerMode.ListenEffective(mode =>
+        if (!_watching)
         {
-            Volatile.Write(ref _effective, mode);
-            Instance.Refresh();
-        }, e => Log.Default.Warn("power", e.Message));
-    }
+            _watching = true;
+            // Windows calls back once at once with the effective mode, then on each change.
+            PowerMode.ListenEffective(mode =>
+            {
+                Volatile.Write(ref _effective, mode);
+                Changed?.Invoke();
+            }, e => Log.Default.Warn("power", e.Message));
+        }
 
-    protected override Task<PowerModeSnapshot> ReadAsync()
-    {
         var effective = EffectiveFrom(Volatile.Read(ref _effective));
-        if (PowerMode.GetUserConfigured(OnBattery(), out var guid) != 0)
-            return Task.FromResult(new PowerModeSnapshot(true, PowerModeLevel.Balanced, effective, false));
-        return Task.FromResult(new PowerModeSnapshot(true, FromGuid(guid), effective, true));
+        return PowerMode.GetUserConfigured(PowerSupply.OnBattery(), out var guid) == 0
+            ? new PowerModeSnapshot(true, FromGuid(guid), effective, true)
+            : new PowerModeSnapshot(true, PowerModeLevel.Balanced, effective, false);
     }
 
-    /// <summary>
-    /// Sets the slider for the supply in use: DC while on battery, AC otherwise. Returns the Windows
-    /// error, or 0. This changes the power mode, not the power plan.
-    /// </summary>
     public uint Set(PowerModeLevel mode)
     {
         if (!Enum.IsDefined(mode))
             return 87;
-        var result = PowerMode.SetUserConfigured(OnBattery(), ToGuid(mode));
-        Refresh();
+        var result = PowerMode.SetUserConfigured(PowerSupply.OnBattery(), ToGuid(mode));
+        Changed?.Invoke();
         return result;
+    }
+
+    public void Dispose()
+    {
+        if (_watching)
+            PowerMode.StopListeningEffective();
+        _watching = false;
     }
 
     internal static PowerModeLevel FromGuid(Guid guid)
@@ -96,11 +108,5 @@ internal sealed class PowerModeBackend : SnapshotSource<PowerModeSnapshot>
     internal static EffectivePowerMode EffectiveFrom(int mode)
     {
         return Enum.IsDefined((EffectivePowerMode)mode) ? (EffectivePowerMode)mode : EffectivePowerMode.Balanced;
-    }
-
-    private static bool OnBattery()
-    {
-        var status = default(SYSTEM_POWER_STATUS);
-        return Win32.GetSystemPowerStatus(out status) && status.ACLineStatus == 0;
     }
 }

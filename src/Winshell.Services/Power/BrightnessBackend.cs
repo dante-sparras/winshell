@@ -29,34 +29,78 @@ internal sealed record BrightnessSnapshot(bool Ready, IReadOnlyList<BrightnessIn
     public static readonly BrightnessSnapshot Initial = new(false, []);
 }
 
+internal interface IBrightnessBackend : IDisposable
+{
+    /// <summary>Windows reported a change to the displays or a panel's brightness. Raised on any thread.</summary>
+    event Action? Changed;
+
+    /// <summary>Reads the monitors. The first read starts watching Windows until the backend is disposed.</summary>
+    Task<BrightnessSnapshot> ReadAsync(CancellationToken cancellation);
+
+    /// <summary>
+    /// Sets one monitor to a brightness already in its range. Returns why Windows did not, or null. One write can take
+    /// hundreds of milliseconds.
+    /// </summary>
+    string? Set(string deviceName, int brightness);
+}
+
 /// <summary>
 /// Monitor brightness. An internal panel comes from WMI. An external monitor comes from one DDC/CI read.
 /// Reads happen when the shell starts, when the displays change, when an internal panel reports a change, and
 /// after a burst of writes ends, so external monitors are not polled. A monitor whose read fails stays at its
 /// last reading while it is connected.
 /// </summary>
-internal sealed class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
+internal sealed class BrightnessBackend : IBrightnessBackend
 {
-    public static readonly BrightnessBackend Instance = new();
-
+    private volatile IReadOnlyList<BrightnessInfo> _monitors = [];
+    private bool _watching;
     private ManagementEventWatcher? _watcher;
 
-    private BrightnessBackend()
-        : base(BrightnessSnapshot.Initial)
+    public event Action? Changed;
+
+    public Task<BrightnessSnapshot> ReadAsync(CancellationToken cancellation)
     {
-        Writer = new BrightnessWriter(Set, Refresh);
+        return Task.Run(Read, cancellation);
     }
 
-    /// <summary>Writes brightness off the UI thread, since one write can take hundreds of milliseconds.</summary>
-    public BrightnessWriter Writer { get; }
-
-    protected override string Category => "power";
-
-    protected override async Task StartAsync()
+    private BrightnessSnapshot Read()
     {
-        SystemEvents.DisplaySettingsChanged += (_, _) => Refresh();
-        WatchInternal();
-        await RefreshNowAsync().ConfigureAwait(false);
+        if (!_watching)
+        {
+            _watching = true;
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+            // Starting a WMI watcher takes a few hundred milliseconds, so it starts here, off the loop.
+            WatchInternal();
+        }
+
+        _monitors = Combine(Screens.Enumerate(), ReadWmi(), ReadExternal, _monitors);
+        return new BrightnessSnapshot(true, _monitors);
+    }
+
+    /// <summary>Stops watching Windows.</summary>
+    public void Dispose()
+    {
+        if (!_watching)
+            return;
+        _watching = false;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        if (_watcher is { } watcher)
+        {
+            watcher.EventArrived -= OnPanelChanged;
+            watcher.Stop();
+            watcher.Dispose();
+            _watcher = null;
+        }
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        Changed?.Invoke();
+    }
+
+    private void OnPanelChanged(object sender, EventArrivedEventArgs e)
+    {
+        Changed?.Invoke();
     }
 
     private void WatchInternal()
@@ -64,7 +108,7 @@ internal sealed class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
         try
         {
             var watcher = new ManagementEventWatcher(@"root\WMI", "SELECT * FROM WmiMonitorBrightnessEvent");
-            watcher.EventArrived += (_, _) => Refresh();
+            watcher.EventArrived += OnPanelChanged;
             watcher.Start();
             _watcher = watcher;
         }
@@ -73,12 +117,6 @@ internal sealed class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
         {
             WmiFailed("watch built-in panel brightness", ex);
         }
-    }
-
-    protected override Task<BrightnessSnapshot> ReadAsync()
-    {
-        var monitors = Combine(Screens.Enumerate(), ReadWmi(), ReadExternal, Current.Monitors);
-        return Task.FromResult(new BrightnessSnapshot(true, monitors));
     }
 
     /// <summary>
@@ -143,13 +181,9 @@ internal sealed class BrightnessBackend : SnapshotSource<BrightnessSnapshot>
             : null;
     }
 
-    /// <summary>
-    /// Sets one monitor to a brightness already in its range. Returns why Windows did not, or null. Callers must not
-    /// use this from tests.
-    /// </summary>
-    private string? Set(string deviceName, int brightness)
+    public string? Set(string deviceName, int brightness)
     {
-        var monitor = Current.Monitors.FirstOrDefault(m => m.DeviceName == deviceName);
+        var monitor = _monitors.FirstOrDefault(m => m.DeviceName == deviceName);
         if (monitor is null)
             return "the monitor is gone";
         try
