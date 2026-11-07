@@ -300,7 +300,7 @@ public sealed class SystemTrayTests
     }
 
     [Fact]
-    public void An_app_bar_message_finds_Explorers_taskbar_first_and_an_open_tray_then_returns_to_the_front()
+    public void An_app_bar_message_lowers_each_open_tray_behind_Explorers_taskbar_and_raises_it_again()
     {
         using var tray = Tray();
         _backend.Calls.Clear();
