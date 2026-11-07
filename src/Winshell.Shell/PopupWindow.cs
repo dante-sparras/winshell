@@ -7,6 +7,7 @@ public sealed class PopupWindow : ShellWindow
 {
     private Rect _rect = new(0, 0, 100, 100);
     private bool _grabFocus;
+    private PopupPlacer? _placer;
 
     /// <summary>
     /// A hidden popup of the running shell, 100 by 100 at the virtual desktop's origin until
@@ -49,9 +50,14 @@ public sealed class PopupWindow : ShellWindow
     /// <summary>A click outside the popup and its open flyouts, or Esc, dismissed it. It is hidden.</summary>
     public event Action? Dismissed;
 
+    internal override IWindowPlacer CreatePlacer(HostWindow host, ShellPlatform platform)
+    {
+        return _placer = new PopupPlacer(host, platform);
+    }
+
     private protected override void ApplyPlacement()
     {
-        ((PopupPlacer)Host!.Placer).Set(new PopupPlacement(Screen, _rect));
+        _placer!.Set(new PopupPlacement(Screen, _rect));
     }
 
     private protected override void ApplyFocus()

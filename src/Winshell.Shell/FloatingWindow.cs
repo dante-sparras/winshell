@@ -13,6 +13,7 @@ public sealed class FloatingWindow : ShellWindow
     private bool _fullscreen;
     private bool _stateRequested;
     private FloatingWindow? _owner;
+    private FloatingFrame? _frame;
 
     /// <summary>
     /// A hidden window of the running shell, 640 by 480 unless <c>Width</c> and <c>Height</c> say otherwise.
@@ -159,9 +160,14 @@ public sealed class FloatingWindow : ShellWindow
         return false;
     }
 
+    internal override IWindowPlacer CreatePlacer(HostWindow host, ShellPlatform platform)
+    {
+        return _frame = new FloatingFrame(host, platform);
+    }
+
     private protected override void ApplyPlacement()
     {
-        ((FloatingFrame)Host!.Placer).Apply(new FloatingPlacement(
+        _frame!.Apply(new FloatingPlacement(
             Screen,
             _title,
             double.IsNaN(Width) ? 640 : Width,
