@@ -125,7 +125,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     private async Task MonitorAsync(CancellationToken cancellation)
     {
-        var warning = new MonitorWarning(() => _log, "notifications");
+        var warning = new MonitorWarning(_log, "notifications");
         // Not disposed: a toast event can still arrive after the watch stops.
         var changed = new SemaphoreSlim(0);
         Action? unwatch = null;

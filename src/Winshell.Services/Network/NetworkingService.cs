@@ -29,7 +29,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         _access = new DeviceAction(loop.Post);
         _wifiSwitch = new DeviceAction(loop.Post);
         _reader = new StateReader<NetworkSnapshot>(_backend.ReadAsync, Apply, loop,
-            new MonitorWarning(() => log, "network"));
+            new MonitorWarning(log, "network"));
         _backend.Changed += _reader.Request;
         _reader.Request();
     }

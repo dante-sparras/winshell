@@ -7,7 +7,7 @@ public sealed class MonitorWarningTests
     {
         var messages = new List<string>();
         var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
-        var warning = new MonitorWarning(() => log, "bluetooth");
+        var warning = new MonitorWarning(log, "bluetooth");
 
         warning.Failed(new InvalidOperationException("radio broke"));
         warning.Failed(new InvalidOperationException("radio broke"));

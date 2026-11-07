@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Winshell.Power;
 
@@ -118,7 +119,7 @@ public sealed class PowerServiceTests
             written.TrySetResult(value);
             return null;
         });
-        using var brightness = new BrightnessService(loop, Log.Default, source);
+        using var brightness = new BrightnessService(loop, Log.Default, new ObservableCollection<ScreenInfo>(), source);
         loop.Process();
         var monitor = brightness.Monitors[0];
 

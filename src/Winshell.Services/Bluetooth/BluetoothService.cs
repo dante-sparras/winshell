@@ -37,7 +37,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     {
         _loop = loop;
         _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
-        _warning = new MonitorWarning(() => log, "bluetooth");
+        _warning = new MonitorWarning(log, "bluetooth");
         _radioChange = new DeviceAction(Post);
         _visibilityChange = new DeviceAction(Post);
         Backend = backend ?? new BluetoothBackend(loop.Time);
