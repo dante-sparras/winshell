@@ -22,6 +22,9 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public nint Foreground { get; set; }
 
+    /// <summary>The monitors the foreground window covers.</summary>
+    public HashSet<string> Fullscreen { get; } = [];
+
     /// <summary>Runs inside each read, with the window being read, as a message pumped during the read would.</summary>
     public Action<nint>? Reading { get; set; }
 
@@ -66,6 +69,12 @@ internal sealed class FakeWindowBackend : IWindowBackend
         Raise(Win32.EVENT_SYSTEM_FOREGROUND, hwnd);
     }
 
+    /// <summary>Moves or resizes a window.</summary>
+    public void Move(nint hwnd)
+    {
+        Raise(Win32.EVENT_OBJECT_LOCATIONCHANGE, hwnd);
+    }
+
     public void Flash(nint hwnd)
     {
         Flashed?.Invoke(hwnd);
@@ -78,6 +87,15 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public void Start(Log log)
     {
+    }
+
+    public void WatchForeground(Log log)
+    {
+    }
+
+    public IReadOnlySet<string> FullscreenScreens()
+    {
+        return Fullscreen.ToHashSet();
     }
 
     public IReadOnlyList<nint> TopLevel()

@@ -1,5 +1,6 @@
 using Windows.Foundation;
 using Winshell.Native;
+using Winshell.Windows;
 
 namespace Winshell;
 
@@ -383,15 +384,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
     {
         if (Win32.IsIconic(Handle))
             return _fullscreen;
-        var style = (uint)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE);
-        if ((style & (Win32.WS_CAPTION | Win32.WS_THICKFRAME)) != 0)
-            return false;
         if (!Win32.GetWindowRect(Handle, out var rect))
             return _fullscreen;
         var (_, bounds) = Screens.Of(Handle);
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return _fullscreen;
-        return rect.Left <= bounds.Left + 1 && rect.Top <= bounds.Top + 1 && rect.Right >= bounds.Right - 1 &&
-               rect.Bottom >= bounds.Bottom - 1;
+        return WindowRules.CoversMonitor((long)Win32.GetWindowLongPtr(Handle, Win32.GWL_STYLE), rect, bounds);
     }
 }

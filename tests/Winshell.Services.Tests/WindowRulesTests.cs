@@ -27,6 +27,19 @@ public sealed class WindowRulesTests
         Assert.Equal(@"C:\Program Files\App\app.exe", WindowRules.IconPath("", @"C:\Program Files\App\app.exe"));
     }
 
+    [Theory]
+    [InlineData(Win32.WS_POPUP, 0, 0, 1920, 1080, true)]
+    [InlineData(Win32.WS_POPUP | Win32.WS_THICKFRAME, -8, -8, 1928, 1088, true)]
+    [InlineData(Win32.WS_CAPTION | Win32.WS_THICKFRAME, -8, -8, 1928, 1088, false)]
+    [InlineData(Win32.WS_POPUP, 0, 0, 1920, 1079, false)]
+    [InlineData(Win32.WS_POPUP, 1, 0, 1920, 1080, false)]
+    public void A_window_is_fullscreen_when_it_has_no_title_bar_and_covers_the_whole_monitor(
+        uint style, int left, int top, int right, int bottom, bool fullscreen)
+    {
+        Assert.Equal(fullscreen,
+            WindowRules.CoversMonitor(style, new RECT(left, top, right, bottom), new RECT(0, 0, 1920, 1080)));
+    }
+
     [Fact]
     public void Foreground_and_top_level_events_mark_a_window_and_a_child_event_does_not()
     {
