@@ -2,6 +2,8 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Winshell.Apps;
 using Winshell.Native;
 
@@ -40,7 +42,10 @@ public sealed class AppIndexTests
             WriteLink(hidden, cmd, "", "", "secret");
             File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
 
-            var apps = AppIndex.Shortcuts([common, user]);
+            using var catalog = Catalog(common, user);
+            catalog.Start();
+            Wait.Until(() => Listed(catalog, "Accessories/Edit"), "the first scan");
+            var apps = catalog.Snapshot.Entries;
 
             var edit = Assert.Single(apps, app => app.Id == "Accessories/Edit");
             Assert.Equal("/user", edit.Arguments);
@@ -295,7 +300,7 @@ public sealed class AppIndexTests
     [Theory]
     [InlineData(true, "apps: Could not read the installed apps: no packages")]
     [InlineData(false, "apps: Could not read how often apps are used: no usage")]
-    public void A_read_that_fails_is_logged_and_keeps_what_the_last_good_one_found(bool packagesFail, string warning)
+    public void A_read_that_keeps_failing_keeps_the_last_good_one_and_is_warned_once(bool packagesFail, string warning)
     {
         var root = Temp();
         var messages = new ConcurrentQueue<string>();
@@ -317,14 +322,16 @@ public sealed class AppIndexTests
             });
             catalog.Start();
             Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == calc.Id), "the first scan");
-            // The next scan, the one whose read fails, is the one that finds a new shortcut.
-            WriteLink(Path.Combine(root, "Probe.lnk"), Cmd(), "", "", "probe");
-            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Probe"), "the next scan");
+            // Every scan after the first fails that read; the shortcut each finds shows it ran.
+            WriteLink(Path.Combine(root, "First.lnk"), Cmd(), "", "", "first");
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "First"), "the next scan");
+            WriteLink(Path.Combine(root, "Second.lnk"), Cmd(), "", "", "second");
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Second"), "the scan after");
 
             var snapshot = catalog.Snapshot;
             Assert.Contains(snapshot.Entries, app => app.Id == calc.Id);
             Assert.Equal(new AppUsage(3, 0), snapshot.Usage.GetValueOrDefault(calc.Id));
-            Assert.Contains(warning, messages);
+            Assert.Single(messages, message => message == warning);
         }
         finally
         {
@@ -332,10 +339,67 @@ public sealed class AppIndexTests
         }
     }
 
-    /// <summary>A catalog of one folder, with no packaged apps and no usage.</summary>
-    private static AppCatalog Catalog(string folder)
+    [Fact]
+    public void An_unreadable_folder_keeps_its_last_shortcuts_and_a_gone_one_has_none()
     {
-        return new AppCatalog(new Log(), [folder], () => [],
+        var root = Temp();
+        var messages = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
+        var locked = Path.Combine(root, "locked");
+        var open = Path.Combine(root, "open");
+        WriteLink(Path.Combine(locked, "Kept.lnk"), Cmd(), "", "", "kept");
+        Directory.CreateDirectory(open);
+        try
+        {
+            using var catalog = new AppCatalog(log, [locked, open], () => [],
+                () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
+            catalog.Start();
+            Wait.Until(() => Listed(catalog, "Kept"), "the first scan");
+
+            var folder = new DirectoryInfo(locked);
+            var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory,
+                AccessControlType.Deny);
+            var acl = folder.GetAccessControl();
+            acl.AddAccessRule(deny);
+            folder.SetAccessControl(acl);
+            try
+            {
+                // Each shortcut added to the other folder is one more scan that can't read the locked one.
+                WriteLink(Path.Combine(open, "First.lnk"), Cmd(), "", "", "first");
+                Wait.Until(() => Listed(catalog, "First"), "a scan of the locked folder");
+                WriteLink(Path.Combine(open, "Second.lnk"), Cmd(), "", "", "second");
+                Wait.Until(() => Listed(catalog, "Second"), "another scan of the locked folder");
+
+                Assert.True(Listed(catalog, "Kept"));
+                Assert.Single(messages, message => message.StartsWith("apps: Could not read the shortcuts",
+                    StringComparison.Ordinal));
+            }
+            finally
+            {
+                acl.RemoveAccessRule(deny);
+                folder.SetAccessControl(acl);
+            }
+
+            Directory.Delete(locked, true);
+            WriteLink(Path.Combine(open, "Third.lnk"), Cmd(), "", "", "third");
+            Wait.Until(() => Listed(catalog, "Third"), "a scan without the gone folder");
+            Assert.False(Listed(catalog, "Kept"));
+        }
+        finally
+        {
+            Delete(root);
+        }
+    }
+
+    private static bool Listed(AppCatalog catalog, string id)
+    {
+        return catalog.Snapshot.Entries.Any(app => app.Id == id);
+    }
+
+    /// <summary>A catalog of some folders, the common one first, with no packaged apps and no usage.</summary>
+    private static AppCatalog Catalog(params string[] folders)
+    {
+        return new AppCatalog(new Log(), folders, () => [],
             () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
     }
 

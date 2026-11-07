@@ -3,7 +3,10 @@ namespace Winshell;
 /// <summary>
 /// Warns about a failed poll once. The same failure is quiet until a poll succeeds or a different failure comes.
 /// </summary>
-internal sealed class MonitorWarning(Log log, string category)
+/// <param name="log">Where the warning goes.</param>
+/// <param name="category">The log category.</param>
+/// <param name="what">What failed, put before the failure's message; empty for the message alone.</param>
+internal sealed class MonitorWarning(Log log, string category, string what = "")
 {
     private string? _last;
 
@@ -12,7 +15,7 @@ internal sealed class MonitorWarning(Log log, string category)
         if (e.Message == _last)
             return;
         _last = e.Message;
-        log.Warn(category, e.Message);
+        log.Warn(category, what.Length == 0 ? e.Message : $"{what}: {e.Message}");
     }
 
     public void Succeeded()
