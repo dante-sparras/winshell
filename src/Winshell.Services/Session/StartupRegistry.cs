@@ -27,12 +27,15 @@ internal interface IStartupRegistry
 }
 
 /// <summary>A value under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, for the current user only.</summary>
+/// <param name="command">The command this entry starts.</param>
+/// <param name="configRoot">The config folder a sign-in command's <c>-c</c>, or its lack of <c>-p</c> and <c>-c</c>, is read against.</param>
+/// <param name="runKey">The <c>Run</c> key, or a key of a test's own.</param>
+/// <param name="approvedKey">Where Startup apps keeps its on and off for <paramref name="runKey"/>.</param>
 internal sealed class WindowsStartupRegistry(
     string command,
+    string configRoot,
     string runKey = SignInEntry.RunKey,
-    string approvedKey = SignInEntry.ApprovedKey,
-    Func<string?>? bareFolderOf = null,
-    Func<string>? configRootOf = null) : IStartupRegistry
+    string approvedKey = SignInEntry.ApprovedKey) : IStartupRegistry
 {
     public string Command => command;
 
@@ -43,22 +46,7 @@ internal sealed class WindowsStartupRegistry(
 
     public bool PointsElsewhere()
     {
-        return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value &&
-                         !SameSignInCommand(value, command, BareFolder(), ConfigRoot()));
-    }
-
-    /// <summary>
-    /// The folder a bare <c>winshell run</c> starts, read when the entry is read. A shell stays open across adding a
-    /// configuration, and that changes which project the installer's command starts.
-    /// </summary>
-    private string? BareFolder()
-    {
-        return bareFolderOf?.Invoke();
-    }
-
-    private string? ConfigRoot()
-    {
-        return configRootOf?.Invoke();
+        return Try(() => SignInEntry.RegisteredCommand(runKey) is { } value && !Starts(value));
     }
 
     public bool TurnedOffInWindows()
@@ -100,17 +88,21 @@ internal sealed class WindowsStartupRegistry(
     }
 
     /// <summary>
-    /// Whether two sign-in commands start the same install. The windowed name counts as the console name. When
-    /// <paramref name="expected"/> names a configuration, the installer's command (no <c>-p</c> and no <c>-c</c>) matches
-    /// it only when that configuration is <paramref name="bareFolder"/>, and a <c>-c</c> name is a folder of
-    /// <paramref name="configRoot"/>.
+    /// Whether <paramref name="actual"/> starts what this entry's command starts. The windowed name counts as the
+    /// console name. When the command names a configuration, <paramref name="actual"/> starts it when it runs the
+    /// same install and <c>winshell run</c> would choose the same project for it, read now: adding a configuration
+    /// while a shell is open changes which project the installer's command, with no <c>-p</c> and no <c>-c</c>, starts.
     /// </summary>
-    internal static bool SameSignInCommand(string actual, string expected, string? bareFolder = null,
-        string? configRoot = null)
+    private bool Starts(string actual)
     {
-        if (!SignInEntry.Read(expected).NamesConfiguration)
-            return Words(actual).SequenceEqual(Words(expected), StringComparer.OrdinalIgnoreCase);
-        return SignInEntry.IsOurs(actual, expected, bareFolder, configRoot);
+        var wanted = SignInEntry.Read(command);
+        if (!wanted.NamesConfiguration)
+            return Words(actual).SequenceEqual(Words(command), StringComparer.OrdinalIgnoreCase);
+        var seen = SignInEntry.Read(actual);
+        return wanted.Program is { } here && seen.Program is { } started &&
+               SignInEntry.SameInstall(started, here, SignInEntry.Resolve) &&
+               SignInEntry.ProjectOf(wanted, configRoot) is { } project &&
+               SignInEntry.Starts(seen, project, configRoot);
     }
 
     private static IEnumerable<string> Words(string command)

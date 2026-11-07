@@ -50,13 +50,10 @@ public sealed class StartupService : ObservableObject
             return WindowsStartupTasks.Open() is { } task ? new StartupTaskRegistry(task) : null;
         if (Environment.ProcessPath is not { } exe)
             return null;
-        if (ConfigurationProject.FolderOf(exe) is null)
-            return new WindowsStartupRegistry(SignInEntry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)));
-        if (SignInCommand(exe, WinshellHost.Supervising()) is not { } command)
-            return null;
-        return new WindowsStartupRegistry(command,
-            bareFolderOf: () => SignInEntry.BareFolder(ShellLocations.Current.ConfigRoot),
-            configRootOf: () => ShellLocations.Current.ConfigRoot);
+        var command = ConfigurationProject.FolderOf(exe) is null
+            ? SignInEntry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1))
+            : SignInCommand(exe, WinshellHost.Supervising());
+        return command is null ? null : new WindowsStartupRegistry(command, ShellLocations.Current.ConfigRoot);
     }
 
     /// <summary>

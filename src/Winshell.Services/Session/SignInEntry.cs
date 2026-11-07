@@ -231,68 +231,28 @@ internal static class SignInEntry
     }
 
     /// <summary>
-    /// Whether <paramref name="launch"/> starts <paramref name="projectFolder"/>. A command that names no configuration
-    /// starts the folder <paramref name="bareFolder"/>, which is what <c>winshell run</c> with no <c>-p</c> or <c>-c</c>
-    /// would start. <paramref name="configRoot"/> is the folder a <c>-c</c> name is inside.
+    /// The folder of the project <paramref name="launch"/> starts: the one <c>winshell run</c> would choose with the same
+    /// <c>-p</c> or <c>-c</c>, or with neither, in <paramref name="configRoot"/>. Null when it would start none.
     /// </summary>
-    internal static bool RunsThis(SignInLaunch launch, string projectFolder, string? bareFolder, string? configRoot)
+    internal static string? ProjectOf(SignInLaunch launch, string configRoot)
     {
-        if (launch.Path is { } path)
+        // The CLI refuses a -c that is not a folder name, so such an entry starts nothing.
+        if (launch.Name is { } name && !CommandWords.IsConfigName(name))
+            return null;
+        try
         {
-            if (SamePath(path, projectFolder))
-                return true;
-            var full = Full(path);
-            return full is not null
-                   && full.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                   && SamePath(Path.GetDirectoryName(full), projectFolder);
+            return ConfigurationProject.Find(launch.Path, launch.Name, configRoot, out _)?.Folder;
         }
-
-        if (launch.Name is { } name)
-            return CommandWords.IsConfigName(name) &&
-                   SamePath(Path.Combine(configRoot ?? ShellLocations.Current.ConfigRoot, name), projectFolder);
-        return bareFolder is not null && SamePath(bareFolder, projectFolder);
-    }
-
-    /// <summary>
-    /// Whether <paramref name="actual"/> starts the same install and configuration as <paramref name="expected"/>.
-    /// <paramref name="expected"/> names a configuration. <paramref name="bareFolder"/> is what a command with no
-    /// <c>-p</c> or <c>-c</c> starts, and <paramref name="configRoot"/> is where a <c>-c</c> name lives.
-    /// </summary>
-    internal static bool IsOurs(string actual, string expected, string? bareFolder, string? configRoot)
-    {
-        var wanted = Read(expected);
-        var project = ProjectOf(wanted, configRoot);
-        var seen = Read(actual);
-        if (wanted.Program is null || project is null || seen.Program is null)
-            return false;
-        return SameInstall(seen.Program, wanted.Program, Resolve) &&
-               RunsThis(seen, project, bareFolder, configRoot);
-    }
-
-    /// <summary>
-    /// The project <c>winshell run</c> starts when it is given no <c>-p</c> and no <c>-c</c>, or null when none would
-    /// start or the config folder cannot be read. <paramref name="configRoot"/> defaults to the current config root.
-    /// </summary>
-    internal static string? BareFolder(string? configRoot = null)
-    {
-        return ConfigurationProject.Find(null, null, configRoot ?? ShellLocations.Current.ConfigRoot, out _)?.Folder;
-    }
-
-    private static string? ProjectOf(SignInLaunch launch, string? configRoot)
-    {
-        if (launch.Path is { } path)
+        catch (Exception e) when (e is ArgumentException or NotSupportedException)
         {
-            var full = Full(path);
-            if (full is null)
-                return null;
-            return full.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
-                ? Path.GetDirectoryName(full)
-                : full;
+            return null;
         }
+    }
 
-        if (launch.Name is { } name && CommandWords.IsConfigName(name))
-            return Full(Path.Combine(configRoot ?? ShellLocations.Current.ConfigRoot, name));
-        return null;
+    /// <summary>Whether <paramref name="launch"/> starts the project in <paramref name="projectFolder"/>.</summary>
+    internal static bool Starts(SignInLaunch launch, string projectFolder, string configRoot)
+    {
+        return SamePath(ProjectOf(launch, configRoot), projectFolder);
     }
 
     private static bool SamePath(string? left, string? right)
