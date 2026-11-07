@@ -3,16 +3,23 @@ $script:Root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $script:TrxNamespace = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'
 
 # What a tier tests: the solution, or one test project, and a filter. Docs builds the guide samples and checks the
-# generated reference; Package packs the template and runs a shell from it.
+# generated reference; Package packs the template and runs a shell from it. Each test project the run builds writes one
+# results file, so ProjectCount is how many to expect.
 function Get-TestRun {
     param([string] $Tier = 'All')
-    switch ($Tier) {
+    $run = switch ($Tier) {
         'Fast' { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package&Category!=Slow' } }
         'Slow' { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package&Category=Slow' } }
         'Docs' { @{ Project = 'tests\Winshell.Shell.Tests'; Filter = 'FullyQualifiedName~Winshell.ShellTests.DocsTests' } }
         'Package' { @{ Project = 'tests\Winshell.Package.Tests'; Filter = 'Category=Package' } }
         default { @{ Project = 'winshell.slnx'; Filter = 'Category!=Package' } }
     }
+    $run.ProjectCount = 1
+    if ($run.Project -like '*.slnx') {
+        $solution = [xml] (Get-Content -LiteralPath (Join-Path $script:Root $run.Project) -Raw)
+        $run.ProjectCount = @($solution.SelectNodes('//Project') | Where-Object { $_.Path -like '*.Tests.csproj' }).Count
+    }
+    $run
 }
 
 function Read-TestResult {

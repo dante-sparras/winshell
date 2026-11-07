@@ -5,6 +5,8 @@ param(
     [string] $Repository = $env:GH_REPO
 )
 
+. (Join-Path $PSScriptRoot 'lib/Release.ps1')
+
 function Publish-WinshellRelease {
     param(
         [Parameter(Mandatory)][ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')][string] $Tag,
@@ -13,12 +15,7 @@ function Publish-WinshellRelease {
     )
     $ErrorActionPreference = 'Stop'
     Set-StrictMode -Version Latest
-    $version = $Tag.Substring(1)
-    $names = @(
-        "winshell-$version-win-x64.zip", "winshell-$version-win-arm64.zip",
-        'SHA256SUMS.txt', 'winget-manifests.zip', 'install.ps1', 'uninstall.ps1'
-    )
-    $files = foreach ($name in $names) {
+    $files = foreach ($name in Get-ReleaseAssetName $Tag.Substring(1)) {
         $path = Join-Path $PackageDirectory $name
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing release asset: $name" }
         [pscustomobject]@{ Name = $name; Path = $path; Digest = 'sha256:' + (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }

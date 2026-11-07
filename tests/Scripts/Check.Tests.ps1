@@ -37,6 +37,21 @@ Describe 'Choosing tests' {
         (Get-TestRun -Tier Fast).Filter | Should -Be 'Category!=Package&Category!=Slow'
         (Get-TestRun -Tier Slow).Filter | Should -Be 'Category!=Package&Category=Slow'
     }
+
+    It 'expects a results file from each test project in the solution, or from the one project it runs' {
+        $root = $script:Root
+        $script:Root = $TestDrive
+        try {
+            Set-Content -LiteralPath (Join-Path $TestDrive 'winshell.slnx') -Value @'
+<Solution>
+  <Folder Name="/src/"><Project Path="src/A/A.csproj" /></Folder>
+  <Folder Name="/tests/"><Project Path="tests/A.Tests/A.Tests.csproj" /><Project Path="tests/B.Tests/B.Tests.csproj" /></Folder>
+</Solution>
+'@
+            (Get-TestRun -Tier Fast).ProjectCount | Should -Be 2
+            (Get-TestRun -Tier Docs).ProjectCount | Should -Be 1
+        } finally { $script:Root = $root }
+    }
 }
 
 Describe 'Reading test results' {
@@ -126,7 +141,7 @@ Describe 'Running a tier' {
 Describe 'Check command' {
     BeforeAll {
         $script:Check = (Resolve-Path (Join-Path $PSScriptRoot '../../scripts/check.ps1')).Path
-        $script:ProjectCount = @(Get-ChildItem (Join-Path $PSScriptRoot '../*/*.Tests.csproj')).Count
+        $script:ProjectCount = (Get-TestRun -Tier Fast).ProjectCount
 
         # pwsh prepends the user module folder to an inherited PSModulePath at startup, where a developer's real Pester
         # lives. Setting the path inside the child, after startup, leaves only the stub visible.

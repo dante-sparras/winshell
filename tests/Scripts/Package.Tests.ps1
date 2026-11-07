@@ -1,9 +1,11 @@
 BeforeAll {
-    # package.ps1 builds a release when it runs, so take New-Zip out of its syntax tree and define only that.
+    # package.ps1 builds a release when it runs, so take the functions under test out of its syntax tree and define only those.
     $script = Join-Path $PSScriptRoot '../../scripts/package.ps1'
     $tree = [Management.Automation.Language.Parser]::ParseFile($script, [ref]$null, [ref]$null)
-    $function = $tree.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'New-Zip' }, $true)
-    . ([scriptblock]::Create($function.Extent.Text))
+    foreach ($name in 'New-Zip', 'Get-PeLayout') {
+        $function = $tree.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
+        . ([scriptblock]::Create($function.Extent.Text))
+    }
     $releaseDay = [datetime]::new(2026, 11, 2)
     $ownBinaries = $tree.Find({ param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.VariablePath.UserPath -eq 'ownBinaries' }, $true).Right.Expression.SafeGetValue()
 }
@@ -25,6 +27,19 @@ Describe 'Packing a zip' {
             $archive.Entries.FullName -join ',' | Should -BeExactly "Z,i,sub/a,y,$([char]0x012F)"
             $archive.Entries.LastWriteTime.Date | Select-Object -Unique | Should -Be ([DateTimeOffset]::new($releaseDay, [TimeSpan]::Zero).Date)
         } finally { $archive.Dispose() }
+    }
+}
+
+Describe 'Reading a PE header' {
+    It 'finds the machine and subsystem .NET reads from this PowerShell' {
+        $path = (Get-Process -Id $PID).Path
+        $bytes = [IO.File]::ReadAllBytes($path)
+        $stream = [IO.File]::OpenRead($path)
+        try { $headers = [Reflection.PortableExecutable.PEHeaders]::new($stream) } finally { $stream.Dispose() }
+        $layout = Get-PeLayout $bytes
+
+        [BitConverter]::ToUInt16($bytes, $layout.Machine) | Should -Be ([int] $headers.CoffHeader.Machine)
+        [BitConverter]::ToUInt16($bytes, $layout.Subsystem) | Should -Be ([int] $headers.PEHeader.Subsystem)
     }
 }
 

@@ -27,7 +27,8 @@ param(
     [switch] $AutoStart
 )
 
-# uninstall.ps1 has its own copy of the helpers both scripts need, since each is fetched alone.
+# uninstall.ps1 has the same copy of the helpers both scripts need, since each is fetched alone. Install.Tests.ps1 fails
+# when the copies differ.
 function Write-WinshellLine([string] $Message) { [Console]::Out.WriteLine($Message) }
 
 function Assert-WinshellTestIsolation {

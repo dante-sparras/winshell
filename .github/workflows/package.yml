@@ -209,6 +209,7 @@ jobs:
         env:
           MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
         run: |
+          . ./scripts/lib/Release.ps1
           $publisher = if ($env:MSIX_PUBLISHER) { $env:MSIX_PUBLISHER } else { 'CN=Winshell Test' }
           $msix = Get-ChildItem "$env:RUNNER_TEMP/artifacts/msix" -Filter '*-win-x64.msix' | Select-Object -First 1
           $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -CertStoreLocation Cert:\CurrentUser\My `
@@ -216,9 +217,7 @@ jobs:
           $cer = Join-Path $env:RUNNER_TEMP 'test-signing.cer'
           Export-Certificate -Cert $cert -FilePath $cer | Out-Null
           Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin" -Directory -Filter '10.*' |
-            Sort-Object { [version] $_.Name } -Descending | ForEach-Object { Join-Path $_.FullName 'x64/signtool.exe' } |
-            Where-Object { Test-Path $_ } | Select-Object -First 1
+          $signtool = Get-WindowsSdkTool signtool.exe
           $signed = Join-Path $env:RUNNER_TEMP 'winshell-test.msix'
           Copy-Item $msix.FullName $signed
           & $signtool sign /fd SHA256 /sha1 $cert.Thumbprint $signed
@@ -227,13 +226,12 @@ jobs:
           $package = Get-AppxPackage | Where-Object { $_.Publisher -eq $publisher -and $_.Name -like '*Winshell*' } | Select-Object -First 1
           if (-not $package) { throw 'The package did not install' }
           Write-Output "Installed $($package.PackageFullName)"
-          $reported = & (Join-Path $env:LOCALAPPDATA 'Microsoft/WindowsApps/winshell.exe') --version
-          Write-Output "The winshell alias reports: $reported"
-          Remove-AppxPackage -Package $package.PackageFullName
-          if ($reported -notmatch '^winshell \d+\.\d+\.\d+') { throw 'The winshell alias did not run' }
-      - name: Stage the PowerShell installer
-        shell: pwsh
-        run: Copy-Item scripts/install.ps1, scripts/uninstall.ps1 "$env:RUNNER_TEMP/artifacts/"
+          try {
+            $reported = Assert-WinshellVersion (Join-Path $env:LOCALAPPDATA 'Microsoft/WindowsApps/winshell.exe') (Get-ReleaseVersion)
+            Write-Output "The winshell alias reports: $reported"
+          } finally {
+            Remove-AppxPackage -Package $package.PackageFullName
+          }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: packages
@@ -305,6 +303,10 @@ jobs:
     runs-on: windows-11-arm
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.tag || github.sha }}
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: packages
@@ -313,16 +315,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $zip = @(Get-ChildItem -LiteralPath packages -Filter 'winshell-*-win-arm64.zip' -File)
-          if ($zip.Count -ne 1) { throw "Expected one arm64 zip, found $($zip.Count)." }
-          if ($zip[0].Name -notmatch '^winshell-(.+)-win-arm64\.zip$') { throw "Unexpected zip name $($zip[0].Name)." }
-          $version = $Matches[1]
+          . ./scripts/lib/Release.ps1
+          $version = Get-ReleaseVersion
           $dest = Join-Path $env:RUNNER_TEMP 'arm64'
-          Expand-Archive -LiteralPath $zip[0].FullName -DestinationPath $dest
-          $exe = Join-Path $dest 'winshell.exe'
-          if (-not (Test-Path -LiteralPath $exe)) { throw 'The arm64 zip has no winshell.exe.' }
-          $reported = & $exe --version
-          Write-Output $reported
-          if ($LASTEXITCODE -ne 0 -or $reported -notmatch "^winshell $([regex]::Escape($version))(\+|$)") {
-            throw "winshell.exe --version reported '$reported', not version $version."
-          }
+          Expand-Archive -LiteralPath (Join-Path packages (Get-ReleaseZipName $version 'win-arm64')) -DestinationPath $dest
+          Assert-WinshellVersion (Join-Path $dest 'winshell.exe') $version
