@@ -123,6 +123,7 @@ public sealed class ShellInstanceTests
         var log = new Log();
         var instance = ShellInstance.Open("mine", Program, log);
         log.Warn("shell", "sync --password SENTINEL-PASSWORD");
+        log.Write(LogLevel.Warn, "", "password = SENTINEL-NO-CATEGORY");
         log.Error("network",
             "fetch https://example.com/feed?apikey=SENTINEL-QUERY failed\n    continued: token=SENTINEL-NEXT-LINE");
         string text;
@@ -142,6 +143,7 @@ public sealed class ShellInstanceTests
         Assert.Contains("ERROR network: fetch https://example.com/feed?[redacted] failed", report,
             StringComparison.Ordinal);
         Assert.Contains("    continued: token=[redacted]", report, StringComparison.Ordinal);
+        Assert.Contains(" WARN: password = [redacted]", report, StringComparison.Ordinal);
         Assert.DoesNotContain("SENTINEL", report, StringComparison.Ordinal);
     }
 

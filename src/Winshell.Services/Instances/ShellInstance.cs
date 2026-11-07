@@ -211,7 +211,7 @@ internal sealed class ShellInstance
         }
         catch (IOException)
         {
-            // A full or missing disk must not fail the code that logged; the console still has the line.
+            // The disk refused the line. That must not fail the code that logged it, and the console still has it.
         }
     }
 }

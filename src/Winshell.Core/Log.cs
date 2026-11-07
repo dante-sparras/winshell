@@ -84,7 +84,7 @@ public sealed class Log
 
     /// <summary>
     /// From now on also hands each line to <paramref name="file"/>, and keeps what is at least
-    /// <paramref name="minimum"/>. A process that becomes an instance does this once, with its log file.
+    /// <paramref name="minimum"/>. A process that becomes an instance does this with its log file.
     /// </summary>
     internal void WriteTo(Action<LogLevel, string> file, LogLevel minimum)
     {

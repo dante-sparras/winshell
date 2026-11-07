@@ -116,6 +116,7 @@ public sealed class CrashReportSafetyTests : IDisposable
     [InlineData("Set-Cookie: session=abc; Path=/; Secure", "Set-Cookie: [redacted]")]
     [InlineData("password = correct horse battery", "password = [redacted]")]
     [InlineData("passphrase: correct horse battery", "passphrase: [redacted]")]
+    [InlineData("Proxy-Authorization: Basic abc def", "Proxy-Authorization: [redacted]")]
     [InlineData("password = correct horse\nnext line", "password = [redacted]\nnext line")]
     public void A_value_with_spaces_is_masked_to_the_end_of_its_line(string line, string expected)
     {
