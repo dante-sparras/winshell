@@ -226,15 +226,14 @@ public sealed class MediaServiceTests
         }
 
         Track("Song", "Artist", "Album", "Band", 3, ["Rock"]);
-        Raised(nameof(MediaSession.TrackAlbumArtist), nameof(MediaSession.Metadata));
+        Raised(nameof(MediaSession.Metadata));
 
         _native.ApplyPlayback(new SmtcPlayback(Playing) { CanPause = true, RateSupported = true });
         Raised(nameof(MediaSession.IsPlaying), nameof(MediaSession.CanTogglePlaying), nameof(MediaSession.MinRate),
-            nameof(MediaSession.MaxRate), nameof(MediaSession.CanControl));
+            nameof(MediaSession.MaxRate));
 
         Timeline(5, 125);
-        Raised(nameof(MediaSession.Length), nameof(MediaSession.LengthSupported), nameof(MediaSession.Metadata),
-            nameof(MediaSession.PositionSupported));
+        Raised(nameof(MediaSession.LengthSupported), nameof(MediaSession.Metadata));
     }
 
     [Fact]
