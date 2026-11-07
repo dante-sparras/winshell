@@ -25,7 +25,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private WinlandWorkspace? _focusedWorkspace;
     private WinlandWindow? _activeWindow;
     private string? _configPath, _logPath;
-    private bool _requestingMonitors, _requestingWorkspaces, _requestingWindows, _monitorsRequested;
+    private QueryState _monitorQuery = new(), _workspaceQuery = new(), _windowQuery = new();
+    private bool _monitorsRequested;
     private bool _disposed;
 
     // Bumped when the connection is lost, so replies to an older connection's requests are dropped.
@@ -135,18 +136,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
     /// <summary>Asks Winland for its windows again, adding new ones and updating titles and Workspaces.</summary>
     public void RefreshWindows()
     {
-        if (_requestingWindows)
-            return;
-        _requestingWindows = true;
-        Request("j/clients", reply =>
+        Ask(_windowQuery, "j/clients", false, (json, _) =>
         {
-            _requestingWindows = false;
-            if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
-            {
-                RetryIfConnected(reply, RefreshWindows);
-                return;
-            }
-
             foreach (var entry in json.EnumerateArray())
             {
                 var address = ParseAddress(Str(entry, "address"));
@@ -241,7 +232,9 @@ public sealed class WinlandService : ObservableObject, IDisposable
     private void Reset()
     {
         _generation++;
-        _requestingMonitors = _requestingWorkspaces = _requestingWindows = false;
+        _monitorQuery = new QueryState();
+        _workspaceQuery = new QueryState();
+        _windowQuery = new QueryState();
         _monitorsRequested = false;
         foreach (var window in _windowList.ToArray())
             RemoveWindow(window);
@@ -261,7 +254,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
             if (ParseJson(reply) is not { ValueKind: JsonValueKind.Object } json ||
                 Str(json, "config") is not { Length: > 0 } config)
             {
-                RetryIfConnected(reply, RefreshFiles);
+                _ = RetryIfConnected(reply, RefreshFiles);
                 return;
             }
 
@@ -298,20 +291,51 @@ public sealed class WinlandService : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// Asks a query again 1 s after it got no answer while the event stream is up. Winland has no busy reply: a
-    /// request it cannot take now times out and comes back null. While the stream is up Winland is running, so
-    /// asking again fills the lists once it answers.
+    /// Sends a query whose reply is a JSON array, one of its kind at a time. A request while one is in flight asks once
+    /// more when the reply lands, with <paramref name="canCreate"/> if any of those requests had it, so no request is
+    /// lost and the last reply is never older than the last request.
     /// </summary>
-    private void RetryIfConnected(string? reply, Action retry)
+    private void Ask(QueryState query, string command, bool canCreate, Action<JsonElement, bool> apply)
+    {
+        if (query.Reading)
+        {
+            query.Again = query.Again == true || canCreate;
+            return;
+        }
+
+        query.Reading = true;
+        Request(command, reply =>
+        {
+            query.Reading = false;
+            var again = query.Again;
+            query.Again = null;
+            var json = ParseJson(reply);
+            if (json is not { ValueKind: JsonValueKind.Array } &&
+                RetryIfConnected(reply, () => Ask(query, command, canCreate || again == true, apply)))
+                return;
+            if (again is { } create)
+                Ask(query, command, create, apply);
+            if (json is { ValueKind: JsonValueKind.Array } array)
+                apply(array, canCreate);
+        });
+    }
+
+    /// <summary>
+    /// Asks a query again 1 s after it got no answer while the event stream is up, and returns whether it will. Winland
+    /// has no busy reply: a request it cannot take now times out and comes back null. While the stream is up Winland is
+    /// running, so asking again fills the lists once it answers.
+    /// </summary>
+    private bool RetryIfConnected(string? reply, Action retry)
     {
         if (reply is not null || !_backend.IsConnected)
-            return;
+            return false;
         var generation = _generation;
         _loop.Schedule(TimeSpan.FromSeconds(1), () =>
         {
             if (!_disposed && generation == _generation)
                 retry();
         });
+        return true;
     }
 
     private static JsonElement? ParseJson(string? reply)
@@ -461,91 +485,75 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     private void RefreshMonitors(bool canCreate)
     {
-        if (_requestingMonitors)
-            return;
-        _requestingMonitors = true;
-        Request("j/monitors", reply =>
+        Ask(_monitorQuery, "j/monitors", canCreate, ApplyMonitors);
+    }
+
+    private void ApplyMonitors(JsonElement json, bool canCreate)
+    {
+        _monitorsRequested = true;
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in json.EnumerateArray())
         {
-            _requestingMonitors = false;
-            if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
+            var name = Str(entry, "name");
+            var monitor = FindMonitor(name, false);
+            if (monitor is null)
             {
-                RetryIfConnected(reply, () => RefreshMonitors(canCreate));
-                return;
+                if (!canCreate)
+                    continue;
+                monitor = FindMonitor(name, true)!;
             }
 
-            _monitorsRequested = true;
-            var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var entry in json.EnumerateArray())
-            {
-                var name = Str(entry, "name");
-                var monitor = FindMonitor(name, false);
-                if (monitor is null)
-                {
-                    if (!canCreate)
-                        continue;
-                    monitor = FindMonitor(name, true)!;
-                }
+            names.Add(name);
+            monitor.UpdateInitial(Int(entry, "id") ?? -1, name, Str(entry, "description"));
+            monitor.UpdateGeometry(Int(entry, "x") ?? 0, Int(entry, "y") ?? 0, Int(entry, "width") ?? 0,
+                Int(entry, "height") ?? 0, Num(entry, "scale"));
+            var active = Obj(entry, "activeWorkspace");
+            var activeName = Str(active, "name");
+            if (activeName.Length > 0 && monitor.ActiveWorkspace?.Name != activeName)
+                monitor.SetActiveWorkspace(FindWorkspace(activeName, name, true, Int(active, "id")));
+            monitor.SetLastIpcObject(entry);
+            if (Bool(entry, "focused"))
+                SetFocusedMonitor(monitor);
+        }
 
-                names.Add(name);
-                monitor.UpdateInitial(Int(entry, "id") ?? -1, name, Str(entry, "description"));
-                monitor.UpdateGeometry(Int(entry, "x") ?? 0, Int(entry, "y") ?? 0, Int(entry, "width") ?? 0,
-                    Int(entry, "height") ?? 0, Num(entry, "scale"));
-                var active = Obj(entry, "activeWorkspace");
-                var activeName = Str(active, "name");
-                if (activeName.Length > 0 && monitor.ActiveWorkspace?.Name != activeName)
-                    monitor.SetActiveWorkspace(FindWorkspace(activeName, name, true, Int(active, "id")));
-                monitor.SetLastIpcObject(entry);
-                if (Bool(entry, "focused"))
-                    SetFocusedMonitor(monitor);
-            }
-
-            foreach (var monitor in _monitorList.Where(m => !names.Contains(m.Name)).ToArray())
-                RemoveMonitor(monitor);
-        });
+        foreach (var monitor in _monitorList.Where(m => !names.Contains(m.Name)).ToArray())
+            RemoveMonitor(monitor);
     }
 
     private void RefreshWorkspaces(bool canCreate)
     {
-        if (_requestingWorkspaces)
-            return;
-        _requestingWorkspaces = true;
-        Request("j/workspaces", reply =>
+        Ask(_workspaceQuery, "j/workspaces", canCreate, ApplyWorkspaces);
+    }
+
+    private void ApplyWorkspaces(JsonElement json, bool canCreate)
+    {
+        var entries = json.EnumerateArray().ToList();
+        var unnumbered = UnnumberedIds(entries.Select(e => Str(e, "name")));
+        var seen = new HashSet<WinlandWorkspace>();
+        foreach (var entry in entries)
         {
-            _requestingWorkspaces = false;
-            if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
+            var name = Str(entry, "name");
+            var monitorName = Str(entry, "monitor");
+            var id = Int(entry, "id") ?? unnumbered.GetValueOrDefault(name, IdFromName(name));
+            var workspace = FindWorkspace(name, monitorName, false);
+            if (workspace is null)
             {
-                RetryIfConnected(reply, () => RefreshWorkspaces(canCreate));
-                return;
+                if (!canCreate)
+                    continue;
+                workspace = FindWorkspace(name, monitorName, true, id)!;
             }
 
-            var entries = json.EnumerateArray().ToList();
-            var unnumbered = UnnumberedIds(entries.Select(e => Str(e, "name")));
-            var seen = new HashSet<WinlandWorkspace>();
-            foreach (var entry in entries)
-            {
-                var name = Str(entry, "name");
-                var monitorName = Str(entry, "monitor");
-                var id = Int(entry, "id") ?? unnumbered.GetValueOrDefault(name, IdFromName(name));
-                var workspace = FindWorkspace(name, monitorName, false);
-                if (workspace is null)
-                {
-                    if (!canCreate)
-                        continue;
-                    workspace = FindWorkspace(name, monitorName, true, id)!;
-                }
+            workspace.SetId(id);
+            if (monitorName.Length > 0)
+                workspace.SetMonitor(FindMonitor(monitorName, true, Int(entry, "monitorID") ?? -1));
+            workspace.SetHasFullscreen(Bool(entry, "hasfullscreen"));
+            workspace.SetLastIpcObject(entry);
+            seen.Add(workspace);
+        }
 
-                workspace.SetId(id);
-                if (monitorName.Length > 0)
-                    workspace.SetMonitor(FindMonitor(monitorName, true, Int(entry, "monitorID") ?? -1));
-                workspace.SetHasFullscreen(Bool(entry, "hasfullscreen"));
-                workspace.SetLastIpcObject(entry);
-                seen.Add(workspace);
-            }
-
-            if (canCreate)
-                foreach (var workspace in _workspaceList.Where(w => !seen.Contains(w)).ToArray())
-                    RemoveWorkspace(workspace);
-        });
+        if (canCreate)
+            foreach (var workspace in _workspaceList.Where(w => !seen.Contains(w)).ToArray())
+                RemoveWorkspace(workspace);
     }
 
     // Lookups
@@ -695,5 +703,14 @@ public sealed class WinlandService : ObservableObject, IDisposable
         _disposed = true;
         Attach(null);
         _listening.Dispose();
+    }
+
+    /// <summary>One kind of query: whether one is in flight, and whether a request since wants it again.</summary>
+    private sealed class QueryState
+    {
+        public bool Reading { get; set; }
+
+        /// <summary>Null when no request came during the read; otherwise whether one of them had canCreate.</summary>
+        public bool? Again { get; set; }
     }
 }
