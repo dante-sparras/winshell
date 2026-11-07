@@ -8,14 +8,15 @@
 #
 # Publishing is a self-contained, trimmed ReadyToRun build of src/Winshell for each runtime, so no .NET install is needed
 # and sign-in does less JIT work.
-# Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, and the winget manifests in winget/<version>/
-# and, zipped, in winget-manifests.zip. It also makes winshell-<version>.msixbundle for the Microsoft Store, unsigned,
-# from packaging/msix/ and the identity -IdentityName, -Publisher and -PublisherDisplayName give it. That needs
-# makeappx.exe from the Windows SDK. The same files pack to the same bytes: entries are in ordinal path order and dated
-# the day of the commit, which is also the manifests' ReleaseDate.
-# Verifying checks the checksums, that each zip's binaries are for its architecture, that the x64 winshell.exe runs,
-# reports the version, runs every winshell doctor check, and that the manifests pass the validator
-# wingetcreate runs before it submits them.
+# Packing makes winshell-<version>-<runtime>.zip for each, SHA256SUMS.txt, the winget manifests in winget/<version>/
+# and, zipped, in winget-manifests.zip, and copies install.ps1 and uninstall.ps1 next to them. It also makes
+# winshell-<version>.msixbundle for the Microsoft Store, unsigned, from packaging/msix/ and the identity -IdentityName,
+# -Publisher and -PublisherDisplayName give it. That needs makeappx.exe from the Windows SDK. The same files pack to the
+# same bytes: entries are in ordinal path order and dated the day of the commit, which is also the manifests'
+# ReleaseDate.
+# Verifying checks that every file a release uploads is there, the checksums, that each zip's binaries are for its
+# architecture, that the x64 winshell.exe runs, reports the version, runs every winshell doctor check, and that the
+# manifests pass the validator wingetcreate runs before it submits them.
 param(
     [switch] $Publish,
     [switch] $Pack,
@@ -40,15 +41,15 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot 'lib/Release.ps1')
 if (-not $Publish -and -not $Pack -and -not $Verify) { $Publish = $true; $Pack = $true; $Verify = $true }
-if (-not $Version) {
-    $Version = (Get-Content -LiteralPath (Join-Path $root '.release-please-manifest.json') -Raw | ConvertFrom-Json).'.'
-}
+if (-not $Version) { $Version = Get-ReleaseVersion }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must be major.minor.patch, not '$Version'" }
 if ($Tag -and $Tag -cne "v$Version") { throw "The checkout is version $Version, not the release $Tag." }
 if (-not $IdentityName) { $IdentityName = 'Winshell.Test' }
 if (-not $Publisher) { $Publisher = 'CN=Winshell Test' }
-if (-not $PublisherDisplayName) { $PublisherDisplayName = 'Dante Sparrås' }
+$publisherName = 'Dante Sparrås'
+if (-not $PublisherDisplayName) { $PublisherDisplayName = $publisherName }
 $Out = [IO.Path]::GetFullPath($Out, $root)
 $publishRoot = Join-Path $Out 'publish'
 $id = 'DanteSparras.Winshell'
@@ -126,16 +127,11 @@ function Get-PackageVersion {
     "$([int] $parts[0] + 1).$($parts[1]).$($parts[2]).0"
 }
 
-# makeappx.exe from the newest Windows SDK.
-function Get-MakeAppx {
-    $kits = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
-    $found = Get-ChildItem -LiteralPath $kits -Directory -Filter '10.*' -ErrorAction SilentlyContinue |
-        Sort-Object { [version] $_.Name } -Descending |
-        ForEach-Object { Join-Path $_.FullName 'x64/makeappx.exe' } |
-        Where-Object { Test-Path -LiteralPath $_ } |
-        Select-Object -First 1
-    if (-not $found) { throw "makeappx.exe is not in $kits. Install the Windows SDK." }
-    $found
+# Where a PE file's Machine and Subsystem fields are. e_lfanew, at 0x3C, points at the "PE\0\0" signature; the 20-byte
+# COFF header follows it, and Subsystem is 68 bytes into the optional header after that.
+function Get-PeLayout([byte[]] $bytes) {
+    $coff = [BitConverter]::ToInt32($bytes, 0x3C) + 4
+    @{ Machine = $coff; Subsystem = $coff + 20 + 68 }
 }
 
 function Get-Sha256([string] $path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() }
@@ -165,7 +161,7 @@ if ($Publish) {
         # made here, before anything signs the folder: the subsystem is inside a signature's hash. WinUI loads the main
         # resource index named after the exe, so the Windows app gets a copy of winshell.pri.
         $gui = [IO.File]::ReadAllBytes((Join-Path $dir 'winshell.exe'))
-        $subsystem = [BitConverter]::ToInt32($gui, 0x3C) + 4 + 20 + 68
+        $subsystem = (Get-PeLayout $gui).Subsystem
         if ([BitConverter]::ToUInt16($gui, $subsystem) -ne 3) { throw 'winshell.exe is not a console app' }
         $gui[$subsystem] = 2
         [IO.File]::WriteAllBytes((Join-Path $dir 'winshellw.exe'), $gui)
@@ -179,7 +175,7 @@ if ($Pack) {
     foreach ($rid in $Runtime) {
         $dir = Join-Path $publishRoot $rid
         if (-not (Test-Path -LiteralPath (Join-Path $dir 'winshell.exe'))) { throw "No winshell.exe in $dir. Run with -Publish first." }
-        $zip = Join-Path $Out "winshell-$Version-$rid.zip"
+        $zip = Join-Path $Out (Get-ReleaseZipName $Version $rid)
         New-Zip $dir $zip
         $sums[(Split-Path -Leaf $zip)] = Get-Sha256 $zip
     }
@@ -193,7 +189,7 @@ if ($Pack) {
     New-Item -ItemType Directory -Force -Path $wingetDir | Out-Null
     $header = '# Created by scripts/package.ps1 in https://github.com/' + $Repository
     $installers = foreach ($rid in $Runtime) {
-        $name = "winshell-$Version-$rid.zip"
+        $name = Get-ReleaseZipName $Version $rid
         @"
   - Architecture: $($rid -replace '^win-', '')
     InstallerUrl: https://github.com/$Repository/releases/download/v$Version/$name
@@ -241,14 +237,14 @@ $header
 PackageIdentifier: $id
 PackageVersion: $Version
 PackageLocale: en-US
-Publisher: Dante Sparrås
+Publisher: $publisherName
 PublisherUrl: https://github.com/enpaze
 PublisherSupportUrl: https://github.com/$Repository/issues
 PackageName: Winshell
 PackageUrl: https://github.com/$Repository
 License: MIT
 LicenseUrl: https://github.com/$Repository/blob/main/LICENSE
-Copyright: Copyright (c) Dante Sparrås
+Copyright: Copyright (c) $publisherName
 ShortDescription: A toolkit for writing a desktop shell for Windows 11.
 Description: |-
   Winshell is a toolkit for writing your own desktop shell for Windows 11 as a .NET project. Installing it adds no
@@ -264,9 +260,10 @@ ManifestType: defaultLocale
 ManifestVersion: $schema
 "@ | Set-Content -LiteralPath (Join-Path $wingetDir "$id.locale.en-US.yaml")
     New-Zip $wingetDir (Join-Path $Out 'winget-manifests.zip')
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install.ps1'), (Join-Path $PSScriptRoot 'uninstall.ps1') -Destination $Out
 
     # The Microsoft Store package: one .msix per architecture, bundled. The Store signs it.
-    $makeappx = Get-MakeAppx
+    $makeappx = Get-WindowsSdkTool makeappx.exe
     $packages = Assert-Inside (Join-Path $Out 'msix') $Out
     if (Test-Path -LiteralPath $packages) { Remove-Item -LiteralPath $packages -Recurse -Force }
     New-Item -ItemType Directory -Force -Path $packages | Out-Null
@@ -292,6 +289,9 @@ ManifestVersion: $schema
 }
 
 if ($Verify) {
+    foreach ($asset in Get-ReleaseAssetName $Version $Runtime) {
+        if (-not (Test-Path -LiteralPath (Join-Path $Out $asset) -PathType Leaf)) { throw "No $asset in $Out" }
+    }
     # SHA256SUMS.txt lists every zip, and each matches its line.
     $listed = @{}
     foreach ($line in (Get-Content -LiteralPath (Join-Path $Out 'SHA256SUMS.txt'))) {
@@ -303,7 +303,7 @@ if ($Verify) {
     $ownBinaries = 'winshell.exe', 'winshellw.exe', 'winshell.dll', 'Winshell.Native.dll', 'Winshell.Core.dll', 'Winshell.Services.dll', 'Winshell.Shell.dll'
     $verifyRoot = Join-Path $Out 'verify'
     foreach ($rid in $Runtime) {
-        $name = "winshell-$Version-$rid.zip"
+        $name = Get-ReleaseZipName $Version $rid
         $zip = Join-Path $Out $name
         if (-not (Test-Path -LiteralPath $zip)) { throw "No $name in $Out" }
         if (-not $listed.ContainsKey($name) -or $listed[$name] -ne (Get-Sha256 $zip)) { throw "$name does not match its line in SHA256SUMS.txt" }
@@ -315,7 +315,7 @@ if ($Verify) {
             $path = Join-Path $dir $binary
             if (-not (Test-Path -LiteralPath $path)) { throw "$name has no $binary at its root" }
             $bytes = [IO.File]::ReadAllBytes($path)
-            $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+            $machine = [BitConverter]::ToUInt16($bytes, (Get-PeLayout $bytes).Machine)
             if ($machine -ne $machines[$rid]) { throw "$binary in $name is for machine 0x$($machine.ToString('X4')), not $rid" }
         }
         # Every other binary is that architecture too, or plain IL, which says 0x014C. One built for the other
@@ -323,17 +323,14 @@ if ($Verify) {
         foreach ($file in Get-ChildItem -LiteralPath $dir -Recurse -File -Include '*.dll', '*.exe') {
             $bytes = [IO.File]::ReadAllBytes($file.FullName)
             if ($bytes.Length -lt 0x40 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) { continue }
-            $machine = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4)
+            $machine = [BitConverter]::ToUInt16($bytes, (Get-PeLayout $bytes).Machine)
             if ($machine -ne $machines[$rid] -and $machine -ne 0x014C) {
                 throw "$($file.Name) in $name is for machine 0x$($machine.ToString('X4')), not $rid"
             }
         }
         # arm64 runs only on arm64 hardware; this checks it on an x64 machine, as CI is.
         if ($rid -eq 'win-x64' -and [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'X64') {
-            $reported = & (Join-Path $dir 'winshell.exe') --version
-            if ($LASTEXITCODE -ne 0 -or $reported -notmatch "^winshell $([regex]::Escape($Version))(\+|$)") {
-                throw "The x64 winshell.exe reported '$reported', not version $Version"
-            }
+            $reported = Assert-WinshellVersion (Join-Path $dir 'winshell.exe') $Version
             Write-Output "$name runs: $reported"
             Test-Doctor (Join-Path $dir 'winshell.exe') (Join-Path $verifyRoot 'doctor')
             Write-Output "$name runs every winshell doctor check"
@@ -360,7 +357,7 @@ if ($Verify) {
     # the validator the pinned wingetcreate v1.12.13.0 is built with and runs before it submits.
     $installer = Get-Content -LiteralPath (Join-Path $wingetDir "$id.installer.yaml") -Raw
     foreach ($rid in $Runtime) {
-        if ($installer -notmatch "(?m)^\s+InstallerSha256: $($listed["winshell-$Version-$rid.zip"].ToUpperInvariant())\r?$") {
+        if ($installer -notmatch "(?m)^\s+InstallerSha256: $($listed[(Get-ReleaseZipName $Version $rid)].ToUpperInvariant())\r?$") {
             throw "The installer manifest does not carry the hash of the $rid zip"
         }
     }
@@ -399,7 +396,7 @@ public static extern IntPtr WinGetValidateManifest(string manifestPath, [Marshal
 
     # The Store package: each architecture's has this identity and version, Start's winshellw.exe opens no console and
     # the winshell command is a console app.
-    $makeappx = Get-MakeAppx
+    $makeappx = Get-WindowsSdkTool makeappx.exe
     if (-not (Test-Path -LiteralPath (Join-Path $Out "winshell-$Version.msixbundle"))) { throw "No winshell-$Version.msixbundle in $Out" }
     foreach ($rid in $Runtime) {
         $dir = Assert-Inside (Join-Path $verifyRoot "msix-$rid") $Out
@@ -412,7 +409,7 @@ public static extern IntPtr WinGetValidateManifest(string manifestPath, [Marshal
         if ($actual -cne $expected) { throw "The $rid package's identity is $actual, not $expected" }
         foreach ($pair in @(@('winshell.exe', 3), @('winshellw.exe', 2))) {
             $bytes = [IO.File]::ReadAllBytes((Join-Path $dir $pair[0]))
-            $subsystem = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 4 + 20 + 68)
+            $subsystem = [BitConverter]::ToUInt16($bytes, (Get-PeLayout $bytes).Subsystem)
             if ($subsystem -ne $pair[1]) { throw "$($pair[0]) in the $rid package has subsystem $subsystem, not $($pair[1])" }
         }
         Remove-Item -LiteralPath $dir -Recurse -Force

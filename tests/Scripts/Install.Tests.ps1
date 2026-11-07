@@ -9,6 +9,7 @@ Describe 'install.ps1 and uninstall.ps1' {
         $script:Uninstall = Join-Path $PSScriptRoot '../../scripts/uninstall.ps1'
         $script:Arch = if ([string][Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'arm64' } else { 'x64' }
         $script:Served = Join-Path $TestDrive 'served'
+        . (Join-Path $PSScriptRoot '../../scripts/lib/Release.ps1')
         Add-Type -AssemblyName System.IO.Compression.FileSystem
 
         for ($attempt = 1; -not $script:Listener; $attempt++) {
@@ -40,7 +41,7 @@ Describe 'install.ps1 and uninstall.ps1' {
         function Publish-Release([string] $Version, [switch] $Latest, [switch] $WrongHash) {
             $folder = Join-Path $script:Served "releases\download\v$Version"
             New-Item -ItemType Directory -Force -Path $folder | Out-Null
-            $name = "winshell-$Version-win-$script:Arch.zip"
+            $name = Get-ReleaseZipName $Version "win-$script:Arch"
             $zip = [IO.Compression.ZipFile]::Open((Join-Path $folder $name), 'Create')
             try {
                 foreach ($exe in 'winshell.exe', 'winshellw.exe') {
@@ -117,6 +118,20 @@ Describe 'install.ps1 and uninstall.ps1' {
         $script:Listener.Close()
         $script:Server.EndInvoke($script:Serving)
         $script:Server.Dispose()
+    }
+
+    It 'define each helper they share the same way, since each is fetched alone' {
+        $functions = foreach ($file in $Install, $Uninstall) {
+            $tree = [Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path, [ref]$null, [ref]$null)
+            $all = $tree.FindAll({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] }, $false)
+            $byName = @{}
+            foreach ($function in $all) { $byName[$function.Name] = $function.Extent.Text }
+            , $byName
+        }
+        $installs, $uninstalls = $functions
+        $shared = @($uninstalls.Keys | Where-Object { $_ -ne 'Uninstall-Winshell' })
+        $shared | Should -Not -BeNullOrEmpty
+        foreach ($name in $shared) { $installs[$name] | Should -BeExactly $uninstalls[$name] -Because $name }
     }
 
     It 'installs the latest release, with sign-in from WINSHELL_AUTOSTART' {

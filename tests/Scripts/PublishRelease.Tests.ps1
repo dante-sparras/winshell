@@ -6,7 +6,7 @@ Describe 'Publishing a complete draft release' {
     BeforeEach {
         $script:Directory = Join-Path $TestDrive ([guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $script:Directory | Out-Null
-        $script:Names = @('winshell-0.6.1-win-x64.zip', 'winshell-0.6.1-win-arm64.zip', 'SHA256SUMS.txt', 'winget-manifests.zip', 'install.ps1', 'uninstall.ps1')
+        $script:Names = Get-ReleaseAssetName '0.6.1'
         foreach ($name in $script:Names) { Set-Content -LiteralPath (Join-Path $script:Directory $name) -Value $name }
         $script:Assets = [Collections.Generic.List[object]]::new()
         $script:Calls = [Collections.Generic.List[string]]::new()
@@ -40,10 +40,10 @@ Describe 'Publishing a complete draft release' {
         }
     }
 
-    It 'uploads and verifies all six assets before publishing' {
+    It 'uploads and verifies every asset before publishing' {
         Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo
         $script:Draft | Should -BeFalse
-        $script:Assets.Count | Should -Be 6
+        $script:Assets.Count | Should -Be $script:Names.Count
         $script:Calls[-2] | Should -Be 'release view v0.6.1 --repo owner/repo --json isDraft,body,assets'
         $script:Calls[-1] | Should -Be 'release edit v0.6.1 --repo owner/repo --draft=false'
     }
@@ -52,7 +52,7 @@ Describe 'Publishing a complete draft release' {
         $first = Get-Item -LiteralPath (Join-Path $script:Directory $script:Names[0])
         $script:Assets.Add(@{ name = $first.Name; digest = 'sha256:' + (Get-FileHash -LiteralPath $first.FullName).Hash.ToLowerInvariant() })
         Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo
-        @($script:Calls | Where-Object { $_ -like 'release upload *' }).Count | Should -Be 5
+        @($script:Calls | Where-Object { $_ -like 'release upload *' }).Count | Should -Be ($script:Names.Count - 1)
         $script:Draft | Should -BeFalse
     }
 
@@ -73,7 +73,7 @@ Describe 'Publishing a complete draft release' {
     }
 
     It 'leaves a draft alone if a local asset is missing' {
-        Remove-Item -LiteralPath (Join-Path $script:Directory 'uninstall.ps1')
+        Remove-Item -LiteralPath (Join-Path $script:Directory $script:Names[-1])
         { Publish-WinshellRelease -Tag v0.6.1 -PackageDirectory $script:Directory -Repository owner/repo } | Should -Throw '*Missing release asset*'
         $script:Calls.Count | Should -Be 0
     }

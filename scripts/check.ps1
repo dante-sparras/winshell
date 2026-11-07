@@ -65,8 +65,7 @@ try {
         dotnet build scripts/generate-reference.cs --nologo
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
-    $count = if ($run.Project -eq 'winshell.slnx') { @(Get-ChildItem -Path (Join-Path $root 'tests/*/*.Tests.csproj')).Count } else { 1 }
-    $exit = Invoke-TestRun -Tier $Tier -ProjectCount $count -Seed $Seed
+    $exit = Invoke-TestRun -Tier $Tier -ProjectCount $run.ProjectCount -Seed $Seed
     if ($exit -ne 0) { exit $exit }
     if ($full) {
         # -CI writes testResults.xml into the checkout; inspect the result instead.

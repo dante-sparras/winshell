@@ -32,6 +32,9 @@ obj/
 *.user
 TestResults/
 
+# Invoke-Pester -CI, as the installer job runs it
+testResults.xml
+
 # Status files agent tooling writes.
 out/
 

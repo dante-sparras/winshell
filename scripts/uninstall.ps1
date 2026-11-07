@@ -18,7 +18,8 @@
     run downloaded text. docs/development.md describes the variables its tests set.
 #>
 
-# install.ps1 has its own copy of the helpers both scripts need, since each is fetched alone.
+# install.ps1 has the same copy of the helpers both scripts need, since each is fetched alone. Install.Tests.ps1 fails
+# when the copies differ.
 function Write-WinshellLine([string] $Message) { [Console]::Out.WriteLine($Message) }
 
 function Assert-WinshellTestIsolation {
