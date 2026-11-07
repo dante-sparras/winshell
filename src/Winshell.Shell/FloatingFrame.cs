@@ -52,7 +52,6 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
             }
             else if (_fullscreen)
             {
-                // A size change while fullscreen is part of the saved place, not a new one.
                 _lastWidth = placement.Width;
                 _lastHeight = placement.Height;
                 if (placement.Minimized && !Win32.IsIconic(Handle))

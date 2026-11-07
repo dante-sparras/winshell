@@ -225,7 +225,6 @@ public sealed partial class Shell : IDisposable
                         "Something in Winshell failed. It is still running."));
                     shell = new Shell(loop, options, session);
                     _current = shell;
-                    // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
                     if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
                     {
                         shell.Notices.FollowFileErrors();

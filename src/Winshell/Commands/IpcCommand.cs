@@ -6,7 +6,6 @@ internal static class IpcCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        // CliParser has checked that args is one of these commands, with the words it needs.
         var args = options.Positional;
         var request = args[0] switch
         {

@@ -27,7 +27,6 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
 {
     internal static readonly uint Message = Win32.WM_APP + 1;
 
-    // Every panel that holds an edge now, so a crash can give them back without the windows.
     private static readonly ConcurrentDictionary<IPanelDesktop, byte> Held = new();
 
     private readonly AppBarReservation _reservation = new();
@@ -132,7 +131,6 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
                 held.Add(pair.Key);
         if (held.Count == 0)
             return;
-        // One lowering of this process's trays covers every bar, as a crash asks for them together.
         using (held[0].Explorer())
         {
             foreach (var owner in held)

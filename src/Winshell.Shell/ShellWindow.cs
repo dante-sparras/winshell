@@ -265,8 +265,6 @@ public abstract class ShellWindow : ObservableObject, IDisposable
             ApplyPlacement();
     }
 
-    // What the native window tells it.
-
     /// <summary>A click elsewhere, or Esc, dismissed a window that grabs focus.</summary>
     internal virtual void OnDismissed()
     {
