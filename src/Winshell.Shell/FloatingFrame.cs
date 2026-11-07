@@ -11,7 +11,6 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
     private bool _fullscreen;
     private bool _applying;
     private SavedFloatingPlace? _saved;
-    private int _corners;
     private double _lastWidth = -1, _lastHeight = -1;
 
     private nint Handle => host.Handle;
@@ -66,13 +65,6 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         {
             _applying = false;
         }
-    }
-
-    /// <summary>The corners the window has when it is not fullscreen, which meets the monitor's corners.</summary>
-    public void SetCorners(int preference)
-    {
-        _corners = preference;
-        ApplyCorners(_fullscreen ? 1 : preference);
     }
 
     /// <summary>The window moved or changed size, which may be the user maximizing, minimizing or restoring it.</summary>
@@ -182,9 +174,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
     {
         _saved = CapturePlace();
         _fullscreen = true;
+        host.Presentation.SetFullscreen(true);
         SetStyle(BorderlessStyle());
-        // Square corners, so the window meets the monitor's corners instead of rounding inside them.
-        ApplyCorners(1);
         if (Win32.IsIconic(Handle) || Win32.IsZoomed(Handle))
             Win32.ShowWindow(Handle, Win32.SW_RESTORE);
         FillMonitor();
@@ -194,10 +185,10 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
     {
         var saved = _saved;
         _fullscreen = false;
+        host.Presentation.SetFullscreen(false);
         _saved = null;
         _lastWidth = placement.Width;
         _lastHeight = placement.Height;
-        ApplyCorners(_corners);
         if (saved is null)
         {
             ApplyFrame(placement);
@@ -345,11 +336,6 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
     private void PlaceOuter(RECT rect)
     {
         host.Placement.Move(rect, 0, Win32.SWP_NOZORDER | Win32.SWP_NOACTIVATE | Win32.SWP_FRAMECHANGED);
-    }
-
-    private void ApplyCorners(int preference)
-    {
-        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
     }
 
     private ConnectedMonitor? CurrentMonitor()

@@ -17,6 +17,10 @@ public class PanelEdgeDecisionTests
     private static readonly PanelMonitor Scaled =
         new("scaled", new RECT(0, 0, 1920, 1080), new RECT(0, 80, 1920, 1080), 2);
 
+    // A 150% 2560×1440 monitor to the right of a 1920×1080 primary, and its work area above a 48 px taskbar.
+    private static readonly RECT Wide = new(1920, 0, 4480, 1440);
+    private static readonly RECT WideWork = new(1920, 0, 4480, 1392);
+
     /// <summary>A desktop that records the edge it was asked for and where the window went.</summary>
     private sealed class Desktop : IPanelDesktop
     {
@@ -38,11 +42,14 @@ public class PanelEdgeDecisionTests
 
         public List<Action> Posted { get; } = [];
 
+        public List<PanelMonitor> Monitors { get; } = [Second, Scaled];
+
         public PanelMonitor? Find(string id)
         {
-            if (id == Second.Id)
-                return Second;
-            return id == Scaled.Id ? Scaled : null;
+            foreach (var monitor in Monitors)
+                if (monitor.Id == id)
+                    return monitor;
+            return null;
         }
 
         public PanelMonitor? Primary()
@@ -117,6 +124,21 @@ public class PanelEdgeDecisionTests
     private static ScreenInfo Screen(string id)
     {
         return new ScreenInfo(id, id, "", "", "", default, default, 1, 0, 0, 60, false);
+    }
+
+    private static PanelPlacement Anchored(Edges anchors, double width = 0, double height = 0, double left = 0,
+        double top = 0, double right = 0, double bottom = 0)
+    {
+        return new PanelPlacement(null, anchors, left, top, right, bottom, width, height, false, 0, true, false);
+    }
+
+    /// <summary>Where a panel that reserves nothing goes on a monitor with this work area, in physical pixels.</summary>
+    private static RECT PlacedIn(RECT bounds, RECT area, double scale, PanelPlacement panel)
+    {
+        var desktop = new Desktop();
+        desktop.Monitors.Add(new PanelMonitor("anchored", bounds, area, scale));
+        new PanelEdge(9, desktop, () => { }).Place(panel with { Screen = Screen("anchored") }, true, false);
+        return desktop.Moved!.Value;
     }
 
     [Fact]
@@ -245,5 +267,54 @@ public class PanelEdgeDecisionTests
         PanelEdge.ReleaseAll();
 
         Assert.Equal(1, desktop.Removes);
+    }
+
+    [Fact]
+    public void A_top_bar_spans_its_area_at_the_monitor_scale()
+    {
+        var rect = PlacedIn(Wide, WideWork, 1.5, Anchored(Edges.Top | Edges.Left | Edges.Right, height: 32));
+        Assert.Equal(new RECT(1920, 0, 4480, 48), rect);
+    }
+
+    [Fact]
+    public void A_bottom_bar_follows_the_work_area_when_the_taskbar_moves()
+    {
+        var bar = Anchored(Edges.Bottom | Edges.Left | Edges.Right, height: 40);
+        Assert.Equal(new RECT(1920, 1332, 4480, 1392), PlacedIn(Wide, WideWork, 1.5, bar));
+
+        // The taskbar auto-hides: the work area is the whole monitor, and the bar moves down to its edge.
+        Assert.Equal(new RECT(1920, 1380, 4480, 1440), PlacedIn(Wide, Wide, 1.5, bar));
+    }
+
+    [Fact]
+    public void A_corner_panel_keeps_its_margins_in_logical_pixels()
+    {
+        var rect = PlacedIn(Wide, WideWork, 1.5, Anchored(Edges.Bottom | Edges.Right, 200, 100, right: 8, bottom: 8));
+        Assert.Equal(new RECT(4480 - 12 - 300, 1392 - 12 - 150, 4480 - 12, 1392 - 12), rect);
+    }
+
+    [Fact]
+    public void An_unanchored_panel_is_centered()
+    {
+        var rect = PlacedIn(Primary.Bounds, Primary.Bounds, 1, Anchored(Edges.None, 400, 300));
+        Assert.Equal(new RECT(760, 390, 1160, 690), rect);
+    }
+
+    [Fact]
+    public void The_same_panel_is_placed_again_at_a_new_scale()
+    {
+        // The monitor's scale goes from 100% to 150%: the bar keeps 32 logical pixels.
+        var bar = Anchored(Edges.Top | Edges.Left | Edges.Right, height: 32);
+        Assert.Equal(32, PlacedIn(Wide, Wide, 1, bar).Height);
+        Assert.Equal(48, PlacedIn(Wide, Wide, 1.5, bar).Height);
+    }
+
+    [Fact]
+    public void A_panel_is_never_empty()
+    {
+        var rect = PlacedIn(Primary.Bounds, Primary.Bounds, 1,
+            Anchored(Edges.Left | Edges.Right, height: 0, left: 1000, right: 1000));
+        Assert.True(rect.Width >= 1);
+        Assert.True(rect.Height >= 1);
     }
 }
