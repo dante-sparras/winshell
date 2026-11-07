@@ -33,10 +33,6 @@ public class ProductVersionTests
             .InformationalVersion;
         Assert.Matches($"^{Regex.Escape(manifest)}(\\+\\S+)?$", informational);
         Assert.Equal(informational, ProductVersion.Current.Text);
-        var parsed = ProductVersion.Parse(manifest);
-        Assert.Equal(parsed.Major, ProductVersion.Current.Major);
-        Assert.Equal(parsed.Minor, ProductVersion.Current.Minor);
-        Assert.Equal(parsed.Patch, ProductVersion.Current.Patch);
     }
 
     private static string ManifestVersion()

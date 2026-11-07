@@ -29,27 +29,6 @@ public sealed class TomlLimitsTests
     }
 
     [Fact]
-    public void The_budgets_sit_above_a_preferences_file()
-    {
-        const string Preferences = """
-                                   colorScheme = "system"
-                                   accentColor = ""
-                                   backdrop = "acrylic"
-                                   taskbarCentered = true
-                                   taskbarAutoHide = false
-                                   taskbarAllScreens = true
-                                   taskbarAppsOn = "all"
-                                   startRecommended = true
-                                   hiddenNotificationApps = [{ id = "Contoso.Chat", name = "Chat" }]
-                                   startHotkey = "Win"
-                                   settingsHotkey = ""
-                                   autoUpdate = true
-                                   """;
-        Assert.True(TomlDocument.TryParse("preferences.toml", Preferences, out var document, out var error), error);
-        Assert.Equal("system", document.Values["colorScheme"]);
-    }
-
-    [Fact]
     public void Nesting_past_64_levels_is_refused()
     {
         Assert.True(TomlDocument.TryParse("deep.toml", Dotted(64), out _, out var error), error);

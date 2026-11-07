@@ -79,8 +79,7 @@ public sealed class AtomicFileTests
         using var dir = new TempFolder();
         var (real, link) = Pair(dir);
         File.WriteAllText(real, "old\n");
-        if (!TryLink(link, real))
-            return;
+        SymbolicLink(link, real);
 
         foreach (var text in new[] { "one\n", "two\n" })
         {
@@ -111,18 +110,16 @@ public sealed class AtomicFileTests
         return (Path.Combine(dir.Path, "real.toml"), Path.Combine(dir.Path, "link.toml"));
     }
 
-    private static bool TryLink(string link, string real)
+    private static void SymbolicLink(string link, string real)
     {
         try
         {
             File.CreateSymbolicLink(link, real);
-            return true;
         }
         catch (IOException e) when ((e.HResult & 0xFFFF) == 1314)
         {
-            // ERROR_PRIVILEGE_NOT_HELD. This process cannot create a symbolic link, so the assertion
-            // runs only where that privilege is held. The hard-link test covers the in-place path.
-            return false;
+            // ERROR_PRIVILEGE_NOT_HELD: without Developer Mode or elevation, Windows refuses the link.
+            Assert.Skip("Creating a symbolic link needs Developer Mode or an elevated process.");
         }
     }
 

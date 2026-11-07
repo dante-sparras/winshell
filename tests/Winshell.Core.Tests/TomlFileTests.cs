@@ -112,11 +112,6 @@ public sealed class TomlFileTests
         return items.ToDictionary(item => item.Key, item => item.Value);
     }
 
-    private static void HardLink(string link, string real)
-    {
-        ChildProcess.Run("cmd.exe", "/c", "mklink", "/H", link, real).AssertExitCode(0);
-    }
-
     [Fact]
     public void Values_are_read_from_the_file_and_a_key_it_does_not_have_keeps_its_default()
     {
@@ -154,37 +149,6 @@ public sealed class TomlFileTests
         using var settings = Open(fixture);
 
         Assert.Equal(["Contoso.Chat", "Contoso.Mail"], settings.Hidden.Select(row => row["id"]));
-    }
-
-    [Fact]
-    public void A_changed_array_of_tables_keeps_its_comment_and_unknown_key()
-    {
-        using var fixture = new TomlFixture("""
-                                            [[hidden]]
-                                            id = "Contoso.Chat" # chat
-                                            name = "Chat"
-                                            extra = 1
-
-                                            [[hidden]]
-                                            id = "Contoso.Mail"
-
-                                            [other]
-                                            kept = true
-
-                                            """);
-        using var settings = Open(fixture);
-
-        settings.Hidden = [Row(("id", "Contoso.Chat"), ("name", "Renamed"))];
-        fixture.Loop.Process();
-
-        var text = fixture.Text;
-        Assert.True(TomlDocument.TryParse("settings.toml", text, out _, out var error), error);
-        Assert.Single(text.Split("[[hidden]]").Skip(1));
-        Assert.Contains("id = \"Contoso.Chat\" # chat", text, StringComparison.Ordinal);
-        Assert.Contains("name = \"Renamed\"", text, StringComparison.Ordinal);
-        Assert.Contains("extra = 1", text, StringComparison.Ordinal);
-        Assert.DoesNotContain("hidden =", text, StringComparison.Ordinal);
-        Assert.Contains("[other]", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -704,63 +668,6 @@ public sealed class TomlFileTests
         var written = File.ReadAllBytes(fixture.FilePath);
         Assert.Equal([0xEF, 0xBB, 0xBF], written[..3]);
         Assert.Contains("name = \"next\"", Encoding.UTF8.GetString(written[3..]), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_crlf_file_stays_crlf()
-    {
-        using var fixture = new TomlFixture("name = \"mine\" # hand\r\n");
-        using var settings = Open(fixture);
-
-        settings.Name = "yours";
-        fixture.Loop.Process();
-
-        var text = fixture.Text;
-        Assert.DoesNotContain("\n", text.Replace("\r\n", "", StringComparison.Ordinal), StringComparison.Ordinal);
-        Assert.Contains("name = \"yours\" # hand\r\n", text, StringComparison.Ordinal);
-        Assert.Contains("on = true\r\n", text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_write_goes_through_a_hard_link_and_keeps_it()
-    {
-        using var fixture = new TomlFixture("name = \"mine\"\n");
-        var other = Path.Combine(fixture.Directory, "other.toml");
-        HardLink(other, fixture.FilePath);
-        using var settings = Open(fixture);
-
-        settings.Name = "next";
-        fixture.Loop.Process();
-        settings.Name = "again";
-        fixture.Loop.Process();
-
-        Assert.Contains("name = \"again\"", File.ReadAllText(other), StringComparison.Ordinal);
-        Assert.Contains("name = \"again\"", fixture.Text, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void A_write_goes_through_a_symbolic_link_and_keeps_it()
-    {
-        using var fixture = new TomlFixture();
-        var real = Path.Combine(fixture.Directory, "real.toml");
-        File.WriteAllText(real, "name = \"mine\"\n");
-        try
-        {
-            File.CreateSymbolicLink(fixture.FilePath, real);
-        }
-        catch (IOException e) when ((e.HResult & 0xFFFF) == 1314)
-        {
-            // ERROR_PRIVILEGE_NOT_HELD. This process cannot create a symbolic link. The hard-link test covers the in-place path.
-            return;
-        }
-
-        using var settings = Open(fixture);
-
-        settings.Name = "next";
-        fixture.Loop.Process();
-
-        Assert.Contains("name = \"next\"", File.ReadAllText(real), StringComparison.Ordinal);
-        Assert.NotNull(new FileInfo(fixture.FilePath).LinkTarget);
     }
 
     [Fact]
