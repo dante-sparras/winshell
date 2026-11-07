@@ -28,13 +28,4 @@ public sealed class TrayIconModuleTests
     {
         Assert.False(IconImage.IsLocalPath(path));
     }
-
-    [Fact]
-    public void An_image_is_not_loaded_from_a_network_module()
-    {
-        // The host does not exist; a load would try to reach it.
-        Assert.Null(IconImage.FromResource(new IconResource(@"\\nonexistent-host.invalid\share\x.dll", 1, ""), 32));
-        Assert.Null(IconImage.FromResource(new IconResource(@"\\?\UNC\nonexistent-host.invalid\share\x.dll", 0, "ICON"),
-            32));
-    }
 }

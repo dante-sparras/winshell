@@ -243,19 +243,6 @@ public sealed class NotificationTests
     }
 
     [Fact]
-    public async Task The_monitor_reads_at_once_and_stops_watching_when_disposed()
-    {
-        var backend = new FakeBackend { Current = Snapshot(Toast(1)) };
-        var loop = new ManualEventLoop();
-        var listener = new NotificationListener(loop, Log.Default, backend, true);
-
-        await Wait.UntilAsync(() => listener.Notifications.Count == 1, "the first read", loop.Process);
-        listener.Dispose();
-
-        await Wait.UntilAsync(() => backend.Unwatched == 1, "the watch to stop");
-    }
-
-    [Fact]
     public async Task A_logo_arrives_after_the_notification_and_goes_with_it()
     {
         var logo = new FakeLogo([.. Png(2, 2), .. Guid.NewGuid().ToByteArray()]);

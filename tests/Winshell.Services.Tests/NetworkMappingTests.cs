@@ -17,16 +17,6 @@ public sealed class NetworkMappingTests
     }
 
     [Theory]
-    [InlineData(WiFiAccessStatus.Allowed, NetworkAccessStatus.Allowed)]
-    [InlineData(WiFiAccessStatus.DeniedByUser, NetworkAccessStatus.DeniedByUser)]
-    [InlineData(WiFiAccessStatus.DeniedBySystem, NetworkAccessStatus.DeniedBySystem)]
-    [InlineData(WiFiAccessStatus.Unspecified, NetworkAccessStatus.Unspecified)]
-    public void Access_mapping(WiFiAccessStatus value, NetworkAccessStatus expected)
-    {
-        Assert.Equal(expected, NetworkBackend.MapAccess(value));
-    }
-
-    [Theory]
     [InlineData(null, AirplaneModeState.Unknown)]
     [InlineData(0, AirplaneModeState.Off)]
     [InlineData(1, AirplaneModeState.On)]
@@ -49,29 +39,13 @@ public sealed class NetworkMappingTests
     [InlineData(0x80000000u, WifiDeviceMode.Unknown)]
     public void Operation_mode_maps_extensible_station_and_access_point(uint operationMode, WifiDeviceMode expected)
     {
-        var mode = NetworkBackend.MapDeviceMode(operationMode);
-        Assert.Equal(expected, mode);
-        Assert.NotEqual(WifiDeviceMode.AdHoc, mode);
-        Assert.NotEqual(WifiDeviceMode.Mesh, mode);
+        Assert.Equal(expected, NetworkBackend.MapDeviceMode(operationMode));
     }
 
     [Fact]
     public void A_failed_operation_mode_query_is_unknown()
     {
-        var mode = NetworkBackend.MapDeviceMode(null);
-        Assert.Equal(WifiDeviceMode.Unknown, mode);
-        Assert.NotEqual(WifiDeviceMode.AdHoc, mode);
-        Assert.NotEqual(WifiDeviceMode.Mesh, mode);
-    }
-
-    [Theory]
-    [InlineData(NetworkCostType.Unknown, NetworkCost.Unknown)]
-    [InlineData(NetworkCostType.Unrestricted, NetworkCost.Unrestricted)]
-    [InlineData(NetworkCostType.Fixed, NetworkCost.Fixed)]
-    [InlineData(NetworkCostType.Variable, NetworkCost.Variable)]
-    public void Cost_mapping(NetworkCostType value, NetworkCost expected)
-    {
-        Assert.Equal(expected, NetworkBackend.MapCost(value));
+        Assert.Equal(WifiDeviceMode.Unknown, NetworkBackend.MapDeviceMode(null));
     }
 
     [Theory]

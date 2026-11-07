@@ -271,10 +271,11 @@ public class IpcBoundsTests
             await using var client = await Connect(name);
             await client.WriteAsync("{\"op\":\"show\"}\n"u8.ToArray());
             using var reader = new StreamReader(client, Encoding.UTF8, false, leaveOpen: true);
-            if (await reader.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(2)) is { } line)
+            // No time limit: a full server, or one whose idle timer ran first, closes the connection, which ends the read.
+            if (await reader.ReadLineAsync(TestContext.Current.CancellationToken) is { } line)
                 answered.TrySetResult(line);
         }
-        catch (Exception e) when (e is IOException or TimeoutException)
+        catch (Exception e) when (e is IOException or TimeoutException or OperationCanceledException)
         {
             // The server was full and closed this connection. The next try comes after more time passes.
         }

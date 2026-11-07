@@ -242,7 +242,7 @@ public sealed class StartupRegistryTests : IDisposable
 
         var run = _testKey + @"\Run";
         var approved = _testKey + @"\StartupApproved";
-        var registry = new WindowsStartupRegistry(supervised, run, approved, project);
+        var registry = new WindowsStartupRegistry(supervised, run, approved, () => project);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
@@ -286,7 +286,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.Equal("The sign-in entry does not start this configuration.", otherConfiguration.Message);
 
         var playRegistry = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", play]), run, approved, project);
+            SignInEntry.CommandFor(winshell, ["run", "-p", play]), run, approved, () => project);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
@@ -313,7 +313,7 @@ public sealed class StartupRegistryTests : IDisposable
         var byName = SignInEntry.CommandFor(winshell, ["run", "-c", "work"]);
         var named = new WindowsStartupRegistry(
             SignInEntry.CommandFor(winshell, ["run", "-p", root + @"\work"]),
-            run, approved, configRoot: root);
+            run, approved, configRootOf: () => root);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, byName, RegistryValueKind.String);
@@ -372,7 +372,7 @@ public sealed class StartupRegistryTests : IDisposable
         const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
         var run = _testKey + @"\Run";
         var registry = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", project]), run, bareFolder: project);
+            SignInEntry.CommandFor(winshell, ["run", "-p", project]), run, bareFolderOf: () => project);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, @"conhost.exe --headless ""C:\bad|winshell.exe"" --no-build",
