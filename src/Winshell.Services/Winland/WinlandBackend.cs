@@ -90,6 +90,8 @@ internal sealed class WinlandBackend : IWinlandBackend
             }
 
             // Winland drops a subscriber that falls behind, so a lost stream is tried again at once, then from 3 s.
+            // The wait is real time: it paces looking for another process, for every shell in this one, so it
+            // belongs to no shell's loop.
             var wait = lost ? TimeSpan.FromMilliseconds(250) : poll;
             poll = lost ? FirstPoll : NextPoll(poll);
             await Task.Delay(wait).ConfigureAwait(false);

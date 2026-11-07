@@ -332,6 +332,22 @@ public sealed class WinlandServiceTests
     }
 
     [Fact]
+    public void A_query_an_event_asks_for_with_no_answer_is_asked_again()
+    {
+        using var service = Connected();
+        var one = service.Workspaces.Single(w => w.Name == "1");
+        _backend.Replies.Remove("j/workspaces");
+
+        Raise("fullscreen>>0");
+        Assert.False(one.HasFullscreen);
+
+        _backend.Replies["j/workspaces"] = Workspaces;
+        _loop.Advance(TimeSpan.FromSeconds(1));
+
+        Assert.True(one.HasFullscreen);
+    }
+
+    [Fact]
     public void A_query_with_no_answer_is_not_asked_again_while_Winland_is_down()
     {
         using var service = new WinlandService(_loop, Log.Default, _backend);
