@@ -9,8 +9,19 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly INotificationBackend _backend;
+    private readonly ToastChanges _changes;
+    private readonly NotificationAppIcons _icons;
     private readonly CancellationTokenSource _stop = new();
     private readonly Task? _monitorTask;
+
+    /// <summary>
+    /// The toasts of the last read. A poll sees the same toasts, each of which costs Windows milliseconds to name its
+    /// app, and an app that changes a toast replaces it, which gives it a new creation time.
+    /// </summary>
+    private Dictionary<(uint Id, DateTimeOffset Created), IncomingToast> _read = [];
+
+    private IReadOnlyList<IncomingToast> _toasts = [];
+
     private NotificationAccessStatus _accessStatus;
     private NotificationState _focusState;
     private NotificationMode _notificationMode = NotificationMode.Unknown;
@@ -29,6 +40,8 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         _loop = loop;
         _log = log;
         _backend = backend;
+        _changes = new ToastChanges(backend.ToastStamp, TimeProvider.System);
+        _icons = new NotificationAppIcons(loop, log, _stop.Token);
         if (monitor)
         {
             var cancellation = _stop.Token;
@@ -67,16 +80,6 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     /// <summary>Why access or the last operation failed.</summary>
     public string Error => _error;
-
-    internal Task? MonitorTask => _monitorTask;
-
-    internal IEventLoop Loop => _loop;
-
-    internal Log Log => _log;
-
-    internal bool IsDisposed => _disposed;
-
-    internal CancellationToken Cancellation => _stop.Token;
 
     /// <summary>Asks Windows for access and returns at once. Call from a button in a foreground window.</summary>
     public void RequestAccess()
@@ -134,7 +137,11 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 try
                 {
                     // With package identity Windows reports toast changes; the poll catches Focus, Do Not Disturb and access.
-                    unwatch ??= _backend.WatchToasts(() => changed.Release());
+                    unwatch ??= _backend.WatchToasts(() =>
+                    {
+                        _changes.Change();
+                        changed.Release();
+                    });
                     await RefreshAsync().ConfigureAwait(false);
                     warning.Succeeded();
                 }
@@ -178,7 +185,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         var revision = Interlocked.Read(ref _revision);
         try
         {
-            var snapshot = await _backend.ReadAsync(_stop.Token).ConfigureAwait(false);
+            var snapshot = await ReadAsync(_stop.Token).ConfigureAwait(false);
             Post(() =>
             {
                 // A read started before dismissal or a permission request must not undo that operation.
@@ -206,6 +213,63 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         }
     }
 
+    private async Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
+    {
+        cancellation.ThrowIfCancellationRequested();
+        // Focus and notification restriction mode do not require listener permission.
+        var focus = _backend.ReadFocus();
+        var mode = _backend.ReadMode();
+        try
+        {
+            var access = _backend.ReadAccess();
+            if (access != NotificationAccessStatus.Allowed)
+            {
+                _changes.Change();
+                return new NotificationSnapshot(access, [], focus, mode);
+            }
+
+            if (!_changes.Due(out var stamp))
+                return new NotificationSnapshot(access, _toasts, focus, mode);
+            var listed = await _backend.ListToastsAsync(cancellation).ConfigureAwait(false);
+            cancellation.ThrowIfCancellationRequested();
+            // Access may be revoked while the asynchronous read is in progress.
+            access = _backend.ReadAccess();
+            if (access != NotificationAccessStatus.Allowed)
+            {
+                _changes.Change();
+                return new NotificationSnapshot(access, [], focus, mode);
+            }
+
+            var known = _read;
+            Dictionary<(uint, DateTimeOffset), IncomingToast> read = [];
+            List<IncomingToast> toasts = [];
+            foreach (var listedToast in listed)
+                try
+                {
+                    var key = (listedToast.Id, listedToast.CreatedAt);
+                    if (!known.TryGetValue(key, out var toast))
+                        toast = listedToast.Read();
+                    read[key] = toast;
+                    toasts.Add(toast);
+                }
+                catch (Exception e) when (WindowsFailure.IsExpected(e))
+                {
+                    // An app can disappear between enumeration and reading its toast.
+                    _log.Warn("notifications", e.Message);
+                }
+
+            _read = read;
+            _toasts = toasts;
+            _changes.Read(stamp);
+            return new NotificationSnapshot(access, toasts, focus, mode);
+        }
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
+        {
+            return new NotificationSnapshot(NotificationAccessStatus.Unavailable, [], focus, mode,
+                $"Windows notification access is unavailable: {e.Message} Check package identity and the userNotificationListener capability.");
+        }
+    }
+
     internal void Apply(NotificationSnapshot snapshot)
     {
         if (_disposed)
@@ -225,7 +289,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             .ThenByDescending(t => t.Id);
         Notifications.Sync(ordered, n => n.Id, t => t.Id, t =>
         {
-            var notification = new Notification(this, t);
+            var notification = new Notification(this, _icons, t);
             added.Add(notification);
             return notification;
         }, (n, t) => n.Update(t), n => n.LetGo());
@@ -257,8 +321,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 
     private void SyncGroups()
     {
-        var grouped = Notifications.GroupBy(n =>
-            n.AppId.Length > 0 ? n.AppId : "notification:" + n.Id.ToString(CultureInfo.InvariantCulture)).ToArray();
+        var grouped = Notifications.GroupBy(n => n.AppKey).ToArray();
         Groups.Sync(grouped, g => g.Key, g => g.Key, g => new NotificationGroup(this, g.Key),
             (group, items) => group.Update([.. items]));
     }
@@ -286,6 +349,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             try
             {
                 _backend.Dismiss(notification.Id);
+                _changes.Change();
                 Interlocked.Increment(ref _revision);
                 Notifications.Remove(notification);
                 SyncGroups();
@@ -351,14 +415,16 @@ public sealed class NotificationListener : ObservableObject, IDisposable
 public sealed class Notification : ObservableObject
 {
     private readonly NotificationListener _listener;
+    private readonly NotificationAppIcons _icons;
     private IncomingToast _toast;
     private string _appIcon = "";
     private string? _loadedKey;
     private int _iconRequest;
 
-    internal Notification(NotificationListener listener, IncomingToast toast)
+    internal Notification(NotificationListener listener, NotificationAppIcons icons, IncomingToast toast)
     {
         _listener = listener;
+        _icons = icons;
         _toast = toast;
     }
 
@@ -403,9 +469,8 @@ public sealed class Notification : ObservableObject
         return false;
     }
 
-    private string IconKey => _toast.AppId.Length > 0
-        ? _toast.AppId
-        : "id:" + _toast.Id.ToString(CultureInfo.InvariantCulture);
+    /// <summary>The sending app, or this notification alone when it has no app identity.</summary>
+    internal string AppKey => AppId.Length > 0 ? AppId : "notification:" + Id.ToString(CultureInfo.InvariantCulture);
 
     internal void Update(IncomingToast toast)
     {
@@ -423,10 +488,8 @@ public sealed class Notification : ObservableObject
     /// <summary>Starts a logo read when this notification's logo source or app changes.</summary>
     private void SyncIcon()
     {
-        if (_listener.IsDisposed)
-            return;
         var source = _toast.Logo;
-        var key = source is null ? null : IconKey;
+        var key = source is null ? null : AppKey;
         if (string.Equals(key, _loadedKey, StringComparison.Ordinal))
             return;
         _loadedKey = key;
@@ -436,19 +499,7 @@ public sealed class Notification : ObservableObject
         var request = _iconRequest;
         var label = _toast.AppName.Length > 0 ? _toast.AppName :
             _toast.AppId.Length > 0 ? _toast.AppId : "a notification";
-        var (loop, log, cancellation) = (_listener.Loop, _listener.Log, _listener.Cancellation);
-        // Not the thread pool. Publishing the url has to run even when every pool thread is busy.
-        var thread = new Thread(() =>
-        {
-            var url = NotificationAppIcons.Read(key, label, source, log, cancellation);
-            // Posted even after the listener is gone, so a finished read can still release its file.
-            loop.Post(() => ApplyIcon(url, request));
-        })
-        {
-            IsBackground = true,
-            Name = "Notification icon"
-        };
-        thread.Start();
+        _icons.Read(key, label, source, url => ApplyIcon(url, request));
     }
 
     private void ApplyIcon(string url, int request)

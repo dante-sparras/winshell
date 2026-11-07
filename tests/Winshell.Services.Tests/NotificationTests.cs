@@ -250,11 +250,9 @@ public sealed class NotificationTests
         var listener = new NotificationListener(loop, Log.Default, backend, true);
 
         await Wait.UntilAsync(() => listener.Notifications.Count == 1, "the first read", loop.Process);
-        var monitor = listener.MonitorTask!;
         listener.Dispose();
-        await monitor.WaitAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, backend.Unwatched);
+        await Wait.UntilAsync(() => backend.Unwatched == 1, "the watch to stop");
     }
 
     [Fact]
@@ -308,9 +306,8 @@ public sealed class NotificationTests
     [Fact]
     public void A_toast_is_built_from_its_properties()
     {
-        var sent = new List<(string AppId, string Xml, string Tag, string Group)>();
-        var toast = new ToastMessage(new ManualEventLoop(),
-            (appId, xml, tag, group, _) => sent.Add((appId, xml, tag, group)))
+        var backend = new FakeBackend();
+        var toast = new ToastMessage(new ManualEventLoop(), backend)
         {
             AppId = "Winshell",
             Title = "Hi <there>",
@@ -324,7 +321,7 @@ public sealed class NotificationTests
 
         Assert.True(toast.Send());
 
-        var (appId, xml, tag, group) = Assert.Single(sent);
+        var (appId, xml, tag, group) = Assert.Single(backend.Shown);
         Assert.Equal(("Winshell", "t", "g"), (appId, tag, group));
         Assert.Contains("Hi &lt;there&gt;", xml, StringComparison.Ordinal);
         Assert.Contains("launch=\"winshell://open\"", xml, StringComparison.Ordinal);
@@ -341,8 +338,8 @@ public sealed class NotificationTests
         string tag, string group)
     {
         var loop = new ManualEventLoop();
-        var sent = 0;
-        var toast = new ToastMessage(loop, (_, _, _, _, _) => sent++)
+        var backend = new FakeBackend();
+        var toast = new ToastMessage(loop, backend)
             { AppId = appId, Title = title, ActivationUri = uri, Tag = tag, Group = group };
         var failures = new List<string>();
         toast.Failed += failures.Add;
@@ -350,7 +347,7 @@ public sealed class NotificationTests
         Assert.False(toast.Send());
         loop.Process();
 
-        Assert.Equal(0, sent);
+        Assert.Empty(backend.Shown);
         Assert.Equal(toast.Error, Assert.Single(failures));
         Assert.NotEmpty(toast.Error);
     }
@@ -359,12 +356,11 @@ public sealed class NotificationTests
     public void A_late_rejection_from_Windows_arrives_on_the_loop()
     {
         var loop = new ManualEventLoop();
-        Action<string>? reject = null;
-        var toast = new ToastMessage(loop, (_, _, _, _, failed) => reject = failed)
-            { AppId = "Winshell", Title = "Hi" };
+        var backend = new FakeBackend();
+        var toast = new ToastMessage(loop, backend) { AppId = "Winshell", Title = "Hi" };
         Assert.True(toast.Send());
 
-        reject!("Rejected");
+        backend.Reject!("Rejected");
         Assert.Empty(toast.Error);
         loop.Process();
 
@@ -374,8 +370,7 @@ public sealed class NotificationTests
     [Fact]
     public void A_toast_has_at_most_five_actions()
     {
-        var toast = new ToastMessage(new ManualEventLoop(), (_, _, _, _, _) => { })
-            { AppId = "Winshell", Title = "Hi" };
+        var toast = new ToastMessage(new ManualEventLoop(), new FakeBackend()) { AppId = "Winshell", Title = "Hi" };
         for (var i = 0; i < 6; i++)
             toast.Actions.Add(new ToastAction { Text = "Open", ActivationUri = "winshell://open" });
 
@@ -410,6 +405,8 @@ public sealed class NotificationTests
 
     private sealed class FakeBackend : INotificationBackend
     {
+        private int _unwatched;
+
         public NotificationSnapshot Current { get; set; } = Snapshot();
 
         public TaskCompletionSource<NotificationSnapshot>? Next { get; set; }
@@ -421,7 +418,12 @@ public sealed class NotificationTests
 
         public List<uint> Dismissed { get; } = [];
 
-        public int Unwatched { get; private set; }
+        public int Unwatched => Volatile.Read(ref _unwatched);
+
+        public List<(string AppId, string Xml, string Tag, string Group)> Shown { get; } = [];
+
+        /// <summary>What the last shown toast calls when Windows rejects it later.</summary>
+        public Action<string>? Reject { get; private set; }
 
         public Task<NotificationAccessStatus> RequestAccessAsync()
         {
@@ -430,9 +432,30 @@ public sealed class NotificationTests
                 : Task.FromResult(NotificationAccessStatus.Allowed);
         }
 
-        public Task<NotificationSnapshot> ReadAsync(CancellationToken cancellation)
+        public NotificationAccessStatus ReadAccess()
         {
-            return Next?.Task ?? Task.FromResult(Current);
+            return Current.AccessStatus;
+        }
+
+        public NotificationState ReadFocus()
+        {
+            return Current.Focus;
+        }
+
+        public NotificationMode ReadMode()
+        {
+            return Current.Mode;
+        }
+
+        public string? ToastStamp()
+        {
+            return null;
+        }
+
+        public async Task<IReadOnlyList<ListedToast>> ListToastsAsync(CancellationToken cancellation)
+        {
+            var snapshot = Next is null ? Current : await Next.Task;
+            return [.. snapshot.Notifications.Select(t => new ListedToast(t.Id, t.CreatedAt, () => t))];
         }
 
         public void Dismiss(uint id)
@@ -444,7 +467,13 @@ public sealed class NotificationTests
 
         public Action? WatchToasts(Action changed)
         {
-            return () => Unwatched++;
+            return () => Interlocked.Increment(ref _unwatched);
+        }
+
+        public void Show(string appId, string xml, string tag, string group, Action<string> failed)
+        {
+            Shown.Add((appId, xml, tag, group));
+            Reject = failed;
         }
     }
 }
