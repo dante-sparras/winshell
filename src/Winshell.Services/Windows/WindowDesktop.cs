@@ -35,9 +35,12 @@ internal static class WindowDesktop
     /// <summary>Moves the window to that desktop. False, with why, when Windows refuses or the manager is unavailable.</summary>
     public static bool Move(nint hwnd, Guid desktop, out string problem)
     {
-        problem = "";
         if (hwnd == 0 || desktop == Guid.Empty)
+        {
+            problem = "MoveWindowToDesktop needs a window and a desktop.";
             return false;
+        }
+
         try
         {
             var manager = Manager(out problem);

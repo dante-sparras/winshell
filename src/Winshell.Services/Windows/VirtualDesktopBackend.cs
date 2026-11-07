@@ -81,10 +81,6 @@ internal readonly record struct WindowsVersion(uint Build, uint Update)
 /// </summary>
 internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 {
-    // Listeners hands a handler's failure to the service that added it. Only a reporter that throws gets here, and
-    // Callback would drop that failure anyway.
-    private static readonly Action<Exception> Unreported = static _ => { };
-
     public static VirtualDesktopBackend Shared { get; } = new();
 
     private readonly Listeners<Action> _switched = new();
@@ -114,13 +110,13 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 
     public bool StartWatching()
     {
-        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent, Unreported);
+        _hook ??= WinEventHook.Start(Win32.EVENT_SYSTEM_DESKTOPSWITCH, OnEvent, Listeners.RaiseNeverFails);
         return _hook is not null;
     }
 
     private void OnEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        _switched.Raise(static handler => handler());
+        _switched.Raise(0, static (handler, _) => handler());
     }
 
     public string ListStamp =>
@@ -156,9 +152,12 @@ internal sealed class VirtualDesktopBackend : IVirtualDesktopBackend
 
     public bool Remove(Guid id, Guid fallback, out string problem)
     {
-        problem = "";
         if (id == Guid.Empty || fallback == Guid.Empty || id == fallback)
+        {
+            problem = "RemoveDesktop needs two different desktops.";
             return false;
+        }
+
         if (ImmersiveDesktops.Remove(id, fallback, out problem))
             return true;
         problem = $"RemoveDesktop {problem}.";

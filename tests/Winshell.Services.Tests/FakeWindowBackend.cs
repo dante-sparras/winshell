@@ -28,21 +28,30 @@ internal sealed class FakeWindowBackend : IWindowBackend
     /// <summary>Runs inside each read, with the window being read, as a message pumped during the read would.</summary>
     public Action<nint>? Reading { get; set; }
 
-    private readonly List<Action<uint, nint, int, int>> _winEvents = [];
-    private readonly List<Action<nint>> _flashes = [];
+    private readonly Listeners<Action<uint, nint, int, int>> _winEvents = new();
+    private readonly Listeners<Action<nint>> _flashes = new();
+    private int _listening;
 
-    public bool HasListeners => _winEvents.Count > 0 || _flashes.Count > 0;
+    public bool HasListeners => _listening > 0;
 
     public IDisposable ListenWinEvents(Action<uint, nint, int, int> handler, Action<Exception> failed)
     {
-        _winEvents.Add(handler);
-        return new DisposeAction(() => _winEvents.Remove(handler));
+        return Counted(_winEvents.Add(handler, failed));
     }
 
     public IDisposable ListenFlashes(Action<nint> handler, Action<Exception> failed)
     {
-        _flashes.Add(handler);
-        return new DisposeAction(() => _flashes.Remove(handler));
+        return Counted(_flashes.Add(handler, failed));
+    }
+
+    private DisposeAction Counted(IDisposable listening)
+    {
+        _listening++;
+        return new DisposeAction(() =>
+        {
+            _listening--;
+            listening.Dispose();
+        });
     }
 
     /// <summary>The facts of a normal window with a title: the taskbar lists it.</summary>
@@ -88,14 +97,13 @@ internal sealed class FakeWindowBackend : IWindowBackend
 
     public void Flash(nint hwnd)
     {
-        foreach (var handler in _flashes.ToList())
-            handler(hwnd);
+        _flashes.Raise(hwnd, static (handler, window) => handler(window));
     }
 
     private void Raise(uint eventType, nint hwnd)
     {
-        foreach (var handler in _winEvents.ToList())
-            handler(eventType, hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF);
+        _winEvents.Raise((eventType, hwnd),
+            static (handler, e) => handler(e.eventType, e.hwnd, Win32.OBJID_WINDOW, Win32.CHILDID_SELF));
     }
 
     public IReadOnlyList<string> Start()

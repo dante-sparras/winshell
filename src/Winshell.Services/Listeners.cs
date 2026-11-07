@@ -11,7 +11,7 @@ internal sealed class Listeners<THandler>
     private ImmutableArray<Listener> _all = [];
 
     /// <summary>Adds a handler until the result is disposed. Any thread.</summary>
-    /// <param name="handler">Called by <see cref="Raise"/>.</param>
+    /// <param name="handler">Called by <see cref="Raise{TArg}"/>.</param>
     /// <param name="failed">Gets each exception <paramref name="handler"/> throws.</param>
     public IDisposable Add(THandler handler, Action<Exception> failed)
     {
@@ -20,17 +20,24 @@ internal sealed class Listeners<THandler>
         return listener;
     }
 
-    /// <summary>Calls each handler in turn, on this thread.</summary>
-    public void Raise(Action<THandler> call)
+    /// <summary>Calls each handler in turn, on this thread, with <paramref name="arg"/>. It never throws.</summary>
+    public void Raise<TArg>(TArg arg, Action<THandler, TArg> call)
     {
         foreach (var listener in _all)
             try
             {
-                call(listener.Handler);
+                call(listener.Handler, arg);
             }
             catch (Exception e)
             {
-                listener.Failed(e);
+                try
+                {
+                    listener.Failed(e);
+                }
+                catch (Exception)
+                {
+                    // A reporter that throws must not stop the other handlers, or the thread that raises them.
+                }
             }
     }
 
@@ -45,4 +52,14 @@ internal sealed class Listeners<THandler>
             ImmutableInterlocked.Update(ref owner._all, static (all, removed) => all.Remove(removed), this);
         }
     }
+}
+
+/// <summary>What a Windows callback that only raises <see cref="Listeners{THandler}"/> needs.</summary>
+internal static class Listeners
+{
+    /// <summary>
+    /// The failure reporter for such a callback. <see cref="Listeners{THandler}.Raise{TArg}"/> hands every failure to
+    /// the service whose handler failed and never throws, so nothing reaches it.
+    /// </summary>
+    public static readonly Action<Exception> RaiseNeverFails = static _ => { };
 }

@@ -23,12 +23,11 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
 
     public bool FailRead { get; set; }
 
-    private readonly List<Action> _switched = [];
+    private readonly Listeners<Action> _switched = new();
 
     public IDisposable ListenSwitched(Action handler, Action<Exception> failed)
     {
-        _switched.Add(handler);
-        return new DisposeAction(() => _switched.Remove(handler));
+        return _switched.Add(handler, failed);
     }
 
     public bool StartWatching()
@@ -39,8 +38,7 @@ internal sealed class FakeDesktops : IVirtualDesktopBackend
     /// <summary>Reports a switch the way Windows does, without changing <see cref="Current"/>.</summary>
     public void Switch()
     {
-        foreach (var handler in _switched.ToList())
-            handler();
+        _switched.Raise(0, static (handler, _) => handler());
     }
 
     public string ListStamp => string.Join(",", Items.Select(item => item.Id));

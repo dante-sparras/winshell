@@ -124,10 +124,6 @@ internal interface IWindowBackend
 /// </summary>
 internal sealed class WindowBackend : IWindowBackend
 {
-    // Listeners hands a handler's failure to the service that added it. Only a reporter that throws gets here, and
-    // Callback would drop that failure anyway.
-    private static readonly Action<Exception> Unreported = static _ => { };
-
     public static WindowBackend Shared { get; } = new();
 
     private readonly Listeners<Action<uint, nint, int, int>> _winEvents = new();
@@ -204,26 +200,27 @@ internal sealed class WindowBackend : IWindowBackend
         Hook(refused, Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED);
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
-        if (!ShellHookWindow.Start(OnShellHook, Unreported))
+        if (!ShellHookWindow.Start(OnShellHook, Listeners.RaiseNeverFails))
             refused.Add("RegisterShellHookWindow failed; windows that flash will not show that they want attention");
         return refused;
     }
 
     private void Hook(List<string> refused, uint min, uint max)
     {
-        if (WinEventHook.Start(min, max, OnWinEvent, Unreported) is null)
+        if (WinEventHook.Start(min, max, OnWinEvent, Listeners.RaiseNeverFails) is null)
             refused.Add($"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
     }
 
     private void OnShellHook(nint code, nint hwnd)
     {
         if (WindowRules.IsFlash(code) && hwnd != 0)
-            _flashes.Raise(handler => handler(hwnd));
+            _flashes.Raise(hwnd, static (handler, window) => handler(window));
     }
 
     private void OnWinEvent(uint eventType, nint hwnd, int idObject, int idChild)
     {
-        _winEvents.Raise(handler => handler(eventType, hwnd, idObject, idChild));
+        _winEvents.Raise((eventType, hwnd, idObject, idChild),
+            static (handler, e) => handler(e.eventType, e.hwnd, e.idObject, e.idChild));
     }
 
     public TaskbarWindowFacts TaskbarFacts(nint hwnd)

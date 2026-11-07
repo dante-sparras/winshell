@@ -28,6 +28,10 @@ internal sealed class WinlandBackend : IWinlandBackend
     private volatile int _processId;
     private volatile bool _connected;
 
+    private WinlandBackend()
+    {
+    }
+
     public bool IsConnected => _connected;
 
     public int ProcessId => _processId;
@@ -60,11 +64,11 @@ internal sealed class WinlandBackend : IWinlandBackend
                     await pipe.WriteAsync(Encoding.UTF8.GetBytes("events\n")).ConfigureAwait(false);
                     await pipe.FlushAsync().ConfigureAwait(false);
                     _connected = true;
-                    _listeners.Raise(static handlers => handlers.ConnectionChanged(true));
+                    _listeners.Raise(true, static (handlers, connected) => handlers.ConnectionChanged(connected));
                     var reader = new WinlandReader(pipe);
                     while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
                         if (line.Length > 0)
-                            _listeners.Raise(handlers => handlers.EventReceived(line));
+                            _listeners.Raise(line, static (handlers, received) => handlers.EventReceived(received));
                 }
                 catch (Exception e) when (e is IOException or ObjectDisposedException or InvalidDataException
                                               or InvalidOperationException)
@@ -77,7 +81,7 @@ internal sealed class WinlandBackend : IWinlandBackend
                     if (_connected)
                     {
                         _connected = false;
-                        _listeners.Raise(static handlers => handlers.ConnectionChanged(false));
+                        _listeners.Raise(false, static (handlers, connected) => handlers.ConnectionChanged(connected));
                     }
                 }
 

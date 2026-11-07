@@ -110,12 +110,15 @@ public sealed class VirtualDesktopsService : ObservableObject, IDisposable
             return;
         }
 
-        var problem = "";
-        if (!Guid.TryParse(desktop.Id, out var id) || !Guid.TryParse(Desktops[fallback].Id, out var fallbackId) ||
-            !_backend.Remove(id, fallbackId, out problem))
+        if (!Guid.TryParse(desktop.Id, out var id) || !Guid.TryParse(Desktops[fallback].Id, out var fallbackId))
         {
-            _log.Warn("desktops",
-                problem.Length == 0 ? "The desktop was not removed." : $"The desktop was not removed: {problem}");
+            _log.Warn("desktops", "The desktop was not removed.");
+            return;
+        }
+
+        if (!_backend.Remove(id, fallbackId, out var problem))
+        {
+            _log.Warn("desktops", $"The desktop was not removed: {problem}");
             return;
         }
 

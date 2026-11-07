@@ -17,7 +17,7 @@ public class ListenersTests
         using var throwing = listeners.Add(_ => throw failure, first.Add);
         using var counting = listeners.Add(value => later = value, second.Add);
 
-        listeners.Raise(handler => handler(7));
+        listeners.Raise(7, static (handler, value) => handler(value));
 
         Assert.Same(failure, Assert.Single(first));
         Assert.Empty(second);
@@ -32,7 +32,7 @@ public class ListenersTests
         var added = listeners.Add(() => calls++, e => Assert.Fail(e.Message));
 
         added.Dispose();
-        listeners.Raise(handler => handler());
+        listeners.Raise(0, static (handler, _) => handler());
 
         Assert.Equal(0, calls);
     }
