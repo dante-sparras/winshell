@@ -12,7 +12,13 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
             dismissMenu();
     }
 
+    /// <summary>The window's own handling first. What it leaves to Windows goes to the kind's placer.</summary>
     public nint? OnMessage(WindowMessage message)
+    {
+        return OnWindowMessage(message) ?? host.Placer.OnMessage(message);
+    }
+
+    private nint? OnWindowMessage(WindowMessage message)
     {
         var placement = host.Placement;
         var (msg, wParam) = (message.Id, message.WParam);
@@ -22,19 +28,13 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
             case Win32.WM_MOVE:
                 if (host.Handle != 0)
                     placement.UpdateSize();
-                if (!placement.Placing && !host.Released)
-                    placement.Frame?.OnMovedOrResized();
                 return null;
             case Win32.WM_DPICHANGED:
             {
                 // A size we apply from this message can send it again with the monitor's old scale. Keep the one that started it.
                 if (!placement.Placing)
                     placement.Scale = DesktopSpace.Scale((uint)Win32.HighWord(wParam));
-                if (placement.Frame is { } frame)
-                    frame.OnDpiChanged(message.SuggestedRect, placement.Placing);
-                else if (!placement.Placing)
-                    // A panel or popup only changes DPI on its own when its monitor's scale changes: place it again from its logical size.
-                    platform.Loop.Post(placement.Replace);
+                host.Placer.OnDpiChanged(message.SuggestedRect, placement.Placing);
                 placement.UpdateSize();
                 platform.ScreensMayHaveChanged();
                 return 0;
@@ -52,8 +52,6 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
             case Win32.WM_SETFOCUS:
                 host.Presentation.FocusContent();
                 return null;
-            case Win32.WM_GETMINMAXINFO when placement.Frame is { } frame:
-                return frame.OnGetMinMaxInfo(ref message.MinMaxInfo);
             case Win32.WM_CLOSE:
                 host.Client.OnClosed();
                 placement.SetVisible(false);
@@ -66,13 +64,10 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                 return 1;
             case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED
                 or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
-                if (msg == Win32.WM_DISPLAYCHANGE)
-                    placement.Frame?.OnDisplayChanged();
                 platform.SystemChanged(msg, wParam);
                 return null;
+            default:
+                return null;
         }
-
-        // Explorer's notices to a panel's edge.
-        return placement.Edge?.OnMessage(msg, wParam);
     }
 }

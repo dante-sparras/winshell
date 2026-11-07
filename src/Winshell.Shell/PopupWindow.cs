@@ -51,7 +51,7 @@ public sealed class PopupWindow : ShellWindow
 
     private protected override void ApplyPlacement()
     {
-        Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect));
+        ((PopupPlacer)Host!.Placer).Set(new PopupPlacement(Screen, _rect));
     }
 
     private protected override void ApplyFocus()

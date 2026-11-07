@@ -95,7 +95,7 @@ public sealed class PanelWindow : ShellWindow
 
     private protected override void ApplyPlacement()
     {
-        Host!.Placement.SetPanel(new PanelPlacement(
+        ((PanelEdge)Host!.Placer).Set(new PanelPlacement(
             Screen,
             _anchors,
             _margins.Left,

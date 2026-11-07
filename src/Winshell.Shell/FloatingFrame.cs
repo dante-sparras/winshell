@@ -3,8 +3,22 @@ using Winshell.Native;
 
 namespace Winshell;
 
+/// <summary>A normal window's settings.</summary>
+internal sealed record FloatingPlacement(
+    ScreenInfo? Screen,
+    string Title,
+    double Width,
+    double Height,
+    Size MinimumSize,
+    Size MaximumSize,
+    bool Maximized,
+    bool Minimized,
+    bool Fullscreen = false,
+    HostWindow? Owner = null,
+    bool StateRequested = false);
+
 /// <summary>How a floating window sits on its screen: framed at a size, minimized, maximized or fullscreen.</summary>
-internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
+internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : IWindowPlacer
 {
     private FloatingPlacement? _placement;
     private bool _placed;
@@ -17,6 +31,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
 
     public void Apply(FloatingPlacement placement)
     {
+        if (Handle == 0 || host.Released)
+            return;
         _placement = placement;
         _applying = true;
         try
@@ -67,14 +83,26 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         }
     }
 
-    /// <summary>The window moved or changed size, which may be the user maximizing, minimizing or restoring it.</summary>
-    public void OnMovedOrResized()
+    public nint? OnMessage(WindowMessage message)
     {
-        if (!_applying)
-            ReportState();
+        switch (message.Id)
+        {
+            case Win32.WM_SIZE or Win32.WM_MOVE:
+                // The user may have maximized, minimized or restored it. A move the window makes itself reports once done.
+                if (!host.Placement.Placing && !host.Released && !_applying)
+                    ReportState();
+                return null;
+            case Win32.WM_GETMINMAXINFO:
+                return OnGetMinMaxInfo(ref message.MinMaxInfo);
+            case Win32.WM_DISPLAYCHANGE:
+                if (_fullscreen)
+                    FillMonitor();
+                return null;
+            default:
+                return null;
+        }
     }
 
-    /// <summary>The window's monitor changed scale, or the window went to another monitor.</summary>
     public void OnDpiChanged(RECT suggested, bool placing)
     {
         if (_fullscreen)
@@ -91,14 +119,8 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform)
         }
     }
 
-    public void OnDisplayChanged()
-    {
-        if (_fullscreen)
-            FillMonitor();
-    }
-
     /// <summary>Sets the window's track sizes. Returns null to leave Windows' defaults.</summary>
-    public nint? OnGetMinMaxInfo(ref MINMAXINFO info)
+    private nint? OnGetMinMaxInfo(ref MINMAXINFO info)
     {
         if (_fullscreen && Handle != 0)
         {

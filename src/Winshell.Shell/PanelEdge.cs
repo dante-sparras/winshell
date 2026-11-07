@@ -23,28 +23,67 @@ internal sealed record PanelPlacement(
 /// here too. A placement that arrives after the panel is gone reserves nothing: an app bar with no window is one
 /// nothing can remove.
 /// </summary>
-internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place)
+internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
 {
     internal static readonly uint Message = Win32.WM_APP + 1;
 
-    // Every window that holds an edge now, so a crash can give them back without the windows.
-    private static readonly ConcurrentDictionary<nint, IPanelDesktop> Held = new();
+    // Every panel that holds an edge now, so a crash can give them back without the windows.
+    private static readonly ConcurrentDictionary<IPanelDesktop, byte> Held = new();
 
     private readonly AppBarReservation _reservation = new();
+    private PanelPlacement? _placement;
+    private bool _visible;
+    private bool _released;
     private bool _registered;
     private bool _placePosted;
 
-    /// <summary>
-    /// Puts the panel on its screen. <paramref name="released"/> is a placement that arrived after the panel was
-    /// gone, which reserves nothing. Returns whether it moved the window.
-    /// </summary>
-    internal bool Place(PanelPlacement? placement, bool visible, bool released)
+    internal void Set(PanelPlacement placement)
     {
-        if (released || placement is not { } p)
-            return false;
+        _placement = placement;
+        Place();
+    }
+
+    /// <summary>A hidden panel holds no edge, so a panel about to show places again to take it.</summary>
+    public void Show()
+    {
+        _visible = true;
+        Place();
+    }
+
+    public void Hide()
+    {
+        _visible = false;
+        Remove();
+    }
+
+    public void Release()
+    {
+        _released = true;
+        Remove();
+    }
+
+    /// <summary>A panel only changes DPI on its own when its monitor's scale changes: place it again from its logical size.</summary>
+    public void OnDpiChanged(RECT suggested, bool placing)
+    {
+        if (!placing)
+            desktop.Post(Place);
+    }
+
+    /// <summary>A shown panel follows the work area, which other bars move.</summary>
+    public void OnWorkAreaChanged()
+    {
+        if (_visible)
+            Place();
+    }
+
+    /// <summary>Puts the panel on its screen: the screen, the reservation and the z-order.</summary>
+    private void Place()
+    {
+        if (_released || _placement is not { } p)
+            return;
         var monitor = (p.Screen is { } screen ? desktop.Find(screen.Id) : null) ?? desktop.Primary();
         if (monitor is not { } found)
-            return false;
+            return;
         var scale = found.Scale;
         var edge = EdgeFor(p.Anchors);
         var size = (int)Math.Round(p.ReservedSize * scale);
@@ -54,7 +93,7 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
             Remove();
             area = found.Bounds;
         }
-        else if (edge is { } side && size > 0 && visible)
+        else if (edge is { } side && size > 0 && _visible)
         {
             area = Reserve(side, size, found.Bounds);
         }
@@ -66,21 +105,20 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
 
         var rect = Anchor(area, p, scale);
         desktop.Move(rect, p.AboveWindows && !desktop.FullscreenOn(found.Id), scale);
-        return true;
     }
 
     /// <summary>Gives the edge back. A panel that holds none changes nothing.</summary>
-    internal void Remove()
+    private void Remove()
     {
         if (!_registered)
             return;
         using (desktop.Explorer())
         {
-            desktop.Remove(window);
+            desktop.Remove();
         }
 
         _registered = false;
-        Held.TryRemove(window, out _);
+        Held.TryRemove(desktop, out _);
         _reservation.Clear();
         desktop.WorkAreaMayHaveChanged();
     }
@@ -88,23 +126,24 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
     /// <summary>Gives every edge back. Safe from any thread, so a crash on one can.</summary>
     internal static void ReleaseAll()
     {
-        var held = new List<KeyValuePair<nint, IPanelDesktop>>();
+        var held = new List<IPanelDesktop>();
         foreach (var pair in Held)
-            if (Held.TryRemove(pair.Key, out var owner))
-                held.Add(new KeyValuePair<nint, IPanelDesktop>(pair.Key, owner));
+            if (Held.TryRemove(pair.Key, out _))
+                held.Add(pair.Key);
         if (held.Count == 0)
             return;
         // One lowering of this process's trays covers every bar, as a crash asks for them together.
-        using (held[0].Value.Explorer())
+        using (held[0].Explorer())
         {
-            foreach (var (bar, owner) in held)
-                owner.Remove(bar);
+            foreach (var owner in held)
+                owner.Remove();
         }
     }
 
     /// <summary>Handles Explorer's notices to the app bar. Returns null for any other message.</summary>
-    internal nint? OnMessage(uint msg, nint wParam)
+    public nint? OnMessage(WindowMessage message)
     {
+        var (msg, wParam) = (message.Id, message.WParam);
         if (msg == TaskbarWindows.Created)
         {
             ExplorerRestarted();
@@ -125,7 +164,7 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
                 desktop.Post(() =>
                 {
                     _placePosted = false;
-                    place();
+                    Place();
                 });
             }
         }
@@ -137,7 +176,7 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
     internal void ExplorerRestarted()
     {
         Remove();
-        desktop.Post(place);
+        desktop.Post(Place);
     }
 
     /// <summary>The edge a panel with these anchors reserves: the one it spans, or none for a corner or the whole screen.</summary>
@@ -211,16 +250,16 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
         var side = Side(edge);
         if (!_registered)
         {
-            _registered = desktop.Register(window, Message);
+            _registered = desktop.Register(Message);
             if (!_registered)
                 // No app bar host, as when Explorer is not running: keep the window where the zone would be.
                 return monitor;
-            Held[window] = desktop;
+            Held[desktop] = 0;
         }
 
-        var offered = desktop.Query(window, side, monitor);
+        var offered = desktop.Query(side, monitor);
         var moved = _reservation.Reserve(Strip(edge, thickness, offered), desired =>
-            desktop.Reserve(window, side, desired));
+            desktop.Reserve(side, desired));
         if (moved)
             desktop.WorkAreaMayHaveChanged();
         return Area(edge, _reservation.Granted, monitor);

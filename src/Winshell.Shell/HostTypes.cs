@@ -1,5 +1,3 @@
-using Windows.Foundation;
-
 namespace Winshell;
 
 internal enum WindowKind
@@ -61,20 +59,6 @@ public enum WindowCorners
     /// <summary>Corners with a smaller rounding.</summary>
     RoundSmall
 }
-
-/// <summary>A normal window's settings.</summary>
-internal sealed record FloatingPlacement(
-    ScreenInfo? Screen,
-    string Title,
-    double Width,
-    double Height,
-    Size MinimumSize,
-    Size MaximumSize,
-    bool Maximized,
-    bool Minimized,
-    bool Fullscreen = false,
-    HostWindow? Owner = null,
-    bool StateRequested = false);
 
 /// <summary>What a native window tells the shell window it shows.</summary>
 internal interface IHostClient
