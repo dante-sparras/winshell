@@ -121,8 +121,10 @@ TRACK_POPUP_MENU_FLAGS
 TrackPopupMenuEx
 WM_NCDESTROY
 
-// Process snapshots find the winshell.exe that started a configuration. No .NET API reads a parent process id.
-// GenerateConsoleCtrlEvent and GetConsoleProcessList are for tests, to send a console a Ctrl+Break.
+// Process snapshots find the winshell.exe that started a configuration, and the process that started a test program.
+// No .NET API reads a parent process id.
+// GenerateConsoleCtrlEvent and GetConsoleProcessList only let a test send winshell dev a Ctrl+Break, which no .NET API
+// sends.
 CreateToolhelp32Snapshot
 Process32FirstW
 Process32NextW

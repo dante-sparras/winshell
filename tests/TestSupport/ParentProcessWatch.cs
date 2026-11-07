@@ -1,10 +1,6 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using Windows.Win32;
-using Windows.Win32.Foundation;
-using Windows.Win32.System.Diagnostics.ToolHelp;
+using static Winshell.Native.ProcessImage;
 
 namespace Winshell.TestSupport;
 
@@ -31,35 +27,15 @@ internal static class ParentProcessWatch
 
     private static Process? Parent()
     {
+        var id = ParentOf((uint)Environment.ProcessId) ??
+                 throw new InvalidOperationException("This process's parent is not in the process snapshot.");
         try
         {
-            return Process.GetProcessById((int)ParentId());
+            return Process.GetProcessById((int)id);
         }
         catch (ArgumentException)
         {
             return null;
-        }
-    }
-
-    private static uint ParentId()
-    {
-        var snapshot = PInvoke.CreateToolhelp32Snapshot(CREATE_TOOLHELP_SNAPSHOT_FLAGS.TH32CS_SNAPPROCESS, 0);
-        if (snapshot == new HANDLE(-1))
-            throw new Win32Exception();
-        try
-        {
-            var self = (uint)Environment.ProcessId;
-            var entry = new PROCESSENTRY32W { dwSize = (uint)Marshal.SizeOf<PROCESSENTRY32W>() };
-            for (var more = PInvoke.Process32FirstW(snapshot, ref entry);
-                 more;
-                 more = PInvoke.Process32NextW(snapshot, ref entry))
-                if (entry.th32ProcessID == self)
-                    return entry.th32ParentProcessID;
-            throw new InvalidOperationException("This process is not in the process snapshot.");
-        }
-        finally
-        {
-            PInvoke.CloseHandle(snapshot);
         }
     }
 }

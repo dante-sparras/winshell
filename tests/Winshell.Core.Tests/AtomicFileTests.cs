@@ -6,7 +6,7 @@ public sealed class AtomicFileTests
     [Fact]
     public void A_hand_save_wins_only_when_the_disk_matches_neither_side_of_the_write()
     {
-        using var dir = Temp();
+        using var dir = new TempFolder();
         var path = Path.Combine(dir.Path, "settings.toml");
         const string Incoming = "name = \"file\"\non = false\n";
         const string Read = "name = \"file\"\n";
@@ -66,7 +66,7 @@ public sealed class AtomicFileTests
     [Fact]
     public void Each_save_through_a_hard_link_updates_both_names()
     {
-        using var dir = Temp();
+        using var dir = new TempFolder();
         var (real, link) = Pair(dir);
         File.WriteAllText(real, "old\n");
         HardLink(link, real);
@@ -83,7 +83,7 @@ public sealed class AtomicFileTests
     [Fact]
     public void Each_save_through_a_symbolic_link_updates_the_target_and_keeps_the_link()
     {
-        using var dir = Temp();
+        using var dir = new TempFolder();
         var (real, link) = Pair(dir);
         File.WriteAllText(real, "old\n");
         if (!TryLink(link, real))
@@ -113,12 +113,7 @@ public sealed class AtomicFileTests
         return File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 
-    private static TempDirectory Temp()
-    {
-        return new TempDirectory(Directory.CreateTempSubdirectory("winshell-atomic-"));
-    }
-
-    private static (string Real, string Link) Pair(TempDirectory dir)
+    private static (string Real, string Link) Pair(TempFolder dir)
     {
         return (Path.Combine(dir.Path, "real.toml"), Path.Combine(dir.Path, "link.toml"));
     }
@@ -141,15 +136,5 @@ public sealed class AtomicFileTests
     private static void HardLink(string link, string real)
     {
         ChildProcess.Run("cmd.exe", "/c", "mklink", "/H", link, real).AssertExitCode(0);
-    }
-
-    private sealed class TempDirectory(DirectoryInfo directory) : IDisposable
-    {
-        public string Path { get; } = directory.FullName;
-
-        public void Dispose()
-        {
-            directory.Delete(true);
-        }
     }
 }

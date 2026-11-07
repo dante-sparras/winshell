@@ -22,9 +22,6 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
 {
     private const int PatienceMs = 1_800_000;
 
-    private static readonly string Cli = Path.GetFullPath(typeof(PackedTemplateTests).Assembly
-        .GetCustomAttributes<AssemblyMetadataAttribute>().Single(attribute => attribute.Key == "WinshellCli").Value!);
-
     [Fact(Timeout = PatienceMs)]
     public void The_small_shell_is_listed_and_killed()
     {
@@ -78,11 +75,11 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
             Assert.Equal(shellId,
                 Listed(folders).Single(row => row.GetProperty("pid").GetInt32() == process.Id).GetProperty("shellId")
                     .GetString());
-            var log = CliRun(["log", "--pid", pid], folders);
+            var log = WinshellCli.Run(["log", "--pid", pid], folders);
             log.AssertExitCode(0);
             Assert.Contains($"Winshell {templates.Version} on Windows", log.Output, StringComparison.Ordinal);
 
-            var killed = CliRun(["kill", "--pid", pid], folders);
+            var killed = WinshellCli.Run(["kill", "--pid", pid], folders);
             killed.AssertExitCode(0);
             Wait.Until(() => process.HasExited, "winshell kill to stop the shell");
             ChildProcess.Exited("The packed shell", process, output).AssertExitCode(0);
@@ -139,32 +136,10 @@ public sealed class PackedTemplateTests(PackedTemplates templates) : IClassFixtu
 
     private static List<JsonElement> Listed((string Name, string Value)[] environment)
     {
-        var result = CliRun(["list", "--json"], environment);
+        var result = WinshellCli.Run(["list", "--json"], environment);
         result.AssertExitCode(0);
         using var json = JsonDocument.Parse(result.Output);
         return json.RootElement.EnumerateArray().Select(row => row.Clone()).ToList();
-    }
-
-    private static ChildProcess CliRun(IReadOnlyList<string> args, (string Name, string Value)[] environment)
-    {
-        Assert.True(File.Exists(Cli), $"No CLI at {Cli}");
-        return Command(Cli, args, environment);
-    }
-
-    private static ChildProcess Command(string file, IReadOnlyList<string> args,
-        (string Name, string Value)[]? environment)
-    {
-        var info = new ProcessStartInfo(file)
-        {
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-        foreach (var arg in args)
-            info.ArgumentList.Add(arg);
-        if (environment is not null)
-            foreach (var (name, value) in environment)
-                info.Environment[name] = value;
-        return ChildProcess.Run(info, TimeSpan.FromMinutes(2));
     }
 }
 
@@ -177,7 +152,7 @@ public sealed class PackedTemplates : IDisposable
     public PackedTemplates()
     {
         UserPathBefore = UserPath();
-        var root = Repo();
+        var root = Repo.Root;
         // A version of its own each run. NuGet keeps a package by its version, so a repeated one would build what an
         // earlier run packed, and the test would pass on code it never packed.
         Version = "0.0.0-test." + Guid.NewGuid().ToString("N")[..12];
@@ -263,7 +238,7 @@ public sealed class PackedTemplates : IDisposable
 
     private static void AssertPackage(string nupkg, string version)
     {
-        var packageFile = Path.Combine(Repo(), "src", "Winshell.Package", "Winshell.Package.csproj");
+        var packageFile = Path.Combine(Repo.Root, "src", "Winshell.Package", "Winshell.Package.csproj");
         var packageProject = XDocument.Load(packageFile);
         var packageDir = Path.GetDirectoryName(packageFile)!;
         var lib = "lib/" + packageProject.Descendants("TargetFramework").Single().Value + "/";
@@ -306,7 +281,7 @@ public sealed class PackedTemplates : IDisposable
         var dependencies = XDocument.Load(stream).Descendants().Where(element => element.Name.LocalName == "dependency")
             .ToDictionary(element => element.Attribute("id")!.Value, element => element.Attribute("version")!.Value);
         // A new project gets WindowsAppSDK through this package, so these are the versions it restores.
-        var pinned = XDocument.Load(Path.Combine(Repo(), "Directory.Packages.props")).Descendants("PackageVersion")
+        var pinned = XDocument.Load(Path.Combine(Repo.Root, "Directory.Packages.props")).Descendants("PackageVersion")
             .ToDictionary(element => element.Attribute("Include")!.Value,
                 element => element.Attribute("Version")!.Value);
         var declared = packageProject.Descendants("PackageReference")
@@ -369,18 +344,5 @@ public sealed class PackedTemplates : IDisposable
         }
 
         throw new InvalidOperationException($"No type {ns}.{name} in {path}");
-    }
-
-    private static string Repo()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "scripts", "pack.ps1")))
-                return dir.FullName;
-            dir = dir.Parent;
-        }
-
-        throw new InvalidOperationException($"No scripts/pack.ps1 above {AppContext.BaseDirectory}");
     }
 }
