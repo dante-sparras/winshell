@@ -55,8 +55,8 @@ public sealed class StartupService : ObservableObject
         if (SignInCommand(exe, WinshellHost.Supervising()) is not { } command)
             return null;
         return new WindowsStartupRegistry(command,
-            bareFolderOf: () => SignInEntry.BareFolder(ConfigPaths.Root()),
-            configRootOf: ConfigPaths.Root);
+            bareFolderOf: () => SignInEntry.BareFolder(ShellLocations.Current.ConfigRoot),
+            configRootOf: () => ShellLocations.Current.ConfigRoot);
     }
 
     /// <summary>

@@ -12,7 +12,7 @@ public sealed class ShellInstanceTests
 
     private static List<(InstanceInfo Info, bool Alive)> Rows(ShellInstance instance)
     {
-        return Instances.List(true).Where(i => i.Info.Id == instance.Id).ToList();
+        return ShellLocations.Current.Instances.List(true).Where(i => i.Info.Id == instance.Id).ToList();
     }
 
     private static async Task<IpcResponse> Ask(string pipe, IpcRequest request)
@@ -98,7 +98,7 @@ public sealed class ShellInstanceTests
 
         instance.Abandon();
 
-        Assert.False(Directory.Exists(Instances.DirOf(instance.Id)));
+        Assert.False(Directory.Exists(ShellLocations.Current.Instances.DirOf(instance.Id)));
         Assert.Empty(Rows(instance));
         // The name is free again.
         IpcServer.OpenFirst(instance.Pipe).Dispose();
@@ -149,7 +149,7 @@ public sealed class ShellInstanceTests
         instance.MarkCleanExit();
         instance.Close();
 
-        var reports = Directory.GetFiles(ShellLocations.CrashRoot).Select(File.ReadAllText)
+        var reports = Directory.GetFiles(ShellLocations.Current.CrashRoot).Select(File.ReadAllText)
             .Where(r => r.Contains("SENTINEL crash", StringComparison.Ordinal)).ToList();
         var report = Assert.Single(reports);
         Assert.Contains("Winshell closed: yes", report, StringComparison.Ordinal);

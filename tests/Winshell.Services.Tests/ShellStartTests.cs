@@ -5,6 +5,8 @@ namespace Winshell.Services.Tests;
 /// <summary>What a start reads before it is a shell: its command line, its id, and its folders.</summary>
 public sealed class ShellStartTests
 {
+    private static readonly ShellLocations Locations = new(@"C:\config", @"C:\local");
+
     [Fact]
     public void After_and_no_duplicate_are_read_and_the_rest_stays_the_programs()
     {
@@ -63,12 +65,12 @@ public sealed class ShellStartTests
     [Fact]
     public void A_given_shell_id_names_the_folders()
     {
-        var identity = ShellIdentity.Resolve(@"C:\shells\mine\mine.exe", @"C:\config", "mine-id", null, null, null);
+        var identity = ShellIdentity.Resolve(@"C:\shells\mine\mine.exe", Locations, "mine-id", null, null, null);
 
         Assert.Equal("mine-id", identity.ShellId);
-        Assert.Equal(Path.Combine(ShellLocations.DataRoot, "by-shell", "mine-id"), identity.DataDir);
-        Assert.Equal(Path.Combine(ShellLocations.StateRoot, "by-shell", "mine-id"), identity.StateDir);
-        Assert.Equal(Path.Combine(ShellLocations.CacheRoot, "by-shell", "mine-id"), identity.CacheDir);
+        Assert.Equal(@"C:\local\data\by-shell\mine-id", identity.DataDir);
+        Assert.Equal(@"C:\local\state\by-shell\mine-id", identity.StateDir);
+        Assert.Equal(@"C:\local\cache\by-shell\mine-id", identity.CacheDir);
     }
 
     [Theory]
@@ -76,15 +78,15 @@ public sealed class ShellStartTests
     [InlineData(@"C:\config\Bar\bar.exe", "bar")]
     public void A_program_in_the_config_folder_is_named_after_its_folder(string program, string id)
     {
-        Assert.Equal(id, ShellIdentity.Resolve(program, @"C:\config", null, null, null, null).ShellId);
+        Assert.Equal(id, ShellIdentity.Resolve(program, Locations, null, null, null, null).ShellId);
     }
 
     [Fact]
     public void A_program_anywhere_else_is_named_after_its_path_in_any_case()
     {
-        var one = ShellIdentity.Resolve(@"C:\shells\mine.exe", @"C:\config", null, null, null, null).ShellId;
-        var same = ShellIdentity.Resolve(@"C:\SHELLS\MINE.EXE", @"C:\config", null, null, null, null).ShellId;
-        var other = ShellIdentity.Resolve(@"C:\shells\yours.exe", @"C:\config", null, null, null, null).ShellId;
+        var one = ShellIdentity.Resolve(@"C:\shells\mine.exe", Locations, null, null, null, null).ShellId;
+        var same = ShellIdentity.Resolve(@"C:\SHELLS\MINE.EXE", Locations, null, null, null, null).ShellId;
+        var other = ShellIdentity.Resolve(@"C:\shells\yours.exe", Locations, null, null, null, null).ShellId;
 
         Assert.Equal(one, same);
         Assert.NotEqual(one, other);
@@ -94,16 +96,17 @@ public sealed class ShellStartTests
     [Fact]
     public void A_given_folder_is_next_to_the_program_and_can_name_the_base()
     {
-        var identity = ShellIdentity.Resolve(@"C:\shells\mine.exe", "", "id", "data", @"$BASE\other", @"D:\cache");
+        var identity = ShellIdentity.Resolve(@"C:\shells\mine.exe", Locations with { ConfigRoot = "" }, "id", "data",
+            @"$BASE\other", @"D:\cache");
 
         Assert.Equal(@"C:\shells\data", identity.DataDir);
-        Assert.Equal(Path.Combine(ShellLocations.StateRoot, "other"), identity.StateDir);
+        Assert.Equal(@"C:\local\state\other", identity.StateDir);
         Assert.Equal(@"D:\cache", identity.CacheDir);
     }
 
     [Fact]
     public void A_shell_id_names_its_mutex_in_any_case()
     {
-        Assert.Equal(DuplicateHold.ShellMutexName("Mine"), DuplicateHold.ShellMutexName("mine"));
+        Assert.Equal(DuplicateHold.ShellMutexName(Locations, "Mine"), DuplicateHold.ShellMutexName(Locations, "mine"));
     }
 }

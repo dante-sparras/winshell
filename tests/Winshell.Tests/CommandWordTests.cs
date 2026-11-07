@@ -107,9 +107,9 @@ public class CommandWordTests
         var doctor = CliParser.Help("doctor");
 
         Assert.Contains(CliMetadata.Version, summary, StringComparison.Ordinal);
-        Assert.Contains(ConfigPaths.Root(), summary, StringComparison.Ordinal);
-        Assert.Contains(ConfigPaths.OverrideVariable, summary, StringComparison.Ordinal);
-        Assert.Contains(ConfigPaths.Root(), doctor, StringComparison.Ordinal);
+        Assert.Contains(ShellLocations.Current.ConfigRoot, summary, StringComparison.Ordinal);
+        Assert.Contains(ShellLocations.ConfigVariable, summary, StringComparison.Ordinal);
+        Assert.Contains(ShellLocations.Current.ConfigRoot, doctor, StringComparison.Ordinal);
         Assert.DoesNotContain("{version}", summary, StringComparison.Ordinal);
         Assert.DoesNotContain("{config-root}", doctor, StringComparison.Ordinal);
     }

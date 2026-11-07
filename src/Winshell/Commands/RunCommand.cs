@@ -12,7 +12,7 @@ internal static class RunCommand
         if (error is not null)
         {
             // Before any instance log exists. An attached console prints it. Start and sign-in have no window.
-            StartupError.Report(error, StartupError.FolderFor(options.Path, ConfigPaths.Root()));
+            StartupError.Report(error, StartupError.FolderFor(options.Path, ShellLocations.Current.ConfigRoot));
             return 1;
         }
 
@@ -21,7 +21,8 @@ internal static class RunCommand
             return 0;
         // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
         if (options.NoDuplicate &&
-            project.InstancesOf(ConfigurationBuild.Run, Instances.List(false).Select(i => i.Info)).Any())
+            project.InstancesOf(ConfigurationBuild.Run,
+                ShellLocations.Current.Instances.List(false).Select(i => i.Info)).Any())
             return 0;
         var reason = project.Prepare(options.NoBuild, ConfigurationProject.Run);
         if (reason is not null)

@@ -149,7 +149,7 @@ public sealed class DoctorCommandTests : IDisposable
     /// <summary>Runs winshell.exe with the config folder overridden to a folder of this class's.</summary>
     private static ChildProcess RunIn(string configRoot, params string[] args)
     {
-        return WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configRoot));
+        return WinshellCli.Run(args, (ShellLocations.ConfigVariable, configRoot));
     }
 
     public void Dispose()

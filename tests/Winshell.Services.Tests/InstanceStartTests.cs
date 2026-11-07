@@ -47,7 +47,7 @@ public sealed class InstanceStartTests
 
     private static InstanceInfo Read(string id)
     {
-        var file = Path.Combine(Instances.DirOf(id), "instance.json");
+        var file = Path.Combine(ShellLocations.Current.Instances.DirOf(id), "instance.json");
         return JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo)!;
     }
 
@@ -61,7 +61,7 @@ public sealed class InstanceStartTests
         using var release = new ManualResetEventSlim();
         var holder = new Thread(() =>
             {
-                using var mutex = new Mutex(false, DuplicateHold.ShellMutexName(shellId));
+                using var mutex = new Mutex(false, DuplicateHold.ShellMutexName(ShellLocations.Current, shellId));
                 mutex.WaitOne();
                 taken.Set();
                 release.Wait();
@@ -90,7 +90,7 @@ public sealed class InstanceStartTests
     [Fact]
     public void A_detach_that_cannot_start_reports_why()
     {
-        var program = Path.Combine(ShellLocations.LocalRoot, "missing-shell.exe");
+        var program = Path.Combine(ShellLocations.Current.LocalRoot, "missing-shell.exe");
         var hosted = false;
 
         var result = Start(Launch(ShellId(), program, ["-d"]), _ => hosted = true);
@@ -209,7 +209,7 @@ public sealed class InstanceStartTests
             Assert.False(hosted);
             Assert.Equal(InstanceStartStatus.Failed, result.Status);
             Assert.Equal("The control pipe is already taken.", result.Reason);
-            Assert.False(Directory.Exists(Instances.DirOf(id!)));
+            Assert.False(Directory.Exists(ShellLocations.Current.Instances.DirOf(id!)));
         }
         finally
         {

@@ -7,7 +7,8 @@ internal static class ConfigurationSelection
     {
         try
         {
-            return ConfigurationProject.Find(options.Path, options.Config, ConfigPaths.Root(), out error);
+            return ConfigurationProject.Find(options.Path, options.Config, ShellLocations.Current.ConfigRoot,
+                out error);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

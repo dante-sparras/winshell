@@ -1,6 +1,6 @@
 namespace Winshell.Tests;
 
-/// <summary>Config roots. Every path is under a temp folder this class creates.</summary>
+/// <summary>The CLI reads configurations from <c>WINSHELL_CONFIG_DIR</c>. Every path is under a temp folder this class creates.</summary>
 [Trait("Category", "Slow")]
 public sealed class ConfigPathTests : IDisposable
 {
@@ -10,24 +10,6 @@ public sealed class ConfigPathTests : IDisposable
     public ConfigPathTests()
     {
         Directory.CreateDirectory(_root);
-    }
-
-    [Fact]
-    public void The_default_root_is_roaming_app_data()
-    {
-        Assert.Equal(
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "winshell"),
-            ConfigPaths.RootFrom(null));
-        Assert.Equal(ConfigPaths.RootFrom("  "), ConfigPaths.RootFrom(null));
-    }
-
-    [Fact]
-    public void An_override_is_the_config_root()
-    {
-        var dir = Path.Combine(_root, "custom");
-        Assert.Equal(dir, ConfigPaths.RootFrom(dir));
-        Assert.Equal(dir, ConfigPaths.RootFrom("  " + dir + "  "));
-        Assert.Equal(Path.GetFullPath("winshell-relative"), ConfigPaths.RootFrom("winshell-relative"));
     }
 
     [Fact]
@@ -48,7 +30,7 @@ public sealed class ConfigPathTests : IDisposable
 
     private static ChildProcess Run(string configDir, params string[] args)
     {
-        return WinshellCli.Run(args, (ConfigPaths.OverrideVariable, configDir));
+        return WinshellCli.Run(args, (ShellLocations.ConfigVariable, configDir));
     }
 
     public void Dispose()

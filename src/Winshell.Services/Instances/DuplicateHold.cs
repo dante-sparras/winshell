@@ -23,15 +23,9 @@ internal readonly struct DuplicateHold : IDisposable
     /// The mutex for a configuration's program, which is one shell by its shell id, wherever it was built. An id means
     /// that shell only in one local folder, whose instances are the ones it can see.
     /// </summary>
-    public static string ShellMutexName(string shellId)
+    public static string ShellMutexName(ShellLocations locations, string shellId)
     {
-        return ShellMutexName(shellId, ShellLocations.LocalRoot);
-    }
-
-    /// <summary>The mutex <paramref name="shellId"/> holds when its local folder is <paramref name="localRoot"/>.</summary>
-    internal static string ShellMutexName(string shellId, string localRoot)
-    {
-        return @"Local\winshell-shell-" + Hash(localRoot + "\n" + shellId);
+        return @"Local\winshell-shell-" + Hash(locations.LocalRoot + "\n" + shellId);
     }
 
     private static string Hash(string text)
@@ -39,10 +33,10 @@ internal readonly struct DuplicateHold : IDisposable
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToUpperInvariant())));
     }
 
-    /// <summary>Claims <paramref name="mutexName"/>, unless <paramref name="isSameShell"/> matches a running instance.</summary>
-    public static DuplicateHold TryClaim(string mutexName, Func<InstanceInfo, bool> isSameShell)
+    /// <summary>Claims the mutex of <paramref name="shellId"/>, unless a running instance already has that shell id.</summary>
+    public static DuplicateHold TryClaim(ShellLocations locations, string shellId)
     {
-        var mutex = new Mutex(false, mutexName);
+        var mutex = new Mutex(false, ShellMutexName(locations, shellId));
         bool mine;
         try
         {
@@ -61,7 +55,8 @@ internal readonly struct DuplicateHold : IDisposable
         }
 
         // A shell started without --no-duplicate holds no mutex. Its instance.json is the only record of it.
-        if (Instances.List(false).Any(i => isSameShell(i.Info)))
+        if (locations.Instances.List(false)
+            .Any(i => string.Equals(i.Info.ShellId, shellId, StringComparison.OrdinalIgnoreCase)))
         {
             mutex.ReleaseMutex();
             mutex.Dispose();

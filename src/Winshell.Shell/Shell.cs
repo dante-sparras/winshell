@@ -109,7 +109,7 @@ public sealed partial class Shell : IDisposable
     public string ConfigDir => Path.GetDirectoryName(Environment.ProcessPath)!;
 
     /// <summary>The config folder: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> when it is set.</summary>
-    public string ConfigRoot => ConfigPaths.Root();
+    public string ConfigRoot => ShellLocations.Current.ConfigRoot;
 
     /// <summary>This instance's log file, or empty when it writes none.</summary>
     public string LogPath { get; }
