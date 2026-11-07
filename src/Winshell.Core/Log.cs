@@ -39,6 +39,17 @@ public sealed class Log
     internal LogLevel MinimumLevel { get; set; } = LogLevel.Info;
 
     /// <summary>
+    /// A file that reports to this log changed whether it reads: its path and why not, or empty once it reads again.
+    /// Under <c>winshell dev</c> the shell shows it on screen.
+    /// </summary>
+    internal event Action<string, string>? FileErrorChanged;
+
+    internal void ReportFileError(string path, string error)
+    {
+        FileErrorChanged?.Invoke(path, error);
+    }
+
+    /// <summary>
     /// Writes <paramref name="message"/> under <paramref name="category"/>, such as <c>tray</c>. A
     /// <see cref="LogLevel.Debug"/> message is dropped unless the shell runs with <c>--verbose</c>.
     /// </summary>

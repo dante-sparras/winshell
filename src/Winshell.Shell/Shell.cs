@@ -49,18 +49,30 @@ public sealed partial class Shell : IDisposable
     private bool _nextStarted;
     private bool _disposed;
 
-    internal Shell(IEventLoop loop, Log log, ShellOptions options, ShellIdentity identity, ShellArguments arguments)
+    private Shell(IEventLoop loop, ShellOptions options, InstanceSession session)
     {
+        var log = session.Log;
         Loop = loop;
         Log = log;
         Options = options;
-        _identity = identity;
-        _arguments = arguments;
+        _identity = session.Identity;
+        _arguments = session.Arguments;
+        LogPath = session.Instance.LogPath;
         Ipc = new ShellIpc(log);
         Platform = new ShellPlatform(loop, log);
+        Notices = new ShellNotices(
+            loop,
+            log,
+            session.Instance.Crashes,
+            (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
+            path => OpenToRead.Open(path, log),
+            ShellNotices.WindowsIsQuiet);
     }
 
-    /// <summary>The project folder <c>winshell dev</c> runs, where a shell follows its <c>.xaml</c> files.</summary>
+    /// <summary>
+    /// The project folder <c>winshell dev</c> runs. A shell started with it follows its <c>.xaml</c> files and shows a
+    /// file that does not read on screen.
+    /// </summary>
     internal const string DevProjectVariable = "WINSHELL_DEV_PROJECT";
 
     /// <summary>The shell of this process, or null before <see cref="Run{T}"/> has started it.</summary>
@@ -81,6 +93,9 @@ public sealed partial class Shell : IDisposable
 
     internal ShellPlatform Platform { get; }
 
+    /// <summary>Winshell's own notices.</summary>
+    internal ShellNotices Notices { get; }
+
     /// <summary>The Winshell release this program is built on.</summary>
     public static string Version => ProductVersion.Current.Text;
 
@@ -97,7 +112,7 @@ public sealed partial class Shell : IDisposable
     public string ConfigRoot => ConfigPaths.Root();
 
     /// <summary>This instance's log file, or empty when it writes none.</summary>
-    public string LogPath { get; internal set; } = "";
+    public string LogPath { get; }
 
     /// <summary>This shell's data folder, which exists once read.</summary>
     public string DataDir => Ensure(_identity.DataDir);
@@ -193,9 +208,6 @@ public sealed partial class Shell : IDisposable
     private static void RunHost(ShellConfiguration configuration, ShellOptions options, InstanceSession session)
     {
         var instance = session.Instance;
-        var log = session.Log;
-        var identity = session.Identity;
-        var arguments = session.Arguments;
         Exception? failed = null;
         ComWrappersSupport.InitializeComWrappers();
         Application.Start(_ =>
@@ -204,28 +216,22 @@ public sealed partial class Shell : IDisposable
             SynchronizationContext.SetSynchronizationContext(new DispatcherQueueSynchronizationContext(queue));
             var application = new ShellApplication(() =>
             {
+                Shell? shell = null;
                 // Thrown from here it would cross into WinUI, which ends the process with nothing reported.
                 try
                 {
-                    var loop = new DispatcherLoop(queue, log);
+                    var loop = new DispatcherLoop(queue, session.Log);
                     loop.Failed += e => instance.Reported(instance.Crashes.WriteOnce("event loop", e, "Winshell",
                         "Something in Winshell failed. It is still running."));
-                    var shell = new Shell(loop, log, options, identity, arguments);
-                    shell.LogPath = instance.LogPath;
+                    shell = new Shell(loop, options, session);
                     _current = shell;
-                    var notices = new ShellNotices(
-                        loop,
-                        log,
-                        instance.Crashes,
-                        (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
-                        path => OpenToRead.Open(path, log),
-                        ShellNotices.WindowsIsQuiet);
-                    shell.Notices = notices;
                     // Under winshell dev, a file that does not read says so on screen. Normally the log has it.
-                    if (Environment.GetEnvironmentVariable("DOTNET_WATCH") == "1")
-                        TomlFile.ErrorChanged += notices.ShowConfigError;
                     if (Environment.GetEnvironmentVariable(DevProjectVariable) is { Length: > 0 } project)
+                    {
+                        shell.Notices.FollowFileErrors();
                         XamlReload.Watch(shell, project);
+                    }
+
                     session.Serve(loop, new Control(shell));
                     // winshell.exe is a console program: Ctrl+C would end it with no Dispose, so it quits instead.
                     Console.CancelKeyPress += (_, e) =>
@@ -234,8 +240,7 @@ public sealed partial class Shell : IDisposable
                         loop.Post(shell.Quit);
                     };
                     configuration.Start(shell);
-                    ShellInstance.Quietly(() =>
-                        notices.ShowPrevious(ShellInstance.ExitState, ShellNotices.ReadCrashTimeout()));
+                    ShellInstance.Quietly(() => shell.Notices.ShowPrevious(ShellInstance.ExitState));
                 }
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
@@ -244,7 +249,7 @@ public sealed partial class Shell : IDisposable
                     // Windows go first: WinUI crashes on the way out with any still open.
                     queue.TryEnqueue(() =>
                     {
-                        ShellInstance.Quietly(() => _current?.Dispose());
+                        ShellInstance.Quietly(() => shell?.Dispose());
                         Application.Current.Exit();
                     });
                 }
@@ -325,7 +330,7 @@ public sealed partial class Shell : IDisposable
         if (_disposed)
             return;
         _disposed = true;
-        Notices?.Dispose();
+        Notices.Dispose();
         DisposeServices();
         Platform.Dispose();
     }
@@ -352,12 +357,12 @@ public sealed partial class Shell : IDisposable
 
         public void ShowBuildError(string error, string projectFile)
         {
-            shell.Notices?.ShowBuildError(error, projectFile);
+            shell.Notices.ShowBuildError(error, projectFile);
         }
 
         public void DismissNotice()
         {
-            shell.Notices?.Hide();
+            shell.Notices.Hide();
         }
 
         public Task<string> Inspect(string command, IReadOnlyList<string> args)

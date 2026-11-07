@@ -101,7 +101,7 @@ public sealed class ShellInstanceTests
             try
             {
                 Assert.True(response.Ok);
-                Assert.Equal(NoticeKind.BuildError, shell.Notices!.Current!.Kind);
+                Assert.Equal(NoticeKind.BuildError, shell.Notices.Current!.Kind);
                 Assert.Contains("CS1002", shell.Notices.Current.Body, StringComparison.Ordinal);
                 Assert.Equal(Environment.ProcessId, (await Own()).Pid);
             }
@@ -152,7 +152,7 @@ public sealed class ShellInstanceTests
     {
         return ShellFixture.On(shell =>
         {
-            shell.Notices?.Hide();
+            shell.Notices.Hide();
             return true;
         });
     }

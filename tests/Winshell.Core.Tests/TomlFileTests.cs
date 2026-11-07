@@ -603,6 +603,22 @@ public sealed class TomlFileTests
     }
 
     [Fact]
+    public void Its_log_hears_when_the_file_stops_reading_and_when_it_reads_again()
+    {
+        using var fixture = new TomlFixture("name = \"broken");
+        var heard = new List<(string Path, string Error)>();
+        fixture.Log.FileErrorChanged += (path, error) => heard.Add((path, error));
+        using var settings = Open(fixture);
+
+        File.WriteAllText(fixture.FilePath, "name = \"fixed\"\n");
+        settings.Save();
+
+        Assert.Equal([fixture.FilePath, fixture.FilePath], heard.Select(h => h.Path));
+        Assert.Contains("settings.toml[1:", heard[0].Error, StringComparison.Ordinal);
+        Assert.Equal("", heard[1].Error);
+    }
+
+    [Fact]
     public void A_torn_read_is_written_from_the_copy_that_parses()
     {
         using var fixture = new TomlFixture("name = \"broken");

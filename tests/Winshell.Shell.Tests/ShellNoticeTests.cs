@@ -13,6 +13,7 @@ public sealed class ShellNoticeTests : IDisposable
     private readonly List<string> _logged = [];
     private readonly List<Notice> _shown = [];
     private readonly List<string> _opened = [];
+    private readonly Log _log;
     private readonly CrashReports _crashes;
     private readonly ShellNotices _notices;
     private Action _act = () => { };
@@ -24,9 +25,8 @@ public sealed class ShellNoticeTests : IDisposable
     public ShellNoticeTests()
     {
         _crashes = new CrashReports(_dir);
-        _notices = new ShellNotices(_loop,
-            new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") }, _crashes, Show,
-            _opened.Add, () => _quiet);
+        _log = new Log { Sink = (_, category, message) => _logged.Add($"{category}: {message}") };
+        _notices = new ShellNotices(_loop, _log, _crashes, Show, _opened.Add, () => _quiet);
     }
 
     public void Dispose()
@@ -49,7 +49,8 @@ public sealed class ShellNoticeTests : IDisposable
     [Fact]
     public void A_config_file_that_does_not_read_shows_until_it_is_fixed()
     {
-        _notices.ShowConfigError(@"C:\config\preferences.toml", "preferences.toml[3:1]: expected a value");
+        _notices.FollowFileErrors();
+        _log.ReportFileError(@"C:\config\preferences.toml", "preferences.toml[3:1]: expected a value");
 
         var notice = Assert.Single(_shown);
         Assert.Equal(NoticeKind.ConfigError, notice.Kind);
@@ -57,7 +58,7 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.Contains("[3:1]", notice.Body, StringComparison.Ordinal);
         Assert.Equal(TimeSpan.Zero, notice.Timeout);
 
-        _notices.ShowConfigError(@"C:\config\preferences.toml", "");
+        _log.ReportFileError(@"C:\config\preferences.toml", "");
 
         Assert.Null(_notices.Current);
     }
@@ -134,7 +135,7 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.NotNull(report);
         var state = Path.Combine(_dir, "last-exit.toml");
 
-        _notices.ShowPrevious(state, TimeSpan.FromSeconds(25));
+        _notices.ShowPrevious(state);
         _loop.Process();
 
         var notice = Assert.Single(_shown);
@@ -142,7 +143,7 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.Contains("boom", notice.Body, StringComparison.Ordinal);
         Assert.Equal(report.Path, notice.Target);
 
-        _notices.ShowPrevious(state, TimeSpan.FromSeconds(25));
+        _notices.ShowPrevious(state);
         _loop.Process();
 
         Assert.Single(_shown);

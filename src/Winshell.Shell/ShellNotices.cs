@@ -139,10 +139,14 @@ internal sealed class ShellNotices : IDisposable
     /// <summary>The notice for something that failed: what failed, what Winshell did, and the report.</summary>
     public static Notice ForCrash(CrashReport report, TimeSpan timeout)
     {
-        var subject = report.Subject.Length > 0 ? report.Subject : "a window";
+        return ForCrash(report.Subject.Length > 0 ? report.Subject : "a window", report.Recovery, report.Path, timeout);
+    }
+
+    private static Notice ForCrash(string subject, string body, string reportPath, TimeSpan timeout)
+    {
         var title = char.ToUpperInvariant(subject[0]) + subject[1..] + " stopped working";
-        return new Notice(NoticeKind.Crash, title, "", report.Recovery, "A crash report was saved on this PC.",
-            "Open report", report.Path, timeout);
+        return new Notice(NoticeKind.Crash, title, "", body, "A crash report was saved on this PC.", "Open report",
+            reportPath, timeout);
     }
 
     /// <summary>Shows a notice in place of the one showing. The notice is what reports problems, so one it has itself goes to the log.</summary>
@@ -173,15 +177,20 @@ internal sealed class ShellNotices : IDisposable
     }
 
     /// <summary>Says once that Winshell closed the last time it ran, when it left a report no one has seen.</summary>
-    public void ShowPrevious(string stateFile, TimeSpan timeout)
+    public void ShowPrevious(string stateFile)
     {
         if (CrashReports.Find(_crashes.Folder, stateFile) is not { } closed)
             return;
         CrashReports.MarkShown(stateFile, closed.Path);
         var body = closed.ExceptionLine.Length > 0 ? closed.ExceptionLine : "Winshell closed the last time it ran.";
-        var notice = new Notice(NoticeKind.Crash, "Winshell stopped working", "", body,
-            "A crash report was saved on this PC.", "Open report", closed.Path, timeout);
+        var notice = ForCrash("Winshell", body, closed.Path, ReadCrashTimeout());
         _loop.Post(() => Show(notice));
+    }
+
+    /// <summary>Shows each file written to the log that does not read, until it reads again.</summary>
+    public void FollowFileErrors()
+    {
+        _log.FileErrorChanged += ShowConfigError;
     }
 
     public void Dispose()
@@ -190,6 +199,7 @@ internal sealed class ShellNotices : IDisposable
             return;
         _disposed = true;
         _crashes.Written -= OnReport;
+        _log.FileErrorChanged -= ShowConfigError;
         Hide();
     }
 
@@ -220,7 +230,7 @@ internal sealed class ShellNotices : IDisposable
         });
     }
 
-    internal static TimeSpan ReadCrashTimeout()
+    private static TimeSpan ReadCrashTimeout()
     {
         return MessageDuration.Seconds() is { } seconds ? CrashTimeoutFor(seconds) : CrashTimeout;
     }

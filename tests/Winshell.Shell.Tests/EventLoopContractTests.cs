@@ -141,7 +141,7 @@ public sealed class EventLoopContractTests
                 var hidden = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 shell.Loop.Post(() =>
                 {
-                    shell.Notices?.Hide();
+                    shell.Notices.Hide();
                     hidden.TrySetResult();
                 });
                 await hidden.Task;
