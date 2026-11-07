@@ -104,10 +104,10 @@ internal static class AtomicFile
         }
         finally
         {
+            // A hand save or a failed replace leaves the temp. A failure to delete it is dropped: throwing here would
+            // replace the save's own outcome, and the next process's DeleteStaleTemps removes what is left.
             try
             {
-                // A successful replace has already moved the temp away. A hand save or a failed
-                // replace leaves it, and the next save must not see it.
                 if (File.Exists(temp))
                     File.Delete(temp);
             }
@@ -132,8 +132,10 @@ internal static class AtomicFile
     }
 
     /// <summary>
-    /// Replaces <paramref name="path"/> with <paramref name="temp"/>.
-    /// Antivirus and indexers often hold the new file for a moment, so a sharing or lock failure is tried again.
+    /// Replaces <paramref name="path"/> with <paramref name="temp"/>. Antivirus and indexers often hold the new file
+    /// for a moment, so a lock is tried again, waiting at most 375 ms in all. The wait blocks the caller, which may be
+    /// the loop: <see cref="TomlFile.Save"/> promises the file is written when it returns, and a write still on its way
+    /// at <see cref="TomlFile.Dispose"/> must land before the process ends.
     /// </summary>
     private static void MoveReplacing(string temp, string path)
     {
@@ -144,22 +146,15 @@ internal static class AtomicFile
                 File.Move(temp, path, true);
                 return;
             }
-            catch (Exception e) when (IsTransientLock(e) && attempt < delays.Length)
+            catch (Exception e) when (FileErrors.IsLock(e) && attempt < delays.Length)
             {
                 Thread.Sleep(delays[attempt]);
             }
     }
 
-    private static bool IsTransientLock(Exception exception)
-    {
-        // Win32: ERROR_ACCESS_DENIED 5, ERROR_SHARING_VIOLATION 32, ERROR_LOCK_VIOLATION 33.
-        var code = exception.HResult & 0xFFFF;
-        return code is 5 or 32 or 33;
-    }
-
     /// <summary>
-    /// Removes <c>path.tmp-*</c> left by a process that is no longer running.
-    /// The suffix is a process id, or <c>pid-guid</c> for a save in flight. A live process keeps its file.
+    /// Removes <c>path.tmp-*</c> left by a process that is no longer running. A save names its temp
+    /// <c>pid-guid</c>, and a live process keeps its file.
     /// </summary>
     private static void DeleteStaleTemps(string path)
     {
@@ -175,14 +170,12 @@ internal static class AtomicFile
             if (file.Length <= prefix.Length || !file.StartsWith(prefix, StringComparison.Ordinal))
                 continue;
             var suffix = file[prefix.Length..];
-            // The save names the temp pid-guid. An older temp is only the pid. Either way a live process keeps its file.
-            var pidText = suffix;
             var dash = suffix.IndexOf('-');
-            if (dash >= 0)
-                pidText = suffix[..dash];
-            if (int.TryParse(pidText, NumberStyles.None, CultureInfo.InvariantCulture, out var pid)
+            if (dash > 0
+                && int.TryParse(suffix.AsSpan(0, dash), NumberStyles.None, CultureInfo.InvariantCulture, out var pid)
                 && ProcessIsRunning(pid))
                 continue;
+            // A temp another process still holds is left for the next save to try again. It never stops this one.
             try
             {
                 File.Delete(candidate);
@@ -228,6 +221,7 @@ internal static class AtomicFile
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
+            // A link Windows can't follow, such as a loop or a target this user can't read, is used as it is.
         }
 
         return full;

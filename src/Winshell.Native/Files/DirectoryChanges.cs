@@ -6,6 +6,23 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
 
+/// <summary>What a <see cref="DirectoryChanges"/> reports.</summary>
+[Flags]
+internal enum DirectoryChange : uint
+{
+    /// <summary>A file was created, deleted or renamed.</summary>
+    FileName = FILE_NOTIFY_CHANGE.FILE_NOTIFY_CHANGE_FILE_NAME,
+
+    /// <summary>A folder was created, deleted or renamed.</summary>
+    FolderName = FILE_NOTIFY_CHANGE.FILE_NOTIFY_CHANGE_DIR_NAME,
+
+    /// <summary>A file's size changed.</summary>
+    Size = FILE_NOTIFY_CHANGE.FILE_NOTIFY_CHANGE_SIZE,
+
+    /// <summary>A file's last write time changed.</summary>
+    LastWrite = FILE_NOTIFY_CHANGE.FILE_NOTIFY_CHANGE_LAST_WRITE
+}
+
 /// <summary>
 /// One folder opened for overlapped <c>ReadDirectoryChangesW</c>, with its buffer and completion event. Windows
 /// cancels a read when the thread that made it ends, so one thread makes every <see cref="Read"/> and
@@ -22,7 +39,7 @@ internal sealed unsafe class DirectoryChanges : IDisposable
     private const int HeaderSize = 3 * sizeof(uint);
 
     private readonly SafeFileHandle _handle;
-    private readonly uint _filter;
+    private readonly DirectoryChange _filter;
     private readonly bool _subtree;
     private readonly ManualResetEvent _completed = new(false);
     private readonly byte* _buffer = (byte*)NativeMemory.Alloc(BufferSize);
@@ -32,7 +49,7 @@ internal sealed unsafe class DirectoryChanges : IDisposable
 
     private int _disposed;
 
-    private DirectoryChanges(SafeFileHandle handle, uint filter, bool subtree)
+    private DirectoryChanges(SafeFileHandle handle, DirectoryChange filter, bool subtree)
     {
         _handle = handle;
         _filter = filter;
@@ -41,9 +58,9 @@ internal sealed unsafe class DirectoryChanges : IDisposable
     }
 
     /// <summary>Opens <paramref name="path"/>, or returns null when the folder can't be opened.</summary>
-    /// <param name="filter">The <c>FILE_NOTIFY_CHANGE_*</c> flags to report.</param>
+    /// <param name="filter">What to report.</param>
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
-    internal static DirectoryChanges? Open(string path, uint filter, bool subtree)
+    internal static DirectoryChanges? Open(string path, DirectoryChange filter, bool subtree)
     {
         var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0,
             (uint)FileMode.Open,

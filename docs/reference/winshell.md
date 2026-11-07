@@ -38,15 +38,6 @@ The edges of a screen or a window, such as the ones a panel is anchored to. Thes
 | `Right` | 4 | The right edge. |
 | `Bottom` | 8 | The bottom edge. |
 
-## FileWatch
-
-Follows one file that may not exist yet, and calls back on the loop when it may have changed. A folder that is missing is watched from the nearest one that exists, and each folder created under it moves the watch one step closer. Nothing is called after Dispose.
-
-| Member | Type | Description |
-| --- | --- | --- |
-| `FileWatch(string path, [IEventLoop](#ieventloop) loop, Action changed)` | constructor | Starts watching path, calling changed on loop. |
-| `Dispose()` | void | Stops watching the file. |
-
 ## FloatingWindow
 
 A normal window with a title bar.

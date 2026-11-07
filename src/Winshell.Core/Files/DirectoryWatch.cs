@@ -10,11 +10,12 @@ namespace Winshell;
 /// </summary>
 internal sealed class DirectoryWatch : IDisposable
 {
-    // FILE_NOTIFY_CHANGE_FILE_NAME | SIZE | LAST_WRITE.
-    public const uint FileChanges = 0x00000001 | 0x00000008 | 0x00000010;
+    /// <summary>A file was created, deleted, renamed or written.</summary>
+    public const DirectoryChange FileChanges =
+        DirectoryChange.FileName | DirectoryChange.Size | DirectoryChange.LastWrite;
 
-    // FILE_NOTIFY_CHANGE_FILE_NAME | DIR_NAME.
-    public const uint NameChanges = 0x00000001 | 0x00000002;
+    /// <summary>A file or folder was created, deleted or renamed.</summary>
+    public const DirectoryChange NameChanges = DirectoryChange.FileName | DirectoryChange.FolderName;
 
     private readonly DirectoryChanges _changes;
     private readonly Action<string> _changed;
@@ -39,7 +40,7 @@ internal sealed class DirectoryWatch : IDisposable
     /// <param name="changed">Called with the name of each thing that changed, relative to the folder.</param>
     /// <param name="lost">Called once when the folder went away or changes were dropped. Nothing is reported after it.</param>
     /// <param name="subtree">Also report changes in folders under <paramref name="path"/>.</param>
-    public static DirectoryWatch? Start(string path, uint filter, Action<string> changed, Action lost,
+    public static DirectoryWatch? Start(string path, DirectoryChange filter, Action<string> changed, Action lost,
         bool subtree = false)
     {
         if (DirectoryChanges.Open(path, filter, subtree) is not { } changes)
