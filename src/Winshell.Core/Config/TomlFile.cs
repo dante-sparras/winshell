@@ -127,7 +127,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
     /// <summary>Takes in the file as it is now. A good read replaces what was assigned and could not be written.</summary>
     private void Follow()
     {
-        // The write on its way reads the file too, and keeps what was assigned.
         if (_writePending)
             return;
         var load = TomlDocument.Load(_path);
@@ -138,7 +137,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
                 _log.Debug("io", $"TomlFile: failed to read {_path}: {load.Message}");
                 return;
             case TomlRead.TooLarge:
-                // A file past the limit is still the user's file.
                 _text = null;
                 Error = load.Describe(_path);
                 Loaded = false;
@@ -175,7 +173,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
         var load = TomlDocument.Load(_path);
         var document = load.Document;
         var error = load.Describe(_path);
-        // No file yet is an empty document, so the assigned keys can create it.
         if (load.Kind == TomlRead.Missing)
             document = TomlDocument.Empty(_path);
         if (document is null)
@@ -187,7 +184,6 @@ public abstract class TomlFile : ObservableObject, IDisposable
         }
 
         Error = "";
-        // A file that has not changed was applied already, and its refused values reported.
         if (load.Text != _text)
             Apply(document, true);
         var read = document.Values;

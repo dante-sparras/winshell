@@ -10,10 +10,8 @@ GetSidSubAuthorityCount
 GetSidSubAuthority
 GetCurrentPackageFullName
 
-// Apps
 SHGetKnownFolderPath
 
-// Audio
 EDataFlow
 ERole
 AudioSessionState
@@ -25,7 +23,6 @@ SHLoadIndirectString
 CoMarshalInterThreadInterfaceInStream
 CoGetInterfaceAndReleaseStream
 
-// Bluetooth
 BluetoothIsDiscoverable
 BluetoothIsConnectable
 BluetoothEnableDiscovery
@@ -36,18 +33,15 @@ KSIDENTIFIER
 KSPROPERTY_TYPE_GET
 KSPROPERTY_BTAUDIO
 
-// Capture
 CLIPBOARD_FORMAT
 CreateDirect3D11DeviceFromDXGIDevice
 GlobalFree
 IDirect3DDxgiInterfaceAccess
 IGraphicsCaptureItemInterop
 
-// Diagnostics
 GetThreadDpiAwarenessContext
 AreDpiAwarenessContextsEqual
 
-// Files
 FindFirstFileW
 FindClose
 GetFileInformationByHandle
@@ -56,16 +50,13 @@ GetOverlappedResult
 CancelIoEx
 FILE_NOTIFY_INFORMATION
 
-// Icons
 SIIGBF
 SIZE
 
-// Input
 KBDLLHOOKSTRUCT
 SendInput
 SetCursorPos
 
-// Instances
 GetStdHandle
 SetHandleInformation
 GetFileType
@@ -73,7 +64,6 @@ GetConsoleWindow
 TaskDialogIndirect
 TD_ERROR_ICON
 
-// Ipc
 ConvertStringSecurityDescriptorToSecurityDescriptorW
 ConvertSecurityDescriptorToStringSecurityDescriptorW
 SetKernelObjectSecurity
@@ -82,7 +72,6 @@ GetNamedPipeClientProcessId
 CreateNamedPipeW
 SDDL_REVISION_1
 
-// Network
 ConvertInterfaceGuidToLuid
 GetIfEntry2
 WlanOpenHandle
@@ -99,7 +88,6 @@ WLAN_PROFILE_GROUP_POLICY
 WLAN_PROFILE_USER
 WLAN_CONNECTION_HIDDEN_NETWORK
 
-// Power
 GetNumberOfPhysicalMonitorsFromHMONITOR
 GetPhysicalMonitorsFromHMONITOR
 GetMonitorBrightness
@@ -113,12 +101,10 @@ PowerRegisterForEffectivePowerModeNotifications
 PowerUnregisterFromEffectivePowerModeNotifications
 EFFECTIVE_POWER_MODE_V2
 
-// Screens
 EnumDisplaySettings
 ENUM_DISPLAY_SETTINGS_MODE
 EDD_GET_DEVICE_INTERFACE_NAME
 
-// Shell
 AppendMenu
 CreatePopupMenu
 DestroyMenu
@@ -137,7 +123,6 @@ Process32NextW
 GenerateConsoleCtrlEvent
 GetConsoleProcessList
 
-// Tray
 AllowSetForegroundWindow
 ChangeWindowMessageFilterEx
 COPYDATASTRUCT
@@ -163,7 +148,6 @@ WM_CONTEXTMENU
 NIN_SELECT
 HWND_BROADCAST
 
-// Windows
 RegisterShellHookWindow
 GetShellWindow
 GetWindowTextLength
@@ -191,5 +175,4 @@ SC_CLOSE
 HSHELL_REDRAW
 HSHELL_HIGHBIT
 
-// Winland
 ProcessIdToSessionId

@@ -118,7 +118,6 @@ internal sealed unsafe class DirectoryChanges : IDisposable
 
     public void Dispose()
     {
-        // A second call would free the buffer again.
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
         _handle.Dispose();
