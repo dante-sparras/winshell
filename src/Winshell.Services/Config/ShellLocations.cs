@@ -30,7 +30,6 @@ internal sealed record ShellLocations(string ConfigRoot, string LocalRoot)
     /// <summary>Crash reports, one text file each. They stay on this PC.</summary>
     public string CrashRoot => Path.Combine(LocalRoot, "crashes");
 
-    /// <summary>The instances in <see cref="RunRoot"/>.</summary>
     public Instances Instances => new(RunRoot);
 
     /// <summary>A root for an override value: that folder, made full. A blank value is <c>winshell</c> in <paramref name="profile"/>.</summary>

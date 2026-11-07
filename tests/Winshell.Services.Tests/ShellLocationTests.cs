@@ -18,6 +18,16 @@ public class ShellLocationTests
     }
 
     [Fact]
+    public void The_local_override_names_the_local_root()
+    {
+        // LocalFolder gives every test here its own WINSHELL_LOCAL_DIR.
+        var local = Environment.GetEnvironmentVariable("WINSHELL_LOCAL_DIR")!;
+
+        Assert.Equal(local, ShellLocations.Current.LocalRoot);
+        Assert.NotEqual(local, ShellLocations.Current.ConfigRoot);
+    }
+
+    [Fact]
     public void An_override_is_a_fully_qualified_root()
     {
         var dir = Path.Combine(Path.GetTempPath(), "winshell-override");
