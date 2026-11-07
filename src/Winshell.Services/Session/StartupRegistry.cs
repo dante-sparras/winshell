@@ -26,11 +26,11 @@ internal interface IStartupRegistry
     bool Unregister();
 }
 
-/// <summary>
-/// A value under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, for the current user only.
-/// <paramref name="configRoot"/> is the config folder a sign-in command's <c>-c</c>, or its lack of <c>-p</c> and
-/// <c>-c</c>, is read against.
-/// </summary>
+/// <summary>A value under <c>HKCU\Software\Microsoft\Windows\CurrentVersion\Run</c>, for the current user only.</summary>
+/// <param name="command">The command this entry starts.</param>
+/// <param name="configRoot">The config folder a sign-in command's <c>-c</c>, or its lack of <c>-p</c> and <c>-c</c>, is read against.</param>
+/// <param name="runKey">The <c>Run</c> key, or a key of a test's own.</param>
+/// <param name="approvedKey">Where Startup apps keeps its on and off for <paramref name="runKey"/>.</param>
 internal sealed class WindowsStartupRegistry(
     string command,
     string configRoot,

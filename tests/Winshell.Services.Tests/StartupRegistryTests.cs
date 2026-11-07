@@ -224,22 +224,25 @@ public sealed class StartupRegistryTests : IDisposable
         // install.ps1 -AutoStart writes this command, which names no configuration.
         const string winshell = @"C:\Program Files\Winshell\winshell.exe";
         const string windowed = @"C:\Program Files\Winshell\winshellw.exe";
-        var root = _configRoot.Path;
-        var project = Configuration(root, "work");
-        // Outside the config folder, so a bare winshell run still has one configuration to start.
-        var play = Configuration(Path.Combine(root, "other"), "play");
+        const string written = @"C:\Users\a\AppData\Roaming\winshell\work";
         const string otherExe = @"C:\Other\winshell.exe";
         var conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
         var install = SignInEntry.CommandFor(winshell, []);
-        var supervised =
-            $"{conhost} --headless \"{winshell}\" run -p {SignInEntry.Quote(project)} --no-build --no-duplicate";
-        var program = project + @"\bin\shell\work.exe";
+        var command = $"{conhost} --headless \"{winshell}\" run -p {written} --no-build --no-duplicate";
+        var program = written + @"\bin\shell\work.exe";
 
-        Assert.Equal(supervised, SignInEntry.CommandFor(winshell, ["run", "-p", project]));
-        Assert.Equal(supervised, StartupService.SignInCommand(program, winshell));
-        Assert.Equal(supervised, StartupService.SignInCommand(project + @"\bin\shell.next\work.exe", windowed));
+        Assert.Equal(command, SignInEntry.CommandFor(winshell, ["run", "-p", written]));
+        Assert.Equal(command, StartupService.SignInCommand(program, winshell));
+        Assert.Equal(command, StartupService.SignInCommand(written + @"\bin\shell.next\work.exe", windowed));
         Assert.Null(StartupService.SignInCommand(program, null));
         Assert.Null(StartupService.SignInCommand(program, @"C:\Program Files\dotnet\dotnet.exe"));
+
+        // From here the configurations are on disk, where winshell run looks for them.
+        var root = _configRoot.Path;
+        var project = Configuration(root, "work");
+        // Not a folder of the config folder itself, so a bare winshell run still has one configuration to start.
+        var play = Configuration(Path.Combine(root, "other"), "play");
+        var supervised = SignInEntry.CommandFor(winshell, ["run", "-p", project]);
 
         bool Exists(string path)
         {
