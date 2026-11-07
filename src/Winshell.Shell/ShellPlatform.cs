@@ -16,11 +16,14 @@ namespace Winshell;
 /// <summary>What every native window of one process shares: the screens, the theme, and the clicks that close popups.</summary>
 internal sealed class ShellPlatform : IDisposable
 {
+    /// <summary>The accent followed when Windows' cannot be read: its default blue.</summary>
+    private const string DefaultAccent = "#0078D4";
+
     private readonly List<HostWindow> _windows = [];
     private readonly SystemChanges _systemChanges = new();
     private readonly List<ScreenInfo> _screens;
-    private readonly List<WinEventHook> _foregroundWatches = [];
-    private HashSet<string> _fullscreenScreens = [];
+    private readonly NativeWindow? _broadcasts;
+    private readonly FullscreenApps _fullscreenApps;
     private IDisposable? _relayout;
     private IDisposable? _screenRefresh;
     private UISettings? _uiSettings;
@@ -38,14 +41,17 @@ internal sealed class ShellPlatform : IDisposable
         ReadTheme();
         _uiSettings = new UISettings();
         _uiSettings.ColorValuesChanged += OnColorValuesChanged;
-        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        // Display and settings broadcasts reach only top-level windows. One hidden window hears them for the shell,
+        // whether or not it has a window of its own.
+        _broadcasts = NativeWindow.TryCreate("WinshellSystemChanges", Win32.WS_POPUP, Win32.WS_EX_TOOLWINDOW,
+            OnBroadcast, e => Log.Warn("shell", e.Message), false);
+        if (_broadcasts is null)
+            Log.Warn("shell",
+                "Could not make a window for system broadcasts; screen and theme changes will not be seen");
         OutsideClicks = new OutsideClicks(this);
         // Explorer tells only the app bars that reserve an edge about a fullscreen app, so this reads it from the foreground window.
-        foreach (var evt in new[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_LOCATIONCHANGE })
-            if (WinEventHook.Start(evt, OnForegroundEvent, e => Log.Warn("shell", e.Message)) is { } watch)
-                _foregroundWatches.Add(watch);
-        ReadFullscreen();
+        _fullscreenApps = new FullscreenApps(loop, log);
+        _fullscreenApps.Changed += WorkAreaMayHaveChanged;
     }
 
     public IEventLoop Loop { get; }
@@ -115,13 +121,13 @@ internal sealed class ShellPlatform : IDisposable
             try
             {
                 if (_uiSettings is null)
-                    return "#0078D4";
+                    return DefaultAccent;
                 var color = _uiSettings.GetColorValue(UIColorType.Accent);
                 return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
             }
             catch (COMException)
             {
-                return "#0078D4";
+                return DefaultAccent;
             }
         }
     }
@@ -146,14 +152,11 @@ internal sealed class ShellPlatform : IDisposable
 
     // Screens and the work area
 
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    private nint? OnBroadcast(WindowMessage message)
     {
-        Loop.Post(RefreshScreens);
-    }
-
-    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
-    {
-        FollowSystem(SystemChanges.From(e.Category));
+        if (_systemChanges.Add(SystemChanges.From(message.Id, message.WParam)))
+            Loop.Post(FollowPendingChanges);
+        return null;
     }
 
     private void RefreshScreens()
@@ -168,17 +171,6 @@ internal sealed class ShellPlatform : IDisposable
             if (Screens[i] != next[i])
                 Screens[i] = next[i];
         WorkAreaMayHaveChanged();
-    }
-
-    internal void SystemChanged(uint message, nint wParam)
-    {
-        FollowSystem(SystemChanges.From(message, wParam));
-    }
-
-    private void FollowSystem(SystemChange change)
-    {
-        if (_systemChanges.Add(change))
-            Loop.Post(FollowPendingChanges);
     }
 
     private void FollowPendingChanges()
@@ -223,42 +215,7 @@ internal sealed class ShellPlatform : IDisposable
     /// <summary>Whether another app is fullscreen on a screen, so panels there step back as the taskbar does.</summary>
     internal bool FullscreenOn(string screenId)
     {
-        return _fullscreenScreens.Contains(screenId);
-    }
-
-    private void OnForegroundEvent(uint evt, nint hwnd, int idObject, int idChild)
-    {
-        // A window's move or resize sends this for every window, so only the foreground one can change the answer.
-        if (hwnd == 0 || !WindowRules.IsWindowObject(idObject, idChild)
-                      || (evt == Win32.EVENT_OBJECT_LOCATIONCHANGE && hwnd != Win32.GetForegroundWindow()))
-            return;
-        Loop.Post(ReadFullscreen);
-    }
-
-    private void ReadFullscreen()
-    {
-        HashSet<string> next = [];
-        var hwnd = Win32.GetForegroundWindow();
-        if (hwnd != 0 && Win32.IsWindowVisible(hwnd) && !IsShellWindow(hwnd) && Win32.GetWindowRect(hwnd, out var rect))
-        {
-            var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
-            foreach (var monitor in Winshell.Screens.Enumerate())
-                if (WindowRules.CoversMonitor(style, rect, monitor.Bounds))
-                    next.Add(monitor.Info.Id);
-        }
-
-        if (next.SetEquals(_fullscreenScreens))
-            return;
-        _fullscreenScreens = next;
-        WorkAreaMayHaveChanged();
-    }
-
-    /// <summary>The desktop, and a panel or popup of this process, which are never a fullscreen app.</summary>
-    private static bool IsShellWindow(nint hwnd)
-    {
-        if (((uint)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0)
-            return true;
-        return TopLevelWindows.ClassName(hwnd) is "Progman" or "WorkerW";
+        return _fullscreenApps.On(screenId);
     }
 
     // Theme
@@ -356,7 +313,7 @@ internal sealed class ShellPlatform : IDisposable
         {
         }
 
-        AccentShades.TryFrom("#0078D4", out var shades);
+        AccentShades.TryFrom(DefaultAccent, out var shades);
         return shades;
     }
 
@@ -371,16 +328,14 @@ internal sealed class ShellPlatform : IDisposable
 
     public void Dispose()
     {
-        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        _broadcasts?.Release(true);
+        _fullscreenApps.Dispose();
         if (_uiSettings is not null)
         {
             _uiSettings.ColorValuesChanged -= OnColorValuesChanged;
             _uiSettings = null;
         }
 
-        foreach (var watch in _foregroundWatches)
-            watch.Dispose();
         foreach (var w in _windows.ToArray())
             w.Dispose();
         // Last, since a window lets go of its grab as it goes.

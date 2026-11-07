@@ -62,10 +62,6 @@ internal sealed class HostMessages(HostWindow host, ShellPlatform platform, Acti
                 return null;
             case Win32.WM_ERASEBKGND:
                 return 1;
-            case Win32.WM_DISPLAYCHANGE or Win32.WM_SETTINGCHANGE or Win32.WM_DWMCOLORIZATIONCOLORCHANGED
-                or Win32.WM_SYSCOLORCHANGE or Win32.WM_THEMECHANGED:
-                platform.SystemChanged(msg, wParam);
-                return null;
             default:
                 return null;
         }

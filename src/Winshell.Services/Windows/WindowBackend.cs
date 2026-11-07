@@ -38,7 +38,10 @@ internal sealed record WindowRead(
 /// </summary>
 internal interface IWindowBackend
 {
-    /// <summary>A WinEvent: its type, window, object id and child id. Raised on the thread that called <see cref="Start"/>.</summary>
+    /// <summary>
+    /// A WinEvent: its type, window, object id and child id. Each hook raises it on the thread that set it, so
+    /// <see cref="WatchForeground"/> and <see cref="Start"/> are called on one thread.
+    /// </summary>
     event Action<uint, nint, int, int>? WinEvent;
 
     /// <summary>A window flashed to ask for attention. Raised on the thread that called <see cref="Start"/>.</summary>
@@ -49,6 +52,18 @@ internal interface IWindowBackend
 
     /// <summary>Starts raising <see cref="WinEvent"/> and <see cref="Flashed"/>, once. The thread must pump messages.</summary>
     void Start(Log log);
+
+    /// <summary>
+    /// Starts raising <see cref="WinEvent"/> for a new foreground and for windows that move or resize, once, without
+    /// the rest <see cref="Start"/> watches. The thread must pump messages.
+    /// </summary>
+    void WatchForeground(Log log);
+
+    /// <summary>
+    /// The monitors the foreground window covers, as a fullscreen game or video does. None when the foreground is the
+    /// desktop, which covers every monitor, or a tool window, as panels and popups are.
+    /// </summary>
+    IReadOnlySet<string> FullscreenScreens();
 
     /// <summary>The top-level windows, in z-order.</summary>
     IReadOnlyList<nint> TopLevel();
@@ -98,6 +113,7 @@ internal sealed class WindowBackend : IWindowBackend
     public static WindowBackend Shared { get; } = new();
 
     private bool _started;
+    private bool _foregroundWatched;
 
     private WindowBackend()
     {
@@ -139,28 +155,36 @@ internal sealed class WindowBackend : IWindowBackend
         return WindowDesktop.Move(hwnd, desktop);
     }
 
+    public void WatchForeground(Log log)
+    {
+        if (_foregroundWatched)
+            return;
+        _foregroundWatched = true;
+        Hook(log, Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND);
+        Hook(log, Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_LOCATIONCHANGE);
+    }
+
     public void Start(Log log)
     {
         if (_started)
             return;
         _started = true;
-        (uint Min, uint Max)[] ranges =
-        [
-            (Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_SYSTEM_FOREGROUND),
-            (Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND),
-            (Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE),
-            (Win32.EVENT_OBJECT_LOCATIONCHANGE, Win32.EVENT_OBJECT_NAMECHANGE),
-            (Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED)
-        ];
-        foreach (var (min, max) in ranges)
-            if (WinEventHook.Start(min, max, OnWinEvent, Failed) is null)
-                log.Warn("windows",
-                    $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
+        WatchForeground(log);
+        Hook(log, Win32.EVENT_SYSTEM_MINIMIZESTART, Win32.EVENT_SYSTEM_MINIMIZEEND);
+        Hook(log, Win32.EVENT_OBJECT_CREATE, Win32.EVENT_OBJECT_HIDE);
+        Hook(log, Win32.EVENT_OBJECT_NAMECHANGE, Win32.EVENT_OBJECT_NAMECHANGE);
+        Hook(log, Win32.EVENT_OBJECT_CLOAKED, Win32.EVENT_OBJECT_UNCLOAKED);
         // The shell hook messages Explorer's taskbar gets. Only HSHELL_FLASH is read: WinEvents say nothing when a
         // window flashes.
         if (!ShellHookWindow.Start(OnShellHook, Failed))
             log.Warn("windows",
                 "RegisterShellHookWindow failed; windows that flash will not show that they want attention");
+    }
+
+    private void Hook(Log log, uint min, uint max)
+    {
+        if (WinEventHook.Start(min, max, OnWinEvent, Failed) is null)
+            log.Warn("windows", $"SetWinEventHook failed for events {min:x}-{max:x}; those changes will not be seen");
     }
 
     private static void Failed(Exception e)
@@ -209,11 +233,8 @@ internal sealed class WindowBackend : IWindowBackend
         var device = monitor != 0 && Monitors.TryRead(monitor, out mi) ? mi.Device : "";
         var fullscreen = false;
         if (!minimized && device.Length > 0 && Win32.GetWindowRect(hwnd, out var rect))
-        {
-            // No title bar and covering the whole monitor, as a game or a video player in fullscreen does.
-            var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
-            fullscreen = WindowRules.CoversMonitor(style, rect, mi.Bounds);
-        }
+            fullscreen =
+                WindowRules.CoversMonitor((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE), rect, mi.Bounds);
 
         // The property can arrive after the window is first shown, so it is read every time.
         var property = AppUserModelIds.OfWindow(hwnd);
@@ -233,6 +254,21 @@ internal sealed class WindowBackend : IWindowBackend
     {
         Win32.GetWindowThreadProcessId(hwnd, out var pid);
         return ProcessImage.TryRead(pid) ?? "";
+    }
+
+    public IReadOnlySet<string> FullscreenScreens()
+    {
+        HashSet<string> screens = [];
+        var hwnd = Win32.GetForegroundWindow();
+        if (hwnd == 0 || !Win32.IsWindowVisible(hwnd) || TopLevelWindows.IsShellWindow(hwnd)
+            || ((long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_EXSTYLE) & Win32.WS_EX_TOOLWINDOW) != 0
+            || !Win32.GetWindowRect(hwnd, out var rect))
+            return screens;
+        var style = (long)Win32.GetWindowLongPtr(hwnd, Win32.GWL_STYLE);
+        foreach (var monitor in Screens.Enumerate())
+            if (WindowRules.CoversMonitor(style, rect, monitor.Bounds))
+                screens.Add(monitor.Info.Id);
+        return screens;
     }
 
     /// <summary>

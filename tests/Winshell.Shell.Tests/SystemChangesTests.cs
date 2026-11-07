@@ -1,22 +1,21 @@
-using Microsoft.Win32;
 using Winshell.Native;
 
 namespace Winshell.ShellTests;
 
-/// <summary>One settings broadcast reaches every window. The shell follows that change once.</summary>
+/// <summary>One change in Windows can send several broadcasts. The shell follows that change once.</summary>
 public class SystemChangesTests
 {
     [Fact]
-    public void The_copies_of_a_broadcast_are_followed_once()
+    public void The_broadcasts_of_one_change_are_followed_once()
     {
         var changes = new SystemChanges();
 
         Assert.True(changes.Add(SystemChanges.From(Win32.WM_SETTINGCHANGE, 0)));
         Assert.False(changes.Add(SystemChanges.From(Win32.WM_SETTINGCHANGE, 0)));
         Assert.False(changes.Add(SystemChanges.From(Win32.WM_THEMECHANGED, 0)));
-        Assert.False(changes.Add(SystemChanges.From(UserPreferenceCategory.General)));
+        Assert.False(changes.Add(SystemChanges.From(Win32.WM_SYSCOLORCHANGE, 0)));
 
-        Assert.Equal(SystemChange.Text | SystemChange.Screens | SystemChange.Theme, changes.Take());
+        Assert.Equal(SystemChange.Screens | SystemChange.Theme, changes.Take());
     }
 
     [Fact]
@@ -32,22 +31,22 @@ public class SystemChangesTests
     }
 
     [Fact]
-    public void Each_message_asks_for_what_it_did_before()
+    public void Each_broadcast_asks_for_what_it_changes()
     {
         Assert.Equal(SystemChange.Screens, SystemChanges.From(Win32.WM_DISPLAYCHANGE, 0));
-        Assert.Equal(SystemChange.Text | SystemChange.Screens | SystemChange.Theme,
-            SystemChanges.From(Win32.WM_SETTINGCHANGE, 0));
-        Assert.Equal(SystemChange.Text | SystemChange.WorkArea | SystemChange.Theme,
+        Assert.Equal(SystemChange.Screens | SystemChange.Theme, SystemChanges.From(Win32.WM_SETTINGCHANGE, 0));
+        Assert.Equal(SystemChange.WorkArea | SystemChange.Theme,
             SystemChanges.From(Win32.WM_SETTINGCHANGE, Win32.SPI_SETWORKAREA));
         Assert.Equal(SystemChange.Theme, SystemChanges.From(Win32.WM_THEMECHANGED, 0));
+        Assert.Equal(SystemChange.Theme, SystemChanges.From(Win32.WM_DWMCOLORIZATIONCOLORCHANGED, 0));
     }
 
     [Fact]
-    public void An_unrelated_preference_posts_nothing()
+    public void An_unrelated_message_posts_nothing()
     {
         var changes = new SystemChanges();
 
-        Assert.False(changes.Add(SystemChanges.From(UserPreferenceCategory.Locale)));
-        Assert.True(changes.Add(SystemChanges.From(UserPreferenceCategory.Color)));
+        Assert.False(changes.Add(SystemChanges.From(Win32.WM_SIZE, 0)));
+        Assert.True(changes.Add(SystemChanges.From(Win32.WM_SYSCOLORCHANGE, 0)));
     }
 }

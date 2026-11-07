@@ -53,10 +53,13 @@ internal static unsafe class TopLevelWindows
         return new string(buffer, 0, Math.Clamp(got, 0, ClassNameCapacity - 1));
     }
 
-    /// <summary>Whether this is the desktop window Explorer draws the wallpaper and icons in.</summary>
+    /// <summary>
+    /// Whether this is the desktop: the window Explorer draws the wallpaper and icons in, or a <c>WorkerW</c> window
+    /// Explorer makes for it.
+    /// </summary>
     internal static bool IsShellWindow(nint hwnd)
     {
-        return hwnd == (nint)PInvoke.GetShellWindow();
+        return hwnd == (nint)PInvoke.GetShellWindow() || ClassName(hwnd) is "Progman" or "WorkerW";
     }
 
     /// <summary>Whether DWM hides the window, as it does a window on another virtual desktop or a suspended app.</summary>
