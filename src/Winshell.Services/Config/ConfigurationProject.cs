@@ -77,6 +77,15 @@ internal sealed partial class ConfigurationProject
             : null;
     }
 
+    /// <summary>
+    /// <paramref name="program"/> as it is in <see cref="OutputFolder"/>, so a program a reload built in
+    /// <c>bin\shell.next</c> names the same one. Null for a program in neither build folder.
+    /// </summary>
+    public static string? InOutputFolder(string program)
+    {
+        return FolderOf(program) is { } folder ? Path.Combine(folder, "bin", Output, Path.GetFileName(program)) : null;
+    }
+
     /// <summary>The project whose <see cref="ConfigurationBuild.Run"/> program is <paramref name="program"/>, or null.</summary>
     public static ConfigurationProject? ForProgram(string program)
     {

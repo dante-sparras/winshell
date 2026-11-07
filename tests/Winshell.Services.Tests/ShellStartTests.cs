@@ -74,23 +74,77 @@ public sealed class ShellStartTests
     }
 
     [Theory]
-    [InlineData(@"C:\config\mine.exe", "root")]
-    [InlineData(@"C:\config\Bar\bar.exe", "bar")]
-    public void A_program_in_the_config_folder_is_named_after_its_folder(string program, string id)
+    [InlineData(@"C:\config\bin\shell\Mine.exe", "root")]
+    [InlineData(@"C:\config\Bar\bin\shell\Bar.exe", "bar")]
+    [InlineData(@"C:\config\Bar\bin\shell.next\Bar.exe", "bar")]
+    public void A_configuration_in_the_config_folder_is_named_after_its_folder(string program, string id)
     {
-        Assert.Equal(id, ShellIdentity.Resolve(program, Locations, null, null, null, null).ShellId);
+        Assert.Equal(id, IdOf(program));
     }
 
     [Fact]
-    public void A_program_anywhere_else_is_named_after_its_path_in_any_case()
+    public void A_configuration_anywhere_else_is_named_after_its_path_in_any_case_from_either_build_folder()
     {
-        var one = ShellIdentity.Resolve(@"C:\shells\mine.exe", Locations, null, null, null, null).ShellId;
-        var same = ShellIdentity.Resolve(@"C:\SHELLS\MINE.EXE", Locations, null, null, null, null).ShellId;
-        var other = ShellIdentity.Resolve(@"C:\shells\yours.exe", Locations, null, null, null, null).ShellId;
+        var one = IdOf(@"C:\shells\mine\bin\shell\Mine.exe");
 
-        Assert.Equal(one, same);
-        Assert.NotEqual(one, other);
-        Assert.Matches("^[0-9a-f]{32}$", one);
+        // The id an earlier Winshell gave it, so its folders stay where they are.
+        Assert.Equal("cea0f30d0e45e5a6bf33f1d21c3e6351", one);
+        Assert.Equal(one, IdOf(@"C:\shells\mine\bin\shell.next\Mine.exe"));
+        Assert.Equal(one, IdOf(@"C:\SHELLS\MINE\BIN\SHELL\MINE.EXE"));
+        Assert.NotEqual(one, IdOf(@"C:\shells\yours\bin\shell\Yours.exe"));
+    }
+
+    [Fact]
+    public void Folders_named_after_the_earlier_hash_move_to_the_configurations_name_once()
+    {
+        using var temp = new TempFolder();
+        var locations = new ShellLocations(Path.Combine(temp.Path, "config"), Path.Combine(temp.Path, "local"));
+        var program = Path.Combine(locations.ConfigRoot, "bar", "bin", "shell", "Bar.exe");
+        // Before a configuration was named after its folder, its program's path named it, as it does with no config folder.
+        var earlier = ShellIdentity.Resolve(program, locations with { ConfigRoot = "" }, null, null, null, null);
+        Directory.CreateDirectory(earlier.DataDir);
+        File.WriteAllText(Path.Combine(earlier.DataDir, "kept.txt"), "data");
+        Directory.CreateDirectory(earlier.StateDir);
+        var messages = new List<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
+
+        var identity = ShellIdentity.Resolve(program, locations, null, null, null, null);
+        identity.CarryOver(log);
+
+        Assert.Equal("data", File.ReadAllText(Path.Combine(identity.DataDir, "kept.txt")));
+        Assert.True(Directory.Exists(identity.StateDir));
+        Assert.False(Directory.Exists(identity.CacheDir));
+        Assert.False(Directory.Exists(earlier.DataDir));
+        Assert.Equal(
+        [
+            $"shell: Moved \"{earlier.DataDir}\" to \"{identity.DataDir}\"",
+            $"shell: Moved \"{earlier.StateDir}\" to \"{identity.StateDir}\""
+        ], messages);
+
+        Directory.CreateDirectory(earlier.DataDir);
+        identity.CarryOver(log);
+
+        Assert.True(Directory.Exists(earlier.DataDir));
+        Assert.Equal(2, messages.Count);
+    }
+
+    [Fact]
+    public void A_given_shell_id_moves_nothing_and_a_given_folder_is_not_moved_into()
+    {
+        using var temp = new TempFolder();
+        var locations = new ShellLocations(Path.Combine(temp.Path, "config"), Path.Combine(temp.Path, "local"));
+        var program = Path.Combine(locations.ConfigRoot, "bar", "bin", "shell", "Bar.exe");
+        var earlier = ShellIdentity.Resolve(program, locations with { ConfigRoot = "" }, null, null, null, null);
+        Directory.CreateDirectory(earlier.DataDir);
+        Directory.CreateDirectory(earlier.StateDir);
+        var given = Path.Combine(temp.Path, "state");
+
+        ShellIdentity.Resolve(program, locations, "bar", null, null, null).CarryOver(new Log());
+        Assert.True(Directory.Exists(earlier.DataDir));
+
+        ShellIdentity.Resolve(program, locations, null, null, given, null).CarryOver(new Log());
+        Assert.True(Directory.Exists(earlier.StateDir));
+        Assert.False(Directory.Exists(given));
     }
 
     [Fact]
@@ -108,5 +162,10 @@ public sealed class ShellStartTests
     public void A_shell_id_names_its_mutex_in_any_case()
     {
         Assert.Equal(DuplicateHold.ShellMutexName(Locations, "Mine"), DuplicateHold.ShellMutexName(Locations, "mine"));
+    }
+
+    private static string IdOf(string program)
+    {
+        return ShellIdentity.Resolve(program, Locations, null, null, null, null).ShellId;
     }
 }
