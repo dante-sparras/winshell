@@ -403,15 +403,15 @@ internal sealed partial class ConfigurationProject
     }
 
     /// <summary>
-    /// Whether a line of build output is an error: <c>error</c> then its code, such as <c>error CS1002:</c> or
-    /// <c>XamlCompiler error WMC0130:</c>, or <c>error :</c> for one with no code.
+    /// Whether a line of build output is an error: <c>error</c> then its code, such as <c>error CS1002:</c>,
+    /// <c>error CsWinRT1028:</c> or <c>XamlCompiler error WMC0130:</c>, or <c>: error :</c> for one with no code.
     /// </summary>
     internal static bool IsErrorLine(string line)
     {
         return CompilerError().IsMatch(line);
     }
 
-    [GeneratedRegex(@"\berror(?: [A-Z]+\d+| ):")]
+    [GeneratedRegex(@"\berror [A-Za-z]+\d+:|: error :")]
     private static partial Regex CompilerError();
 
     /// <summary>

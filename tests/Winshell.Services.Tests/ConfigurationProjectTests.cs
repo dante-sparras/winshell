@@ -418,12 +418,13 @@ public sealed class ConfigurationProjectTests : IDisposable
     }
 
     [Fact]
-    public void A_failed_build_gives_xaml_and_uncoded_errors_too()
+    public void A_failed_build_gives_each_form_of_compiler_error()
     {
         var project = Found(Project("Bar.csproj"));
         const string output = """
                               Panel.xaml(2,5): XamlCompiler error WMC0130: Invalid value. [C:\x\Bar.csproj]
                               Bar.targets(3,3): error : Something the build refused. [C:\x\Bar.csproj]
+                              CSC : error CsWinRT1028: Class 'Bar' should be partial. [C:\x\Bar.csproj]
                               Build FAILED.
                               """;
 
@@ -431,7 +432,8 @@ public sealed class ConfigurationProjectTests : IDisposable
 
         Assert.Equal(
             "Bar did not build.\nPanel.xaml(2,5): XamlCompiler error WMC0130: Invalid value.\n" +
-            "Bar.targets(3,3): error : Something the build refused.", why);
+            "Bar.targets(3,3): error : Something the build refused.\n" +
+            "CSC : error CsWinRT1028: Class 'Bar' should be partial.", why);
     }
 
     /// <summary><c>winshell run</c> and <c>winshell reload</c> say why, rather than end on the exception.</summary>
