@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
@@ -49,7 +50,7 @@ public sealed class AppIndexTests
             Assert.Equal(program, edit.StartIn);
             Assert.Equal("demo", edit.AppId);
             Assert.Equal($"\"{demo}\" /user", edit.CommandLine);
-            Assert.Equal(edit.LaunchPath, edit.Icon);
+            Assert.Equal(Path.Combine(user, "Accessories", "Edit.lnk"), edit.Path);
             Assert.False(edit.Hidden);
             Assert.False(edit.Packaged);
 
@@ -79,7 +80,7 @@ public sealed class AppIndexTests
         Assert.NotNull(packaged);
         Assert.True(packaged.Packaged);
         Assert.Equal(packaged.Id, packaged.AppId);
-        Assert.Equal(@"shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", packaged.Icon);
+        Assert.Equal(@"shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App", packaged.Path);
         Assert.Equal("Calculator", packaged.Name);
         Assert.Equal("A calculator", packaged.Description);
         Assert.False(packaged.Hidden);
@@ -228,19 +229,16 @@ public sealed class AppIndexTests
         });
     }
 
-    [Fact(Timeout = 30_000)]
-    public async Task Catalog_updates_when_a_shortcut_is_added_and_removed()
+    [Fact]
+    public void Catalog_updates_when_a_shortcut_is_added_and_removed()
     {
         var root = Temp();
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
-        using var catalog = new AppCatalog([folder], () => [],
-            () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(200),
-            false);
+        using var catalog = Catalog(folder);
         try
         {
             catalog.Start();
-            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             var link = Path.Combine(folder, "Probe.lnk");
             WriteLink(link, Cmd(), "", "", "probe");
             Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Probe"), "the new shortcut");
@@ -253,21 +251,18 @@ public sealed class AppIndexTests
         }
     }
 
-    [Fact(Timeout = 30_000)]
-    public async Task A_folder_that_comes_back_is_watched_again()
+    [Fact]
+    public void A_folder_that_comes_back_is_watched_again()
     {
         var root = Temp();
         var folder = Path.Combine(root, "programs");
         Directory.CreateDirectory(folder);
         WriteLink(Path.Combine(folder, "First.lnk"), Cmd(), "", "", "first");
-        using var catalog = new AppCatalog([folder], () => [],
-            () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase), TimeSpan.FromMilliseconds(500),
-            false);
+        using var catalog = Catalog(folder);
         try
         {
             catalog.Start();
-            await catalog.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
-            Assert.Contains(catalog.Snapshot.Entries, app => app.Id == "First");
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "First"), "the first scan");
             Directory.Delete(folder, true);
             Directory.CreateDirectory(folder);
             Wait.Until(() => catalog.Snapshot.Entries.All(app => app.Id != "First"),
@@ -282,6 +277,79 @@ public sealed class AppIndexTests
         }
     }
 
+    [Fact]
+    public void A_failed_scan_is_logged_and_the_next_change_scans_again()
+    {
+        var root = Temp();
+        var messages = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
+        var calls = 0;
+        try
+        {
+            using var catalog = new AppCatalog(log, [root], () =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                    throw new InvalidCastException("scan broke");
+                return [];
+            }, () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
+            catalog.Start();
+            Wait.Until(() => messages.Contains("apps: scan broke"), "the failed scan to be logged");
+            File.WriteAllText(Path.Combine(root, "note.txt"), "x");
+            Wait.Until(() => Volatile.Read(ref calls) >= 2, "the next scan");
+        }
+        finally
+        {
+            Delete(root);
+        }
+    }
+
+    [Theory]
+    [InlineData(true, "apps: Could not read the installed apps: no packages")]
+    [InlineData(false, "apps: Could not read how often apps are used: no usage")]
+    public void A_read_that_fails_is_logged_and_keeps_what_the_last_good_one_found(bool packagesFail, string warning)
+    {
+        var root = Temp();
+        var messages = new ConcurrentQueue<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Enqueue($"{category}: {message}") };
+        var calc = AppIndex.Packaged("Contoso.Calc_1!App", "Calc", "")!;
+        var reads = 0;
+        try
+        {
+            using var catalog = new AppCatalog(log, [root], () =>
+            {
+                if (packagesFail && Interlocked.Increment(ref reads) > 1)
+                    throw new COMException("no packages");
+                return [calc];
+            }, () =>
+            {
+                if (!packagesFail && Interlocked.Increment(ref reads) > 1)
+                    throw new UnauthorizedAccessException("no usage");
+                return new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase) { [calc.Id] = new(3, 0) };
+            });
+            catalog.Start();
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == calc.Id), "the first scan");
+            // The next scan, the one whose read fails, is the one that finds a new shortcut.
+            WriteLink(Path.Combine(root, "Probe.lnk"), Cmd(), "", "", "probe");
+            Wait.Until(() => catalog.Snapshot.Entries.Any(app => app.Id == "Probe"), "the next scan");
+
+            var snapshot = catalog.Snapshot;
+            Assert.Contains(snapshot.Entries, app => app.Id == calc.Id);
+            Assert.Equal(new AppUsage(3, 0), snapshot.Usage.GetValueOrDefault(calc.Id));
+            Assert.Contains(warning, messages);
+        }
+        finally
+        {
+            Delete(root);
+        }
+    }
+
+    /// <summary>A catalog of one folder, with no packaged apps and no usage.</summary>
+    private static AppCatalog Catalog(string folder)
+    {
+        return new AppCatalog(new Log(), [folder], () => [],
+            () => new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase));
+    }
+
     private static IReadOnlyList<string> Names(string query, IReadOnlyList<AppRecord> apps,
         Func<AppRecord, AppUsage>? usage = null)
     {
@@ -292,9 +360,7 @@ public sealed class AppIndexTests
         string target = "", string folders = "", bool hidden = false, bool packaged = false)
     {
         var identifier = id ?? name;
-        IReadOnlyList<string> folderList = folders.Length == 0 ? [] : folders.Split('/');
-        return new AppRecord(identifier, name, description, target, target, "", target, "", appId, folderList, hidden,
-            packaged, target);
+        return new AppRecord(identifier, name, description, target, target, "", "", appId, folders, hidden, packaged);
     }
 
     private static byte[] Assist(int count, DateTimeOffset when)

@@ -28,9 +28,8 @@ internal sealed class AppSnapshot
     {
         if (Entries.Count != other.Entries.Count || Usage.Count != other.Usage.Count)
             return false;
-        for (var i = 0; i < Entries.Count; i++)
-            if (!AppIndex.Same(Entries[i], other.Entries[i]))
-                return false;
+        if (!Entries.SequenceEqual(other.Entries))
+            return false;
         foreach (var (key, value) in Usage)
             if (!other.Usage.TryGetValue(key, out var theirs) || theirs != value)
                 return false;
@@ -39,10 +38,18 @@ internal sealed class AppSnapshot
 }
 
 /// <summary>
-/// The Start menu for one set of folders, and how its apps open. The process shares <see cref="Shared"/>, which
-/// watches the real Programs folders and package install. A test builds its own and points it at a temporary folder.
+/// The Start menu of some Programs folders and the installed packages, and how its apps open. Each scan reads the
+/// folders, the packages and the usage; a read that fails keeps what the last good one found.
 /// </summary>
-internal sealed class AppCatalog : IAppsBackend, IDisposable
+/// <param name="log">Where failed reads are reported.</param>
+/// <param name="folders">The Programs folders, the common one first: <see cref="ProgramsFolders"/>.</param>
+/// <param name="packaged">Reads the packaged apps: <see cref="PackagedApps.Read"/>.</param>
+/// <param name="usage">Reads the usage: <see cref="AppUsageReader.Read"/>.</param>
+internal sealed class AppCatalog(
+    Log log,
+    IReadOnlyList<string> folders,
+    Func<IReadOnlyList<AppRecord>> packaged,
+    Func<IReadOnlyDictionary<string, AppUsage>> usage) : IAppsBackend
 {
     public static IReadOnlyList<string> ProgramsFolders()
     {
@@ -53,23 +60,13 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         ];
     }
 
-    public static AppCatalog Shared { get; } = new(
-        ProgramsFolders(),
-        PackagedApps.Read,
-        AppUsageReader.Read,
-        TimeSpan.FromSeconds(1),
-        true);
+    // Installers write many files at once, so a scan waits until they have been quiet this long.
+    private static readonly TimeSpan Debounce = TimeSpan.FromSeconds(1);
 
     private readonly object _gate = new();
-    private readonly IReadOnlyList<string> _folders;
-    private readonly Func<IReadOnlyList<AppRecord>> _packaged;
-    private readonly Func<IReadOnlyDictionary<string, AppUsage>> _usage;
-    private readonly bool _watchPackages;
-    private readonly Log _log;
     private readonly Dictionary<string, DirectoryWatch> _watches = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<string> _lost = new(StringComparer.OrdinalIgnoreCase);
     private readonly AutoResetEvent _wake = new(false);
-    private readonly TaskCompletionSource _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private PackageCatalog? _packages;
     private Thread? _scanThread;
     private readonly long _made = TimeProvider.System.GetTimestamp();
@@ -77,29 +74,11 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
     private bool _started, _disposed;
     private volatile bool _stop;
     private volatile AppSnapshot _snapshot = AppSnapshot.Empty;
-
-    public AppCatalog(
-        IReadOnlyList<string> folders,
-        Func<IReadOnlyList<AppRecord>> packaged,
-        Func<IReadOnlyDictionary<string, AppUsage>> usage,
-        TimeSpan debounce,
-        bool watchPackages,
-        Log? log = null)
-    {
-        _folders = folders;
-        _packaged = packaged;
-        _usage = usage;
-        _watchPackages = watchPackages;
-        _log = log ?? Log.Default;
-        Debounce = debounce;
-    }
-
-    public TimeSpan Debounce { get; }
+    private IReadOnlyList<AppRecord> _packagedApps = AppSnapshot.Empty.Entries;
+    private IReadOnlyDictionary<string, AppUsage> _usage = AppSnapshot.Empty.Usage;
 
     /// <summary>Raised on a background thread after a scan changed the list or the usage.</summary>
     public event Action? Changed;
-
-    public Task Ready => _ready.Task;
 
     public AppSnapshot Snapshot => _snapshot;
 
@@ -116,20 +95,19 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         _scanThread = new Thread(ScanLoop) { IsBackground = true, Name = "App scan" };
         _scanThread.Start();
         Poke(TimeSpan.Zero);
-        foreach (var folder in _folders.Where(Directory.Exists))
+        foreach (var folder in folders.Where(Directory.Exists))
             Arm(folder);
-        if (_watchPackages)
-            try
-            {
-                _packages = PackageCatalog.OpenForCurrentUser();
-                _packages.PackageInstalling += OnInstalling;
-                _packages.PackageUninstalling += OnUninstalling;
-                _packages.PackageUpdating += OnUpdating;
-            }
-            catch (Exception e) when (e is COMException or UnauthorizedAccessException)
-            {
-                Debug.WriteLine(e);
-            }
+        try
+        {
+            _packages = PackageCatalog.OpenForCurrentUser();
+            _packages.PackageInstalling += OnInstalling;
+            _packages.PackageUninstalling += OnUninstalling;
+            _packages.PackageUpdating += OnUpdating;
+        }
+        catch (Exception e) when (e is COMException or UnauthorizedAccessException)
+        {
+            log.Warn("apps", $"Not following app installs: {e.Message}");
+        }
     }
 
     public void Dispose()
@@ -157,7 +135,6 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
         }
 
         _wake.Dispose();
-        _ready.TrySetResult();
     }
 
     private void Arm(string folder)
@@ -235,7 +212,6 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
     /// <summary>Milliseconds since this catalog was made. The scan thread sleeps on a real wait handle, so this is real time too.</summary>
     private long Clock => (long)TimeProvider.System.GetElapsedTime(_made).TotalMilliseconds;
 
-    // Installers write many files at once, so a scan waits until they have been quiet.
     private void Poke(TimeSpan delay)
     {
         lock (_gate)
@@ -293,46 +269,37 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
             _snapshot = snapshot;
             if (changed)
                 Changed?.Invoke();
-            _ready.TrySetResult();
         }
-#pragma warning disable CA1031 // A failed scan is a finished empty result. The next file event tries again.
+#pragma warning disable CA1031 // A failed scan keeps the last list. The next file event tries again.
         catch (Exception e)
 #pragma warning restore CA1031
         {
-            _log.Warn("apps", e.Message);
-            _ready.TrySetResult();
+            log.Warn("apps", e.Message);
         }
     }
 
     private AppSnapshot Take()
     {
-        var entries = AppIndex.Combine(AppIndex.Shortcuts(_folders), ReadPackaged());
-        return new AppSnapshot(entries, ReadUsage());
-    }
-
-    private IReadOnlyList<AppRecord> ReadPackaged()
-    {
         try
         {
-            return _packaged();
+            _packagedApps = packaged();
         }
         catch (Exception e) when (e is COMException or UnauthorizedAccessException or IOException
                                       or InvalidOperationException)
         {
-            return [];
+            log.Warn("apps", $"Could not read the installed apps: {e.Message}");
         }
-    }
 
-    private IReadOnlyDictionary<string, AppUsage> ReadUsage()
-    {
         try
         {
-            return _usage();
+            _usage = usage();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
         {
-            return new Dictionary<string, AppUsage>(StringComparer.OrdinalIgnoreCase);
+            log.Warn("apps", $"Could not read how often apps are used: {e.Message}");
         }
+
+        return new AppSnapshot(AppIndex.Combine(AppIndex.Shortcuts(folders), _packagedApps), _usage);
     }
 
     public string? OpenShortcut(string path, string startIn)
@@ -392,20 +359,11 @@ internal sealed class AppCatalog : IAppsBackend, IDisposable
 /// <summary>Packaged and unpackaged apps Windows shows in Start, from PackageManager.</summary>
 internal static class PackagedApps
 {
-    public static IReadOnlyList<AppRecord> Read()
+    /// <summary>Every app of the current user's packages. A package that fails to answer is left out and logged.</summary>
+    public static IReadOnlyList<AppRecord> Read(Log log)
     {
         var result = new List<AppRecord>();
-        IEnumerable<Package> packages;
-        try
-        {
-            packages = new PackageManager().FindPackagesForUser("").ToList();
-        }
-        catch (Exception e) when (e is COMException or UnauthorizedAccessException)
-        {
-            return result;
-        }
-
-        foreach (var package in packages)
+        foreach (var package in new PackageManager().FindPackagesForUser("").ToList())
             try
             {
                 if (package.IsFramework || package.IsResourcePackage)
@@ -419,6 +377,7 @@ internal static class PackagedApps
                                           or FileNotFoundException or IOException or InvalidOperationException)
             {
                 // A package being installed or removed can fail to answer; the next scan reads it again.
+                log.Warn("apps", $"Skipped a package that did not answer: {e.Message}");
             }
 
         return result;

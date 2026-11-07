@@ -1,7 +1,7 @@
 namespace Winshell.Apps;
 
 /// <summary>
-/// What <see cref="IJumpListReader"/> returned for one app. <see cref="Available"/> is false when the lists cannot
+/// What <see cref="IJumpListBackend"/> returned for one app. <see cref="Available"/> is false when the lists cannot
 /// be read. An empty <see cref="Names"/> with <see cref="Available"/> true was read and has no documents.
 /// </summary>
 internal readonly record struct JumpListRead(bool Available, IReadOnlyList<string> Names)
@@ -46,7 +46,7 @@ internal readonly record struct JumpListRead(bool Available, IReadOnlyList<strin
 }
 
 /// <summary>Reads recent and frequent destinations for an AppUserModelID. It does not launch or change them.</summary>
-internal interface IJumpListReader
+internal interface IJumpListBackend
 {
     JumpListRead Read(string appUserModelId);
 }

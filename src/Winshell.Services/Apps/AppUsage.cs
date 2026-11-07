@@ -1,4 +1,3 @@
-using System.Security;
 using Microsoft.Win32;
 using Winshell.Native;
 
@@ -27,8 +26,7 @@ internal readonly record struct AppUsage(int RunCount, long LastUsedUnixMillisec
         Take(app.AppId);
         Take(app.Id);
         Take(app.Target);
-        Take(app.Icon);
-        Take(app.LaunchPath);
+        Take(app.Path);
         if (app.Target.Length > 0)
             Take(Path.GetFileName(app.Target));
         return best;
@@ -37,7 +35,8 @@ internal readonly record struct AppUsage(int RunCount, long LastUsedUnixMillisec
 
 /// <summary>
 /// Recent and frequent use as Windows records it: FeatureUsage launch and switch counts, and UserAssist run count
-/// and last run. The higher of the two FeatureUsage counts is kept, so a launch is not added to a switch.
+/// and last run. The higher of the two FeatureUsage counts is kept, so a launch is not added to a switch. A registry
+/// key that can't be read throws, and the catalog keeps the usage it read last.
 /// </summary>
 internal static class AppUsageReader
 {
@@ -164,20 +163,12 @@ internal static class AppUsageReader
     private static List<KeyValuePair<string, int>> ReadCounts(string subKey)
     {
         var counts = new List<KeyValuePair<string, int>>();
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(subKey);
-            if (key is null)
-                return counts;
-            foreach (var name in key.GetValueNames())
-                if (TryCount(key.GetValue(name), out var count) && count > 0)
-                    counts.Add(new KeyValuePair<string, int>(name, count));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
-        {
+        using var key = Registry.CurrentUser.OpenSubKey(subKey);
+        if (key is null)
             return counts;
-        }
-
+        foreach (var name in key.GetValueNames())
+            if (TryCount(key.GetValue(name), out var count) && count > 0)
+                counts.Add(new KeyValuePair<string, int>(name, count));
         return counts;
     }
 
@@ -200,24 +191,17 @@ internal static class AppUsageReader
     private static List<(string EncodedName, byte[] Data)> ReadUserAssist()
     {
         var entries = new List<(string, byte[])>();
-        try
-        {
-            using var root = Registry.CurrentUser.OpenSubKey(UserAssist);
-            if (root is null)
-                return entries;
-            foreach (var guid in root.GetSubKeyNames())
-            {
-                using var count = root.OpenSubKey(guid + @"\Count");
-                if (count is null)
-                    continue;
-                foreach (var name in count.GetValueNames())
-                    if (count.GetValue(name) is byte[] data)
-                        entries.Add((name, data));
-            }
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or SecurityException)
-        {
+        using var root = Registry.CurrentUser.OpenSubKey(UserAssist);
+        if (root is null)
             return entries;
+        foreach (var guid in root.GetSubKeyNames())
+        {
+            using var count = root.OpenSubKey(guid + @"\Count");
+            if (count is null)
+                continue;
+            foreach (var name in count.GetValueNames())
+                if (count.GetValue(name) is byte[] data)
+                    entries.Add((name, data));
         }
 
         return entries;

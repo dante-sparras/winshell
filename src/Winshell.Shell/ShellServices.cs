@@ -70,7 +70,8 @@ public sealed partial class Shell
     public PowerModeService PowerMode => _powerMode ??= new PowerModeService(Loop, Log);
 
     /// <summary>The documents in the user's Recent folder, found by name.</summary>
-    public RecentDocuments RecentDocuments => _recentDocuments ??= new RecentDocuments();
+    public RecentDocuments RecentDocuments =>
+        _recentDocuments ??= new RecentDocuments(Environment.GetFolderPath(Environment.SpecialFolder.Recent));
 
     /// <summary>The Windows session: locking it, and what state it is in.</summary>
     public SessionService Session => _session ??= new SessionService(Log);

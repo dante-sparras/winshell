@@ -9,14 +9,10 @@ namespace Winshell.Apps;
 /// <see cref="DocumentLists"/> requires. A failed read is <see cref="JumpListRead.Missing"/>, and the menu says the
 /// list cannot be read.
 /// </summary>
-internal sealed class WindowsJumpListReader : IJumpListReader
+internal sealed class WindowsJumpListBackend : IJumpListBackend
 {
-    public static readonly WindowsJumpListReader Instance = new();
-
     public JumpListRead Read(string appUserModelId)
     {
-        if (string.IsNullOrWhiteSpace(appUserModelId))
-            return JumpListRead.Missing;
         var (recent, frequent) = DocumentLists.Read(appUserModelId, JumpListRead.PerCategory);
         return JumpListRead.From(recent, frequent);
     }
