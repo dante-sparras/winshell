@@ -194,8 +194,8 @@ public sealed class CaptureViewTests
         return bytes;
     }
 
-    // Only a frame source. CaptureSessionTests' fake counts calls and fails on demand, and lives in a project this one does
-    // not compile.
+    // Not in TestSupport: Core.Tests compiles it and cannot see ICaptureBackend. CaptureSessionTests' fake also counts calls
+    // and fails on demand.
     private sealed class FakeCapture : ICaptureBackend
     {
         public PixelImage? Next { get; set; }

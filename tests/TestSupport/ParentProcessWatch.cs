@@ -28,7 +28,7 @@ internal static class ParentProcessWatch
     private static Process? Parent()
     {
         var id = ParentOf((uint)Environment.ProcessId) ??
-                 throw new InvalidOperationException("This process's parent is not in the process snapshot.");
+                 throw new InvalidOperationException("No process snapshot names this process's parent.");
         try
         {
             return Process.GetProcessById((int)id);

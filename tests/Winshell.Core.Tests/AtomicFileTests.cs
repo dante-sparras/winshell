@@ -34,33 +34,26 @@ public sealed class AtomicFileTests
     [Fact]
     public void A_temp_from_a_dead_process_is_removed_and_a_live_one_stays()
     {
-        var dir = Path.Combine(Path.GetTempPath(), "winshell-tests", "temps-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, "preferences.toml");
+        using var dir = new TempFolder();
+        var path = Path.Combine(dir.Path, "preferences.toml");
         var dead = path + ".tmp-" + DeadPid;
         var deadGuid = path + ".tmp-" + DeadPid + "-" + Guid.NewGuid().ToString("N");
         var liveGuid = path + ".tmp-" + Environment.ProcessId + "-" + Guid.NewGuid().ToString("N");
-        var other = Path.Combine(dir, "other.toml.tmp-" + DeadPid);
+        var other = Path.Combine(dir.Path, "other.toml.tmp-" + DeadPid);
         var junk = path + ".tmp-not-a-pid";
         File.WriteAllText(dead, "dead");
         File.WriteAllText(deadGuid, "dead-guid");
         File.WriteAllText(liveGuid, "live-guid");
         File.WriteAllText(other, "other");
         File.WriteAllText(junk, "junk");
-        try
-        {
-            Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, "kept\n", false, null));
 
-            Assert.False(File.Exists(dead));
-            Assert.False(File.Exists(deadGuid));
-            Assert.False(File.Exists(junk));
-            Assert.True(File.Exists(liveGuid));
-            Assert.True(File.Exists(other));
-        }
-        finally
-        {
-            Directory.Delete(dir, true);
-        }
+        Assert.Equal(AtomicSave.Saved, AtomicFile.Save(path, "kept\n", false, null));
+
+        Assert.False(File.Exists(dead));
+        Assert.False(File.Exists(deadGuid));
+        Assert.False(File.Exists(junk));
+        Assert.True(File.Exists(liveGuid));
+        Assert.True(File.Exists(other));
     }
 
     [Fact]
