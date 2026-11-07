@@ -180,7 +180,7 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     }
 
     /// <summary>The edge a panel with these anchors reserves: the one it spans, or none for a corner or the whole screen.</summary>
-    internal static Edges? EdgeFor(Edges anchors)
+    private static Edges? EdgeFor(Edges anchors)
     {
         var horizontal = anchors.HasFlag(Edges.Left) ^ anchors.HasFlag(Edges.Right);
         var vertical = anchors.HasFlag(Edges.Top) ^ anchors.HasFlag(Edges.Bottom);
@@ -192,7 +192,7 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     }
 
     /// <summary>The strip of <paramref name="offered"/> that is <paramref name="thickness"/> pixels deep along an edge.</summary>
-    internal static RECT Strip(Edges edge, int thickness, RECT offered)
+    private static RECT Strip(Edges edge, int thickness, RECT offered)
     {
         return edge switch
         {
@@ -204,7 +204,7 @@ internal sealed class PanelEdge(IPanelDesktop desktop) : IWindowPlacer
     }
 
     /// <summary>The monitor, starting at the edge the app bar got and as long as its grant along that edge.</summary>
-    internal static RECT Area(Edges edge, RECT granted, RECT monitor)
+    private static RECT Area(Edges edge, RECT granted, RECT monitor)
     {
         return edge switch
         {

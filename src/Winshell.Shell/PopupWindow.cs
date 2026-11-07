@@ -59,7 +59,7 @@ public sealed class PopupWindow : ShellWindow
         Host!.Focus.SetPopup(_grabFocus);
     }
 
-    private protected override void OnDismissed()
+    internal override void OnDismissed()
     {
         Visible = false;
         Dismissed?.Invoke();

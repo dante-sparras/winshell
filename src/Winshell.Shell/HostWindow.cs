@@ -18,7 +18,7 @@ internal sealed class HostWindow : IDisposable
     private readonly NativeWindow _window;
     private bool _failed;
 
-    public HostWindow(ShellPlatform platform, WindowKind kind, IHostClient client, Action dismissMenu)
+    public HostWindow(ShellPlatform platform, WindowKind kind, ShellWindow client)
     {
         _platform = platform;
         Kind = kind;
@@ -32,7 +32,7 @@ internal sealed class HostWindow : IDisposable
         };
         Presentation = new HostPresentation(this, platform);
         Focus = new WindowFocus(kind, new HostFocusEffects(this, platform));
-        Messages = new HostMessages(this, platform, dismissMenu);
+        Messages = new HostMessages(this, platform);
         var (style, exStyle) = Styles(kind);
         _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage, Fail);
         Handle = _window.Handle;
@@ -54,7 +54,7 @@ internal sealed class HostWindow : IDisposable
     public WindowKind Kind { get; }
 
     /// <summary>The shell window this native window shows.</summary>
-    internal IHostClient Client { get; }
+    internal ShellWindow Client { get; }
 
     internal HostPlacement Placement { get; }
 

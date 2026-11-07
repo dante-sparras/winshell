@@ -35,19 +35,19 @@ public sealed class WindowThumbnail : FrameworkElement
         typeof(WindowThumbnail),
         new PropertyMetadata(false, (sender, _) => ((WindowThumbnail)sender).UpdatePeek()));
 
-    private ShellWindow? _shell;
+    private readonly ShellWindowWatch _shell;
     private WindowPeek? _peeker;
     private nint _thumbnail;
     private nint _destination;
     private RECT _insets;
     private ThumbnailPaint _applied;
-    private bool _watching;
 
     /// <summary>
     /// A thumbnail with no window, which shows nothing. It takes no clicks, and screen readers skip it.
     /// </summary>
     public WindowThumbnail()
     {
+        _shell = new ShellWindowWatch(OnShellChanged);
         IsHitTestVisible = false;
         AutomationProperties.SetAccessibilityView(this, AccessibilityView.Raw);
         Loaded += (_, _) => OnLoaded();
@@ -83,7 +83,7 @@ public sealed class WindowThumbnail : FrameworkElement
     private void OnLoaded()
     {
         WatchClosed(Window, true);
-        AttachShell();
+        _shell.Attach(this);
         UpdateThumbnail();
         UpdatePeek();
     }
@@ -91,7 +91,7 @@ public sealed class WindowThumbnail : FrameworkElement
     private void OnUnloaded()
     {
         WatchClosed(Window, false);
-        DetachShell();
+        _shell.Detach();
         ReleaseThumbnail();
         _peeker?.End();
     }
@@ -126,25 +126,6 @@ public sealed class WindowThumbnail : FrameworkElement
         Window = null;
     }
 
-    private void AttachShell()
-    {
-        DetachShell();
-        _shell = ShellWindow.Of(this);
-        if (_shell is null)
-            return;
-        _shell.PropertyChanged += OnShellChanged;
-        _watching = true;
-    }
-
-    private void DetachShell()
-    {
-        if (!_watching || _shell is null)
-            return;
-        _shell.PropertyChanged -= OnShellChanged;
-        _watching = false;
-        _shell = null;
-    }
-
     private void OnShellChanged(object? sender, PropertyChangedEventArgs e)
     {
         // The destination rect is relative to the shell window, and a move or a scale change puts this element
@@ -160,7 +141,7 @@ public sealed class WindowThumbnail : FrameworkElement
         if (hwnd == 0 && _peeker is null)
             return;
         _peeker ??= WindowPeek.ForSystem();
-        _peeker.Show(hwnd, _shell?.Host?.Handle ?? 0);
+        _peeker.Show(hwnd, _shell.Window?.Host?.Handle ?? 0);
     }
 
     private void UpdateThumbnail()
@@ -171,7 +152,7 @@ public sealed class WindowThumbnail : FrameworkElement
             return;
         }
 
-        var destination = _shell?.Host?.Handle ?? 0;
+        var destination = _shell.Window?.Host?.Handle ?? 0;
         if (destination == 0 || !TryBox(out var box))
         {
             HideThumbnail();

@@ -107,7 +107,7 @@ internal static class ShellFixture
                 var opened = s.Platform.Windows.Except(before).ToList();
                 var names = opened.Select(Describe).ToList();
                 foreach (var window in opened)
-                    (window.Client as ShellWindow)?.Dispose();
+                    window.Client.Dispose();
                 return Task.FromResult(names);
             });
             if (left.Count > 0 && TestContext.Current.Test is { } test)
@@ -159,7 +159,7 @@ internal static class ShellFixture
     /// <summary>A window as a failure names it: its type, its title or the name of what it shows, and what it shows.</summary>
     private static string Describe(HostWindow window)
     {
-        var content = (window.Client as ShellWindow)?.Content;
+        var content = window.Client.Content;
         var name = window.Client is FloatingWindow floating ? floating.Title :
             content is null ? "" : AutomationProperties.GetName(content);
         return $"{window.Client.GetType().Name} \"{name}\" showing {content?.GetType().Name ?? "nothing"}";

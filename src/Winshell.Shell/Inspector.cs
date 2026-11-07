@@ -54,11 +54,7 @@ internal static class Inspector
 
     private static List<ShellWindow> Windows(Shell shell)
     {
-        return
-        [
-            .. shell.Platform.Windows.Where(host => host.Placement.IsVisible).Select(host => host.Client)
-                .OfType<ShellWindow>()
-        ];
+        return [.. shell.Platform.Windows.Where(host => host.Placement.IsVisible).Select(host => host.Client)];
     }
 
     /// <summary>The windows open now, each with its content's tree, as JSON.</summary>

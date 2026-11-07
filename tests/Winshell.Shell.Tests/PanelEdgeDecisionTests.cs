@@ -34,6 +34,9 @@ public class PanelEdgeDecisionTests
 
         public RECT? Asked { get; private set; }
 
+        /// <summary>What Explorer grants for a request. Null grants what was asked.</summary>
+        public RECT? Grant { get; set; }
+
         public int Moves { get; private set; }
 
         public RECT? Moved { get; private set; }
@@ -84,7 +87,7 @@ public class PanelEdgeDecisionTests
         {
             Reserves++;
             Asked = desired;
-            return desired;
+            return Grant ?? desired;
         }
 
         public void Remove()
@@ -151,17 +154,66 @@ public class PanelEdgeDecisionTests
         return desktop.Moved!.Value;
     }
 
-    [Fact]
-    public void A_panel_reserves_a_strip_of_the_screen_it_names()
+    // The panel names Second, which is away from the origin, so an edge's coordinates are never its depth.
+    [Theory]
+    [InlineData(Edges.Top | Edges.Left | Edges.Right, 2560, 1080, 5120, 1128)]
+    [InlineData(Edges.Bottom | Edges.Left | Edges.Right, 2560, 2472, 5120, 2520)]
+    [InlineData(Edges.Left | Edges.Top | Edges.Bottom, 2560, 1080, 2608, 2520)]
+    [InlineData(Edges.Right | Edges.Top | Edges.Bottom, 5072, 1080, 5120, 2520)]
+    [InlineData(Edges.Bottom, 2560, 2472, 5120, 2520)]
+    public void A_panel_along_one_edge_asks_for_a_strip_of_that_edge_as_deep_as_its_size(Edges anchors, int left,
+        int top, int right, int bottom)
     {
         var desktop = new Desktop();
         var edge = Shown(desktop);
 
-        edge.Set(Panel(Edges.Top | Edges.Left | Edges.Right, Second.Id));
+        edge.Set(Panel(anchors, Second.Id));
 
-        Assert.Equal(new RECT(2560, 1080, 5120, 1128), desktop.Asked);
         Assert.Equal(1, desktop.Registers);
-        Assert.True(desktop.Topmost);
+        Assert.Equal(new RECT(left, top, right, bottom), desktop.Asked);
+        edge.Release();
+    }
+
+    [Theory]
+    [InlineData(Edges.None)]
+    [InlineData(Edges.Top | Edges.Left)]
+    [InlineData(Edges.Left | Edges.Right)]
+    [InlineData(Edges.Top | Edges.Bottom | Edges.Left | Edges.Right)]
+    public void A_panel_in_a_corner_or_across_the_screen_reserves_no_edge(Edges anchors)
+    {
+        var desktop = new Desktop();
+        var edge = Shown(desktop);
+
+        edge.Set(Panel(anchors));
+
+        Assert.Equal(0, desktop.Registers);
+        Assert.Null(desktop.Asked);
+    }
+
+    // Explorer grants less than was asked: beside a taskbar on the same edge, or shortened by one on a neighboring
+    // edge. The bar sits in what it got.
+    [Theory]
+    [InlineData(null, Edges.Top, 0, 48, 1920, 96)]
+    [InlineData(null, Edges.Bottom, 0, 984, 1920, 1032)]
+    [InlineData(null, Edges.Left, 0, 48, 48, 1080)]
+    [InlineData(null, Edges.Right, 1872, 0, 1920, 1032)]
+    [InlineData("second", Edges.Top, 2608, 1080, 5120, 1128)]
+    [InlineData("second", Edges.Bottom, 2560, 2472, 5072, 2520)]
+    [InlineData("second", Edges.Left, 2560, 1080, 2608, 2472)]
+    [InlineData("second", Edges.Right, 5072, 1128, 5120, 2520)]
+    public void A_bar_lays_out_in_the_strip_Explorer_grants(string? screen, Edges along, int left, int top, int right,
+        int bottom)
+    {
+        var grant = new RECT(left, top, right, bottom);
+        var desktop = new Desktop { Grant = grant };
+        var edge = Shown(desktop);
+        // A bar 48 pixels deep that spans the edge it holds.
+        var across = along is Edges.Top or Edges.Bottom ? Edges.Left | Edges.Right : Edges.Top | Edges.Bottom;
+
+        edge.Set(new PanelPlacement(screen is null ? null : Screen(screen), along | across, 0, 0, 0, 0, 48, 48, false,
+            48, true));
+
+        Assert.Equal(grant, desktop.Moved);
         edge.Release();
     }
 
