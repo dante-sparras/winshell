@@ -13,7 +13,7 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
     private IReadOnlyList<(string From, string To)> Earlier { get; init; } = [];
 
     /// <summary>The identity of a shell defined by <paramref name="program"/>.</summary>
-    /// <param name="program">A full path. A relative folder is next to this file.</param>
+    /// <param name="program">A full path. A relative folder is next to it, and a program a reload built in <c>bin\shell.next</c> counts as in <c>bin\shell</c>.</param>
     /// <param name="locations">The folders: configurations in <see cref="ShellLocations.ConfigRoot"/>, which can be empty when there is none, and the named folders under its local root.</param>
     /// <param name="shellId">The id it asks for. Null names it after where it is.</param>
     /// <param name="dataDir">Another data folder. Null is the one named after the id. <paramref name="stateDir"/> and <paramref name="cacheDir"/> are the same.</param>
@@ -24,7 +24,7 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
     {
         var id = shellId ?? DefaultId(program, locations.ConfigRoot);
         var earlier = shellId is null ? Hashed(program) : id;
-        var shellDir = Path.GetDirectoryName(program)!;
+        var shellDir = Path.GetDirectoryName(ConfigurationProject.InOutputFolder(program) ?? program)!;
         var moves = new List<(string, string)>();
 
         string Folder(string? given, string root)
@@ -90,7 +90,7 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
     }
 
     /// <summary>
-    /// A given folder is relative to the shell file, and <c>%NAME%</c> is expanded.
+    /// A given folder is relative to <paramref name="shellDir"/>, and <c>%NAME%</c> is expanded.
     /// <c>$BASE</c> is the folder Winshell would have used for that kind of data.
     /// </summary>
     private static string? Expand(string? folder, string baseDir, string shellDir)

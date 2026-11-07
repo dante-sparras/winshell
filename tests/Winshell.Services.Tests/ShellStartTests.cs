@@ -159,6 +159,18 @@ public sealed class ShellStartTests
     }
 
     [Fact]
+    public void A_relative_folder_is_next_to_the_program_in_its_build_folder_from_either_build()
+    {
+        string DataOf(string program)
+        {
+            return ShellIdentity.Resolve(program, Locations, "id", "data", null, null).DataDir;
+        }
+
+        Assert.Equal(@"C:\shells\mine\bin\shell\data", DataOf(@"C:\shells\mine\bin\shell\Mine.exe"));
+        Assert.Equal(@"C:\shells\mine\bin\shell\data", DataOf(@"C:\shells\mine\bin\shell.next\Mine.exe"));
+    }
+
+    [Fact]
     public void A_shell_id_names_its_mutex_in_any_case()
     {
         Assert.Equal(DuplicateHold.ShellMutexName(Locations, "Mine"), DuplicateHold.ShellMutexName(Locations, "mine"));
