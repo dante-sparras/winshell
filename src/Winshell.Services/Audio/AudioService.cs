@@ -164,6 +164,11 @@ public sealed class AudioService : ObservableObject, IDisposable
     private AudioNode? _defaultPlayback;
     private AudioNode? _defaultRecording;
 
+    internal AudioService(IEventLoop loop, Log log)
+        : this(new AudioGraph(loop, log), log)
+    {
+    }
+
     internal AudioService(IAudioGraph graph, Log log)
     {
         _log = log;
@@ -239,5 +244,7 @@ public sealed class AudioService : ObservableObject, IDisposable
         _graph.DefaultsChanged -= OnDefaultsChanged;
         foreach (var node in Nodes)
             node.Remove();
+        // After the nodes: their peak meters read the graph.
+        _graph.Dispose();
     }
 }

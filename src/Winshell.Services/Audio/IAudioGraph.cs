@@ -1,7 +1,9 @@
 namespace Winshell.Audio;
 
-/// <summary>The devices and sessions Windows has. A test gives <see cref="AudioService"/> its own.</summary>
-internal interface IAudioGraph
+/// <summary>
+/// The devices and sessions Windows has. <see cref="AudioService"/> owns its graph, and a test gives it its own.
+/// </summary>
+internal interface IAudioGraph : IDisposable
 {
     IReadOnlyList<AudioGraphNode> Nodes { get; }
 

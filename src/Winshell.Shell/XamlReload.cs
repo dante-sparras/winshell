@@ -53,7 +53,7 @@ internal static partial class XamlReload
     private static void Changed(Shell shell, string file)
     {
         _waiting?.Dispose();
-        _waiting = shell.Loop.Schedule(Settle, () => shell.Notices?.ShowConfigError(file, Apply(shell, file) ?? ""));
+        _waiting = shell.Loop.Schedule(Settle, () => shell.Notices.ShowConfigError(file, Apply(shell, file) ?? ""));
     }
 
     /// <summary>Applies a file to the panels of its class, and gives what is wrong with it, or null.</summary>

@@ -16,8 +16,8 @@ public sealed class IdleMonitor : ObservableObject, IDisposable
     private bool _disposed;
     private IDisposable? _timer;
 
-    internal IdleMonitor(IEventLoop loop)
-        : this(loop, Log.Default, IdleSeconds, () => KeepAwake.AnyActive)
+    internal IdleMonitor(IEventLoop loop, Log log)
+        : this(loop, log, IdleSeconds, () => KeepAwake.AnyActive)
     {
     }
 

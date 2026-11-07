@@ -29,6 +29,10 @@ internal sealed class FakeAudioGraph : IAudioGraph
         DefaultsAsked.Add(node);
     }
 
+    public void Dispose()
+    {
+    }
+
     public FakeAudioNode Add(FakeAudioNode node)
     {
         _nodes.Add(node);
