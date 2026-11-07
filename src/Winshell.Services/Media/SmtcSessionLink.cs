@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using Windows.Foundation;
-using Windows.Media;
 using Windows.Media.Control;
 
 namespace Winshell.Media;
@@ -13,10 +12,10 @@ internal sealed class SmtcSessionLink(
     IEventLoop loop,
     Log log,
     SmtcSession target,
-    GlobalSystemMediaTransportControlsSession session) : ISmtcLink
+    GlobalSystemMediaTransportControlsSession session,
+    TimeProvider time) : ISmtcLink
 {
-    private int _mediaRequest;
-    private int _mediaApplied;
+    private readonly NewestRead _media = new();
     private bool _released;
 
     private TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>?
@@ -48,8 +47,7 @@ internal sealed class SmtcSessionLink(
         Hook();
         OnPlaybackInfoChanged(_session, null);
         OnTimelinePropertiesChanged(_session, null);
-        // A metadata or art read is already running. Starting another drops its result.
-        if (_mediaApplied == _mediaRequest && !target.ArtLoading)
+        if (!_media.Running)
             OnMediaPropertiesChanged(_session, null);
     }
 
@@ -105,7 +103,7 @@ internal sealed class SmtcSessionLink(
     private void OnMediaPropertiesChanged(GlobalSystemMediaTransportControlsSession sender,
         MediaPropertiesChangedEventArgs? args)
     {
-        var request = Interlocked.Increment(ref _mediaRequest);
+        var request = _media.Start();
         _ = Read();
 
         async Task Read()
@@ -120,14 +118,14 @@ internal sealed class SmtcSessionLink(
             catch (Exception e)
 #pragma warning restore CA1031
             {
-                // The session closed while it was being read. Allow a later poll to try again.
                 loop.Post(() =>
                 {
-                    // A session closing mid-read is ordinary; anything else is worth a line.
+                    // Windows throws COMException for a session whose app closed mid-read; anything else is worth a line.
                     if (e is not COMException)
                         log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
-                    if (!_released && request == _mediaRequest)
-                        _mediaApplied = request;
+                    // Ending the read lets a later poll try again.
+                    if (!_released)
+                        _media.End(request);
                 });
             }
         }
@@ -135,9 +133,8 @@ internal sealed class SmtcSessionLink(
 
     private void ApplyMedia(GlobalSystemMediaTransportControlsSessionMediaProperties properties, int request)
     {
-        if (_released || request != _mediaRequest)
+        if (_released || !_media.End(request))
             return;
-        _mediaApplied = request;
         target.ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "",
             properties.AlbumArtist ?? "",
             properties.TrackNumber, properties.Genres, properties.Thumbnail);
@@ -151,6 +148,7 @@ internal sealed class SmtcSessionLink(
             var info = sender.GetPlaybackInfo();
             loop.Post(() => ApplyPlayback(info));
         }
+        // Windows throws COMException for a session whose app has closed. The next SessionsChanged lists without it.
         catch (COMException)
         {
         }
@@ -174,7 +172,7 @@ internal sealed class SmtcSessionLink(
             LoopSupported = controls.IsRepeatEnabled,
             RateSupported = controls.IsPlaybackRateEnabled,
             Shuffle = info.IsShuffleActive ?? false,
-            LoopState = (int)(info.AutoRepeatMode ?? MediaPlaybackAutoRepeatMode.None)
+            LoopState = SmtcPlayback.LoopOf(info.AutoRepeatMode)
         });
     }
 
@@ -184,9 +182,10 @@ internal sealed class SmtcSessionLink(
         try
         {
             var timeline = sender.GetTimelineProperties();
-            var received = TimeProvider.System.GetUtcNow();
+            var received = time.GetUtcNow();
             loop.Post(() => ApplyTimeline(timeline, received));
         }
+        // Windows throws COMException for a session whose app has closed. The next SessionsChanged lists without it.
         catch (COMException)
         {
         }

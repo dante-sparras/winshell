@@ -1,3 +1,4 @@
+using Windows.Media;
 using Windows.Media.Control;
 
 namespace Winshell.Media;
@@ -27,6 +28,27 @@ internal sealed record SmtcPlayback(GlobalSystemMediaTransportControlsSessionPla
 
     public bool Shuffle { get; init; }
 
-    /// <summary>The <c>MediaLoopState</c>.</summary>
-    public int LoopState { get; init; }
+    public MediaLoopState LoopState { get; init; }
+
+    /// <summary>Windows' repeat mode as a <see cref="MediaLoopState"/>. No mode, or one Windows adds later, repeats nothing.</summary>
+    public static MediaLoopState LoopOf(MediaPlaybackAutoRepeatMode? mode)
+    {
+        return mode switch
+        {
+            MediaPlaybackAutoRepeatMode.Track => MediaLoopState.Track,
+            MediaPlaybackAutoRepeatMode.List => MediaLoopState.List,
+            _ => MediaLoopState.None
+        };
+    }
+
+    /// <summary>The repeat mode to ask Windows for.</summary>
+    public static MediaPlaybackAutoRepeatMode ModeOf(MediaLoopState state)
+    {
+        return state switch
+        {
+            MediaLoopState.Track => MediaPlaybackAutoRepeatMode.Track,
+            MediaLoopState.List => MediaPlaybackAutoRepeatMode.List,
+            _ => MediaPlaybackAutoRepeatMode.None
+        };
+    }
 }

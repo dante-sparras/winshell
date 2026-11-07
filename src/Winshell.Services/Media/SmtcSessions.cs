@@ -74,9 +74,16 @@ internal sealed class SmtcSessions : IMediaSessions
     {
         // GetSessions returns a new object for a session that is already held, so reference equality
         // drops it and starts again. That cancels the read of its title and art. Match the app id instead.
-        var incoming = current.ToList();
+        var incoming = new List<GlobalSystemMediaTransportControlsSession>();
+        var ids = new List<string>();
+        foreach (var session in current)
+            if (SmtcSession.IdOf(session) is { } id)
+            {
+                incoming.Add(session);
+                ids.Add(id);
+            }
+
         var held = _sessions.ToList();
-        var ids = incoming.Select(SmtcSession.IdOf).ToList();
         var pair = Pair(held.Select(s => s.AppId).ToList(), ids);
         var kept = new bool[held.Count];
         for (var i = 0; i < incoming.Count; i++)
@@ -91,7 +98,7 @@ internal sealed class SmtcSessions : IMediaSessions
                 continue;
             }
 
-            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, _names.Get(ids[i]), _time);
+            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, ids[i], _names.Get(ids[i]), _time);
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();

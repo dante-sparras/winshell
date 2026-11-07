@@ -11,8 +11,7 @@ namespace Winshell.Media;
 /// <param name="changed">Runs when <see cref="Url"/> changes.</param>
 internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action changed)
 {
-    private int _request;
-    private int _applied;
+    private readonly NewestRead _read = new();
     private bool _missLogged;
     private bool _released;
 
@@ -20,11 +19,11 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
     public string Url { get; private set; } = "";
 
     /// <summary>A read is running. Starting another drops its result.</summary>
-    public bool Loading => _applied != _request;
+    public bool Loading => _read.Running;
 
     public void Load(IRandomAccessStreamReference? thumbnail)
     {
-        var request = Interlocked.Increment(ref _request);
+        var request = _read.Start();
         if (thumbnail is null)
         {
             Set("", request);
@@ -58,8 +57,7 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
         {
             loop.Post(() =>
             {
-                if (request == _request)
-                    _applied = request;
+                _read.End(request);
                 if (_missLogged)
                     return;
                 _missLogged = true;
@@ -76,13 +74,12 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
 
     private void Set(string url, int request)
     {
-        if (_released || request != _request)
+        if (_released || !_read.End(request))
         {
             ArtCache.ReleaseLater(url);
             return;
         }
 
-        _applied = request;
         if (url.Length > 0)
             _missLogged = false;
         if (url == Url)

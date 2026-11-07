@@ -215,33 +215,25 @@ public sealed class MediaServiceTests
     }
 
     [Fact]
-    public void Every_change_names_a_property_of_the_session()
+    public void A_property_read_from_others_is_raised_when_they_change()
     {
-        var session = Session();
-        var changes = Watch(session);
+        var changes = Watch(Session());
+
+        void Raised(params string[] names)
+        {
+            Assert.Superset(names.ToHashSet(), changes.ToHashSet());
+            changes.Clear();
+        }
 
         Track("Song", "Artist", "Album", "Band", 3, ["Rock"]);
-        _native.ApplyPlayback(new SmtcPlayback(Playing)
-        {
-            Rate = 2,
-            CanPlay = true,
-            CanPause = true,
-            CanStop = true,
-            CanGoNext = true,
-            CanGoPrevious = true,
-            CanSeek = true,
-            ShuffleSupported = true,
-            LoopSupported = true,
-            RateSupported = true,
-            Shuffle = true,
-            LoopState = 1
-        });
-        Timeline(5, 125);
+        Raised(nameof(MediaSession.Metadata));
 
-        Assert.All(changes, name => Assert.NotNull(typeof(MediaSession).GetProperty(name)));
-        Assert.Contains(nameof(MediaSession.TrackAlbumArtist), changes);
-        Assert.Contains(nameof(MediaSession.MaxRate), changes);
-        Assert.Contains(nameof(MediaSession.LengthSupported), changes);
+        _native.ApplyPlayback(new SmtcPlayback(Playing) { CanPause = true, RateSupported = true });
+        Raised(nameof(MediaSession.IsPlaying), nameof(MediaSession.CanTogglePlaying), nameof(MediaSession.MinRate),
+            nameof(MediaSession.MaxRate));
+
+        Timeline(5, 125);
+        Raised(nameof(MediaSession.LengthSupported), nameof(MediaSession.Metadata));
     }
 
     [Fact]
@@ -351,14 +343,17 @@ public sealed class MediaServiceTests
     }
 
     [Fact]
-    public void An_unknown_playback_state_is_refused()
+    public void An_unknown_playback_or_loop_state_is_refused()
     {
         var session = Session();
+        _native.ApplyPlayback(new SmtcPlayback(Paused) { LoopSupported = true });
 
         session.PlaybackState = (MediaPlaybackState)7;
+        session.LoopState = (MediaLoopState)7;
 
         Assert.Empty(_link.Sent);
-        Assert.Contains("unknown value 7", Assert.Single(_warnings), StringComparison.Ordinal);
+        Assert.Equal(2, _warnings.Count);
+        Assert.All(_warnings, w => Assert.Contains("unknown value 7", w, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -379,12 +374,12 @@ public sealed class MediaServiceTests
     public void Shuffle_and_repeat_show_only_while_the_app_lets_Windows_change_them()
     {
         var session = Session();
-        _native.ApplyPlayback(new SmtcPlayback(Playing) { Shuffle = true, LoopState = 2 });
+        _native.ApplyPlayback(new SmtcPlayback(Playing) { Shuffle = true, LoopState = MediaLoopState.List });
         Assert.False(session.Shuffle);
         Assert.Equal(MediaLoopState.None, session.LoopState);
 
         _native.ApplyPlayback(new SmtcPlayback(Playing)
-            { Shuffle = true, LoopState = 2, ShuffleSupported = true, LoopSupported = true });
+            { Shuffle = true, LoopState = MediaLoopState.List, ShuffleSupported = true, LoopSupported = true });
         Assert.True(session.Shuffle);
         Assert.Equal(MediaLoopState.List, session.LoopState);
 

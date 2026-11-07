@@ -8,17 +8,53 @@ namespace Winshell.Media;
 /// <summary>One app's entry in the Windows media controls.</summary>
 public sealed class MediaSession : ObservableObject
 {
+    // What a binding reads, and how to read it to tell whether it changed. Position, and Length while the app
+    // reports no length, move with the clock; the session's Seeked raises them.
+    private static readonly (string Name, Func<MediaSession, object?> Read)[] Reported =
+    [
+        (nameof(AppName), s => s.AppName),
+        (nameof(UniqueId), s => s.UniqueId),
+        (nameof(TrackTitle), s => s.TrackTitle),
+        (nameof(TrackArtist), s => s.TrackArtist),
+        (nameof(TrackAlbum), s => s.TrackAlbum),
+        (nameof(TrackAlbumArtist), s => s.TrackAlbumArtist),
+        (nameof(TrackArtUrl), s => s.TrackArtUrl),
+        (nameof(Metadata), s => s.Metadata),
+        (nameof(PlaybackState), s => s.PlaybackState),
+        (nameof(IsPlaying), s => s.IsPlaying),
+        (nameof(CanPlay), s => s.CanPlay),
+        (nameof(CanPause), s => s.CanPause),
+        (nameof(CanStop), s => s.CanStop),
+        (nameof(CanGoNext), s => s.CanGoNext),
+        (nameof(CanGoPrevious), s => s.CanGoPrevious),
+        (nameof(CanSeek), s => s.CanSeek),
+        (nameof(CanTogglePlaying), s => s.CanTogglePlaying),
+        (nameof(ShuffleSupported), s => s.ShuffleSupported),
+        (nameof(Shuffle), s => s.Shuffle),
+        (nameof(LoopSupported), s => s.LoopSupported),
+        (nameof(LoopState), s => s.LoopState),
+        (nameof(MinRate), s => s.MinRate),
+        (nameof(MaxRate), s => s.MaxRate),
+        (nameof(Rate), s => s.Rate),
+        (nameof(PositionSupported), s => s.PositionSupported),
+        (nameof(Length), s => s._session.Length),
+        (nameof(LengthSupported), s => s.LengthSupported),
+        (nameof(CanControl), s => s.CanControl)
+    ];
+
     private readonly SmtcSession _session;
     private readonly IEventLoop _loop;
     private readonly Log _log;
-    private bool _canControl;
+    private object?[] _reported;
+    private uint _track;
 
     internal MediaSession(SmtcSession session, IEventLoop loop, Log log)
     {
         _session = session;
         _loop = loop;
         _log = log;
-        _canControl = AcceptsControl();
+        _reported = Read();
+        _track = session.UniqueId;
         session.Changed += OnChanged;
         session.Seeked += RefreshPosition;
     }
@@ -50,7 +86,7 @@ public sealed class MediaSession : ObservableObject
     public bool CanGoPrevious => _session.CanGoPrevious;
 
     /// <summary>True when the session accepts at least one playback command.</summary>
-    public bool CanControl => _canControl;
+    public bool CanControl => CanPlay || CanPause || CanStop || CanSeek || CanGoNext || CanGoPrevious;
 
     /// <summary>
     /// True when <see cref="SwitchTo"/> knows how to find the app: a Store app, or a program whose
@@ -196,7 +232,7 @@ public sealed class MediaSession : ObservableObject
     /// </summary>
     public MediaLoopState LoopState
     {
-        get => (MediaLoopState)_session.LoopState;
+        get => _session.LoopState;
         set
         {
             if (!_session.LoopSupported)
@@ -205,8 +241,15 @@ public sealed class MediaSession : ObservableObject
                 return;
             }
 
-            if (value != LoopState)
-                _session.SetLoopState((int)value);
+            if (value == LoopState)
+                return;
+            if (!Enum.IsDefined(value))
+            {
+                Warn($"Cannot set the loop state of {{0}} to unknown value {(int)value}.");
+                return;
+            }
+
+            _session.SetLoopState(value);
         }
     }
 
@@ -375,13 +418,6 @@ public sealed class MediaSession : ObservableObject
         _session.Seeked -= RefreshPosition;
     }
 
-    // Windows reports each command on its own. One flag says whether any of them works.
-    private bool AcceptsControl()
-    {
-        return _session.CanPlay || _session.CanPause || _session.CanStop
-               || _session.CanSeek || _session.CanGoNext || _session.CanGoPrevious;
-    }
-
     private static nint MainWindow(string program)
     {
         foreach (var process in Process.GetProcessesByName(program))
@@ -412,14 +448,33 @@ public sealed class MediaSession : ObservableObject
         _log.Warn("media", string.Format(CultureInfo.InvariantCulture, message, AppName));
     }
 
-    private void OnChanged(IReadOnlyList<string> names, bool trackChanged)
+    private object?[] Read()
     {
-        if (trackChanged)
+        return Array.ConvertAll(Reported, p => p.Read(this));
+    }
+
+    private void OnChanged()
+    {
+        var was = _reported;
+        _reported = Read();
+        var newTrack = _track != UniqueId;
+        _track = UniqueId;
+        if (newTrack)
             TrackChanged?.Invoke();
-        foreach (var name in names)
-            Changed(char.ToUpperInvariant(name[0]) + name[1..]);
-        Set(ref _canControl, AcceptsControl(), nameof(CanControl));
-        if (trackChanged)
+        for (var i = 0; i < Reported.Length; i++)
+            Changed(!Same(was[i], _reported[i]), Reported[i].Name);
+        if (newTrack)
             PostTrackChanged?.Invoke();
+    }
+
+    private static bool Same(object? a, object? b)
+    {
+        return (a, b) switch
+        {
+            (IReadOnlyDictionary<string, object?> x, IReadOnlyDictionary<string, object?> y) =>
+                x.Count == y.Count && x.All(e => y.TryGetValue(e.Key, out var v) && Same(e.Value, v)),
+            (IReadOnlyList<string> x, IReadOnlyList<string> y) => x.SequenceEqual(y),
+            _ => Equals(a, b)
+        };
     }
 }
