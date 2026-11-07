@@ -12,7 +12,6 @@ namespace Winshell;
 /// </summary>
 internal sealed class ShellInstance
 {
-    private readonly object _logGate = new();
     private readonly InstanceLog _file;
     private readonly Instances _instances;
     private readonly string _dir;
@@ -20,7 +19,6 @@ internal sealed class ShellInstance
     private readonly string _configPath;
     private NamedPipeServerStream? _listening;
     private IpcServer? _server;
-    private bool _logClosed;
     private Exception? _fatal;
 
     private ShellInstance(ShellLocations locations, string id, string shellId, string configPath, Log log)
@@ -57,16 +55,15 @@ internal sealed class ShellInstance
 
     /// <summary>
     /// Makes this process's folder and log, and reports crashes from here on. <paramref name="log"/> writes to that
-    /// log from now on. <paramref name="configPath"/> is what <c>winshell list</c> shows as the configuration.
+    /// log from now on, and keeps Debug lines when <paramref name="verbose"/>. <paramref name="configPath"/> is what
+    /// <c>winshell list</c> shows as the configuration.
     /// </summary>
     public static ShellInstance Open(string shellId, string configPath, Log log, bool verbose = false)
     {
         var locations = ShellLocations.Current;
         locations.Instances.Clean();
         var instance = new ShellInstance(locations, Instances.NewId(), shellId, configPath, log);
-        // Objects with no engine log through Log.Default. That is this process's log.
-        log.MinimumLevel = verbose ? LogLevel.Debug : LogLevel.Info;
-        log.Sink = instance.WriteLog;
+        log.WriteTo(instance.WriteLine, verbose ? LogLevel.Debug : LogLevel.Info);
         // A crash is reported in a crash report that outlives the log, and in the instance's log, where
         // winshell log finds it, before the process ends. Failures the shell survives get a report each too.
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
@@ -171,7 +168,7 @@ internal sealed class ShellInstance
         _listening?.Dispose();
         _listening = null;
         _instances.Remove(Id);
-        CloseLog();
+        _file.Dispose();
     }
 
     /// <summary>Takes back a start that never published, so nothing of it stays behind.</summary>
@@ -179,7 +176,7 @@ internal sealed class ShellInstance
     {
         _listening?.Dispose();
         _listening = null;
-        CloseLog();
+        _file.Dispose();
         try
         {
             Directory.Delete(_dir, true);
@@ -201,41 +198,20 @@ internal sealed class ShellInstance
         }
     }
 
-    private void WriteLog(LogLevel level, string category, string message)
+    /// <summary>
+    /// Adds one line to the file. The file outlives the run and crash reports copy its end, so this is where secrets
+    /// are taken out. Its time is the process's real time. Once the file is closed, a line goes to the console only.
+    /// </summary>
+    private void WriteLine(LogLevel level, string line)
     {
-        var label = level switch
+        try
         {
-            LogLevel.Debug => "DEBUG",
-            LogLevel.Info => " INFO",
-            LogLevel.Warn => " WARN",
-            LogLevel.Error => "ERROR",
-            _ => "FATAL"
-        };
-        var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
-        lock (_logGate)
-        {
-            // A crash can still be reported after the log file is closed; then it goes to the console only.
-            // The file outlives the run and goes into crash reports, so secrets are taken out of it.
-            try
-            {
-                if (!_logClosed)
-                    _file.Write(level,
-                        $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
-            }
-            catch (Exception e) when (e is IOException or ObjectDisposedException)
-            {
-            }
-
-            Console.Error.WriteLine(line);
+            _file.Write(level,
+                $"{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff} {CrashRedaction.Redact(line)}");
         }
-    }
-
-    private void CloseLog()
-    {
-        lock (_logGate)
+        catch (IOException)
         {
-            _logClosed = true;
-            _file.Dispose();
+            // The disk refused the line. That must not fail the code that logged it, and the console still has it.
         }
     }
 }

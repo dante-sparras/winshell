@@ -28,15 +28,15 @@ public sealed class Log
     public static readonly Log Default = new();
 
     private readonly object _lock = new();
+    private Action<LogLevel, string>? _file;
+    private LogLevel _minimum = LogLevel.Info;
 
     internal Log()
     {
     }
 
-    /// <summary>Where messages go. The default writes to the standard error stream.</summary>
-    internal Action<LogLevel, string, string>? Sink { get; set; }
-
-    internal LogLevel MinimumLevel { get; set; } = LogLevel.Info;
+    /// <summary>Takes each message in place of the standard error stream and the file. Tests read a log through it.</summary>
+    internal Action<LogLevel, string, string>? Sink { get; init; }
 
     /// <summary>
     /// A file that reports to this log changed whether it reads: its path and why not, or empty once it reads again.
@@ -58,7 +58,7 @@ public sealed class Log
     /// <param name="message">The text of the message.</param>
     public void Write(LogLevel level, string category, string message)
     {
-        if (level < MinimumLevel)
+        if (level < _minimum)
             return;
         if (Sink is { } sink)
         {
@@ -77,7 +77,21 @@ public sealed class Log
         var line = string.IsNullOrEmpty(category) ? $"{label}: {message}" : $"{label} {category}: {message}";
         lock (_lock)
         {
+            _file?.Invoke(level, line);
             Console.Error.WriteLine(line);
+        }
+    }
+
+    /// <summary>
+    /// From now on also hands each line to <paramref name="file"/>, and keeps what is at least
+    /// <paramref name="minimum"/>. A process that becomes an instance does this with its log file.
+    /// </summary>
+    internal void WriteTo(Action<LogLevel, string> file, LogLevel minimum)
+    {
+        lock (_lock)
+        {
+            _file = file;
+            _minimum = minimum;
         }
     }
 
