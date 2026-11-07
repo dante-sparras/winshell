@@ -13,9 +13,7 @@ internal interface IInstanceControl
     string? Reload(string? program);
 
     /// <summary>Runs after a client has the answer to a reload that worked, which a shell that goes on to end has to wait for.</summary>
-    void Reloaded()
-    {
-    }
+    void Reloaded();
 
     /// <summary>Ends the shell.</summary>
     void Quit();
@@ -24,19 +22,14 @@ internal interface IInstanceControl
     /// Shows the notice for a configuration that did not build, and the shell keeps running. An empty <paramref name="error"/>
     /// says the project built: that closes the build-error notice of <paramref name="projectFile"/>, and no other.
     /// </summary>
-    void ShowBuildError(string error, string projectFile)
-    {
-    }
+    void ShowBuildError(string error, string projectFile);
+
+    /// <summary>
+    /// Closes whichever of Winshell's own notices is showing, for <c>winshell ipc call notice dismiss</c>. That call is
+    /// not a target the configuration registered, so it works when the configuration registered nothing.
+    /// </summary>
+    void DismissNotice();
 
     /// <summary>What <c>winshell inspect</c> asked of the shell, and the text it prints. <see cref="IpcException"/> is a failed request.</summary>
-    Task<string> Inspect(string command, IReadOnlyList<string> args)
-    {
-        throw new IpcException("This shell can't be inspected.");
-    }
-
-    /// <summary>A failed request as the client reads it.</summary>
-    string Describe(Exception e)
-    {
-        return $"ipc: {e.GetType().Name}: {e.Message}";
-    }
+    Task<string> Inspect(string command, IReadOnlyList<string> args);
 }

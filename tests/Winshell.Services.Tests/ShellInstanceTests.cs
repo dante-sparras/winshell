@@ -10,45 +10,6 @@ public sealed class ShellInstanceTests
 {
     private const string Program = @"C:\shells\mine.exe";
 
-    private sealed class FakeControl : IInstanceControl
-    {
-        public string? ReloadError { get; init; }
-
-        public int Reloads { get; private set; }
-
-        public int Answered { get; private set; }
-
-        public int Quits { get; private set; }
-
-        public string? BuildError { get; private set; }
-
-        public string? BuildProject { get; private set; }
-
-        public ShellIpc Ipc { get; } = new(new Log());
-
-        public string? Reload(string? program)
-        {
-            Reloads++;
-            return ReloadError;
-        }
-
-        public void Reloaded()
-        {
-            Answered++;
-        }
-
-        public void Quit()
-        {
-            Quits++;
-        }
-
-        public void ShowBuildError(string error, string projectFile)
-        {
-            BuildError = error;
-            BuildProject = projectFile;
-        }
-    }
-
     private static List<(InstanceInfo Info, bool Alive)> Rows(ShellInstance instance)
     {
         return Instances.List(true).Where(i => i.Info.Id == instance.Id).ToList();
@@ -96,7 +57,7 @@ public sealed class ShellInstanceTests
     public void A_published_instance_is_listed_and_a_clean_close_marks_it_exited()
     {
         var instance = ShellInstance.Open("mine", Program, new Log());
-        Assert.True(instance.TryOpenPipe());
+        Assert.Null(instance.OpenPipe());
         instance.Publish();
 
         var row = Assert.Single(Rows(instance));
@@ -118,7 +79,7 @@ public sealed class ShellInstanceTests
     {
         var log = new Log();
         var instance = ShellInstance.Open("mine", Program, log);
-        Assert.True(instance.TryOpenPipe());
+        Assert.Null(instance.OpenPipe());
         log.Info("shell", "Shell ID: \"mine\"");
 
         instance.Publish();
@@ -133,7 +94,7 @@ public sealed class ShellInstanceTests
     public void A_start_that_is_abandoned_leaves_nothing_behind()
     {
         var instance = ShellInstance.Open("mine", Program, new Log());
-        Assert.True(instance.TryOpenPipe());
+        Assert.Null(instance.OpenPipe());
 
         instance.Abandon();
 
@@ -150,7 +111,7 @@ public sealed class ShellInstanceTests
         using var held = IpcServer.OpenFirst(instance.Pipe);
         var taken = instance.Pipe;
 
-        Assert.True(instance.TryOpenPipe());
+        Assert.Null(instance.OpenPipe());
 
         Assert.NotEqual(taken, instance.Pipe);
         instance.Close();
@@ -201,7 +162,7 @@ public sealed class ShellInstanceTests
     public async Task A_kill_reaches_a_shell_whatever_its_program_is_called()
     {
         // The server here is this test program, which the client now trusts by owner and integrity alone.
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -214,7 +175,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_reload_that_worked_runs_what_follows_once_the_client_has_its_answer()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -227,7 +188,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_reload_that_failed_says_why_and_the_shell_stays()
     {
-        var control = new FakeControl { ReloadError = "It did not start." };
+        var control = new FakeInstanceControl { ReloadError = "It did not start." };
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -241,7 +202,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_build_error_is_handed_to_the_shell_with_its_project()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -257,9 +218,26 @@ public sealed class ShellInstanceTests
     }
 
     [Fact]
+    public async Task What_throws_on_the_shell_thread_is_a_failed_response_whichever_request_it_was()
+    {
+        var control = new FakeInstanceControl { InspectFailure = new InvalidOperationException("no screen") };
+        control.Ipc.Handle("tests", "fail", new Action(() => throw new InvalidOperationException("no")));
+        var (pipe, loop, server) = Serve(control);
+        using var _ = server;
+
+        var called = await Pumping(loop, () => Ask(pipe, IpcRequest.ForCall("tests", "fail", [])));
+        var inspected = await Pumping(loop, () => Ask(pipe, IpcRequest.ForInspect("tree", [])));
+        var listened = await Pumping(loop, () => Ask(pipe, IpcRequest.ForListen("tests", "gone")));
+
+        Assert.Equal((false, "ipc: InvalidOperationException: no"), (called.Ok, called.Error));
+        Assert.Equal((false, "ipc: InvalidOperationException: no screen"), (inspected.Ok, inspected.Error));
+        Assert.Equal((false, "Signal not found: tests.gone."), (listened.Ok, listened.Error));
+    }
+
+    [Fact]
     public async Task A_client_with_no_protocol_number_is_served_and_reads_past_the_shells()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -273,7 +251,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_client_from_a_newer_protocol_is_refused_in_a_plain_failed_response()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
 
@@ -305,7 +283,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_client_of_another_release_is_refused_before_the_shell_acts()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
@@ -323,7 +301,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_client_of_another_release_can_still_stop_the_shell()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
         var other = ProductVersion.Current.Major == 9 ? "1.0.0" : "9.9.9";
@@ -355,7 +333,7 @@ public sealed class ShellInstanceTests
     [Fact]
     public async Task A_client_of_this_release_is_served_and_one_with_no_release_still_is()
     {
-        var control = new FakeControl();
+        var control = new FakeInstanceControl();
         var (pipe, loop, server) = Serve(control);
         using var _ = server;
         var version = JsonSerializer.Serialize(ProductVersion.Current.Text);
@@ -402,22 +380,22 @@ public sealed class ShellInstanceTests
     }
 
     [Theory]
-    [InlineData(0, 0, 1, null)]
-    [InlineData(1, 0, 1, null)]
-    [InlineData(2, 0, 1, "This shell speaks control protocol 1 and this winshell speaks 2.")]
-    [InlineData(1, 2, 3, "This shell speaks control protocol 3 and this winshell speaks 1.")]
-    public void A_shell_refuses_a_client_outside_what_it_speaks(int client, int oldest, int current, string? refusal)
+    [InlineData(0, null)]
+    [InlineData(1, null)]
+    [InlineData(2, "This shell speaks control protocol 1 and this winshell speaks 2.")]
+    [InlineData(-1, "This shell speaks control protocol 1 and this winshell speaks -1.")]
+    public void A_shell_refuses_a_client_outside_what_it_speaks(int client, string? refusal)
     {
-        AssertStarts(refusal, IpcProtocol.ClientRefusal(client, current, oldest));
+        AssertStarts(refusal, IpcProtocol.ClientRefusal(client));
     }
 
     [Theory]
-    [InlineData(0, 0, 1, null)]
-    [InlineData(5, 0, 1, null)]
-    [InlineData(1, 2, 3, "This shell speaks control protocol 1 and this winshell speaks 3.")]
-    public void A_client_refuses_only_a_shell_older_than_it_speaks(int shell, int oldest, int current, string? refusal)
+    [InlineData(0, null)]
+    [InlineData(5, null)]
+    [InlineData(-1, "This shell speaks control protocol -1 and this winshell speaks 1.")]
+    public void A_client_refuses_only_a_shell_older_than_it_speaks(int shell, string? refusal)
     {
-        AssertStarts(refusal, IpcProtocol.ShellRefusal(shell, current, oldest));
+        AssertStarts(refusal, IpcProtocol.ShellRefusal(shell));
     }
 
     [Theory]

@@ -17,20 +17,6 @@ public sealed class InstanceStartTests
 
     private static readonly object ExitCode = new();
 
-    private sealed class IdleControl : IInstanceControl
-    {
-        public ShellIpc Ipc { get; } = new(new Log());
-
-        public string? Reload(string? program)
-        {
-            return null;
-        }
-
-        public void Quit()
-        {
-        }
-    }
-
     private static string ShellId()
     {
         return "start-" + Guid.NewGuid().ToString("N");
@@ -129,7 +115,7 @@ public sealed class InstanceStartTests
             ["--after", gone.Id.ToString(CultureInfo.InvariantCulture)]), session =>
         {
             hosted = true;
-            session.Serve(new EventQueue(), new IdleControl());
+            session.Serve(new EventQueue(), new FakeInstanceControl());
         });
 
         Assert.True(hosted);
@@ -156,7 +142,7 @@ public sealed class InstanceStartTests
                         ["--after", replaced.Id.ToString(CultureInfo.InvariantCulture)]), session =>
                     {
                         started.Set();
-                        session.Serve(new EventQueue(), new IdleControl());
+                        session.Serve(new EventQueue(), new FakeInstanceControl());
                     });
                 }
                 catch (Exception e)
@@ -241,7 +227,7 @@ public sealed class InstanceStartTests
         InstanceInfo? published = null;
         var result = Start(Launch(shellId, Program, []), session =>
         {
-            session.Serve(new EventQueue(), new IdleControl());
+            session.Serve(new EventQueue(), new FakeInstanceControl());
             id = session.Instance.Id;
             published = Read(id);
         });

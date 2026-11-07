@@ -13,16 +13,16 @@ internal static class IpcProtocol
     /// <summary>The oldest this build still speaks. 0 is a side with no number, whose lines are the same as 1.</summary>
     public const int Oldest = 0;
 
-    /// <summary>Why a shell speaking <paramref name="current"/> refuses a client speaking <paramref name="client"/>, or null.</summary>
-    public static string? ClientRefusal(int client, int current = Current, int oldest = Oldest)
+    /// <summary>Why this shell refuses a client speaking <paramref name="client"/>, or null.</summary>
+    public static string? ClientRefusal(int client)
     {
-        return client >= oldest && client <= current ? null : Mismatch(current, client);
+        return client is >= Oldest and <= Current ? null : Mismatch(Current, client);
     }
 
-    /// <summary>Why a client speaking <paramref name="current"/> refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
-    public static string? ShellRefusal(int shell, int current = Current, int oldest = Oldest)
+    /// <summary>Why this client refuses a shell speaking <paramref name="shell"/>, or null. A newer shell decides for itself.</summary>
+    public static string? ShellRefusal(int shell)
     {
-        return shell >= oldest ? null : Mismatch(shell, current);
+        return shell >= Oldest ? null : Mismatch(shell, Current);
     }
 
     /// <summary>

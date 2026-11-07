@@ -6,7 +6,7 @@ namespace Winshell;
 /// <summary>
 /// What makes a process a Winshell instance, in <c>winshell.exe</c> and in a configuration's own program alike: its
 /// folder and log, its crash reports, its control pipe, and the record <c>winshell list</c> finds it by.
-/// <see cref="InstanceStart"/> calls <see cref="Open"/>, <see cref="TryOpenPipe"/>, <see cref="Listen"/> and
+/// <see cref="InstanceStart"/> calls <see cref="Open"/>, <see cref="OpenPipe"/>, <see cref="Listen"/> and
 /// <see cref="Publish"/> in that order. A start whose pipe failed ends with <see cref="Abandon"/>, and anything else
 /// with <see cref="Close"/>.
 /// </summary>
@@ -86,30 +86,33 @@ internal sealed class ShellInstance
         return instance;
     }
 
-    /// <summary>Opens the control pipe, and logs why when it cannot. A <c>false</c> start goes on to <see cref="Abandon"/>.</summary>
-    public bool TryOpenPipe()
+    /// <summary>
+    /// Opens the control pipe. Null when it opened, or else why not, which is also logged. A start that failed goes on
+    /// to <see cref="Abandon"/>.
+    /// </summary>
+    public string? OpenPipe()
     {
         var pipe = Pipe;
         try
         {
             _listening = IpcServer.OpenAvailable(ref pipe);
         }
-        catch (IOException)
+        catch (IOException e)
         {
-            Log.Error("shell", "The control pipe is already taken.");
-            return false;
+            Log.Error("shell", e.Message);
+            return e.Message;
         }
 
         if (!string.Equals(pipe, Pipe, StringComparison.Ordinal))
             Log.Warn("shell", $"The control pipe {Pipe} was taken. Listening on {pipe}.");
         Pipe = pipe;
-        return true;
+        return null;
     }
 
-    /// <summary>Starts serving the pipe <see cref="TryOpenPipe"/> opened, on <paramref name="loop"/>.</summary>
-    public void Listen(IEventLoop loop, IInstanceControl control, Action? dismissNotice = null)
+    /// <summary>Starts serving the pipe <see cref="OpenPipe"/> opened, on <paramref name="loop"/>.</summary>
+    public void Listen(IEventLoop loop, IInstanceControl control)
     {
-        _server = new IpcServer(_listening!, Pipe, loop, control, dismissNotice: dismissNotice);
+        _server = new IpcServer(_listening!, Pipe, loop, control);
         _listening = null;
     }
 
