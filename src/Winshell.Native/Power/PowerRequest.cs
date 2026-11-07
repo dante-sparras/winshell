@@ -1,4 +1,6 @@
 using System.Runtime.InteropServices;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 
 namespace Winshell.Native;
 
@@ -37,7 +39,7 @@ internal sealed class PowerRequest : IDisposable
         if (!Win32.PowerSetRequest(handle, DisplayRequired) || !Win32.PowerSetRequest(handle, SystemRequired))
         {
             (failedStep, error) = ("set", Marshal.GetLastPInvokeError());
-            Win32.CloseHandle(handle);
+            PInvoke.CloseHandle(new HANDLE(handle));
             return null;
         }
 
@@ -52,7 +54,7 @@ internal sealed class PowerRequest : IDisposable
             return;
         Win32.PowerClearRequest(_handle, DisplayRequired);
         Win32.PowerClearRequest(_handle, SystemRequired);
-        Win32.CloseHandle(_handle);
+        PInvoke.CloseHandle(new HANDLE(_handle));
         _handle = 0;
     }
 }

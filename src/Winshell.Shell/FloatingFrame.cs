@@ -1,4 +1,5 @@
 using Windows.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Windows;
 
@@ -56,11 +57,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
                 _lastHeight = placement.Height;
                 if (placement.Minimized && !Win32.IsIconic(Handle))
                 {
-                    Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+                    Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_MINIMIZE);
                 }
                 else if (!placement.Minimized && Win32.IsIconic(Handle))
                 {
-                    Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+                    Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_RESTORE);
                     FillMonitor();
                 }
                 else if (!Win32.IsIconic(Handle))
@@ -185,11 +186,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         if (host.Placement.IsVisible)
         {
             if (placement.Minimized && !Win32.IsIconic(Handle))
-                Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+                Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_MINIMIZE);
             else if (placement.Maximized && !Win32.IsZoomed(Handle))
-                Win32.ShowWindow(Handle, Win32.SW_SHOWMAXIMIZED);
+                Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_SHOWMAXIMIZED);
             else if (!placement.Maximized && !placement.Minimized && (Win32.IsZoomed(Handle) || Win32.IsIconic(Handle)))
-                Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+                Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_RESTORE);
         }
     }
 
@@ -200,7 +201,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         host.Presentation.SetFullscreen(true);
         SetStyle(BorderlessStyle());
         if (Win32.IsIconic(Handle) || Win32.IsZoomed(Handle))
-            Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+            Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_RESTORE);
         FillMonitor();
     }
 
@@ -229,7 +230,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
                 ? RequestedShow(placement)
                 : Shown(saved);
             if (placement.StateRequested && !placement.Maximized)
-                next.Flags &= ~Win32.WPF_RESTORETOMAXIMIZED;
+                next.Flags &= ~(uint)WINDOWPLACEMENT_FLAGS.WPF_RESTORETOMAXIMIZED;
             if (Win32.SetWindowPlacement(Handle, next))
             {
                 host.Placement.UpdateSize();
@@ -250,30 +251,30 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
         var maximized = placement.StateRequested ? placement.Maximized : saved.Maximized;
         var minimized = placement.StateRequested ? placement.Minimized : saved.Minimized;
         if (minimized)
-            Win32.ShowWindow(Handle, Win32.SW_MINIMIZE);
+            Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_MINIMIZE);
         else if (maximized)
-            Win32.ShowWindow(Handle, Win32.SW_SHOWMAXIMIZED);
+            Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_SHOWMAXIMIZED);
         else if (Win32.IsZoomed(Handle) || Win32.IsIconic(Handle))
-            Win32.ShowWindow(Handle, Win32.SW_RESTORE);
+            Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_RESTORE);
     }
 
     private uint Shown(SavedFloatingPlace saved)
     {
         if (!host.Placement.IsVisible)
-            return (uint)Win32.SW_HIDE;
+            return (uint)SHOW_WINDOW_CMD.SW_HIDE;
         if (saved.Minimized)
-            return (uint)Win32.SW_SHOWMINIMIZED;
+            return (uint)SHOW_WINDOW_CMD.SW_SHOWMINIMIZED;
         if (saved.Maximized)
-            return (uint)Win32.SW_SHOWMAXIMIZED;
+            return (uint)SHOW_WINDOW_CMD.SW_SHOWMAXIMIZED;
         var show = saved.HasPlacement ? saved.Placement.ShowCmd : 0;
         // A window that was never shown has no show command. Leaving fullscreen while it is visible shows it.
-        return show == 0 ? (uint)Win32.SW_SHOWNORMAL : show;
+        return show == 0 ? (uint)SHOW_WINDOW_CMD.SW_SHOWNORMAL : show;
     }
 
     private static uint RequestedShow(FloatingPlacement placement)
     {
-        return (uint)(placement.Minimized ? Win32.SW_SHOWMINIMIZED :
-            placement.Maximized ? Win32.SW_SHOWMAXIMIZED : Win32.SW_SHOWNORMAL);
+        return (uint)(placement.Minimized ? SHOW_WINDOW_CMD.SW_SHOWMINIMIZED :
+            placement.Maximized ? SHOW_WINDOW_CMD.SW_SHOWMAXIMIZED : SHOW_WINDOW_CMD.SW_SHOWNORMAL);
     }
 
     private SavedFloatingPlace CapturePlace()

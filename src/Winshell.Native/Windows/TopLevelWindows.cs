@@ -142,8 +142,8 @@ internal static unsafe class TopLevelWindows
     internal static void Place(nint hwnd, WINDOWPLACEMENT placement, RECT normal, bool minimized, bool maximized)
     {
         placement.Normal = normal;
-        placement.ShowCmd = (uint)(minimized ? Win32.SW_SHOWMINIMIZED :
-            maximized ? (int)SHOW_WINDOW_CMD.SW_MAXIMIZE : Win32.SW_SHOWNORMAL);
+        placement.ShowCmd = (uint)(minimized ? SHOW_WINDOW_CMD.SW_SHOWMINIMIZED :
+            maximized ? SHOW_WINDOW_CMD.SW_MAXIMIZE : SHOW_WINDOW_CMD.SW_SHOWNORMAL);
         placement.Flags |= (uint)WINDOWPLACEMENT_FLAGS.WPF_ASYNCWINDOWPLACEMENT;
         Win32.SetWindowPlacement(hwnd, placement);
     }

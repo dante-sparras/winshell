@@ -1,6 +1,7 @@
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
+using Windows.Win32.Graphics.Dwm;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -56,8 +57,8 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
         if (host.Kind != WindowKind.Floating)
         {
             // Panels and popups appear without the Windows fade, as layer surfaces do.
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_TRANSITIONS_FORCEDISABLED, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_EXCLUDED_FROM_PEEK, 1, 4);
+            Win32.DwmSetWindowAttribute(Handle, (int)DWMWINDOWATTRIBUTE.DWMWA_TRANSITIONS_FORCEDISABLED, 1, 4);
+            Win32.DwmSetWindowAttribute(Handle, (int)DWMWINDOWATTRIBUTE.DWMWA_EXCLUDED_FROM_PEEK, 1, 4);
         }
 
         SetCornersAndBorder(WindowBackdrop.None, WindowCorners.Default);
@@ -96,7 +97,7 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
         if (Handle == 0)
             return;
         var dark = platform.IsDark ? 1 : 0;
-        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_USE_IMMERSIVE_DARK_MODE, dark, 4);
+        Win32.DwmSetWindowAttribute(Handle, (int)DWMWINDOWATTRIBUTE.DWMWA_USE_IMMERSIVE_DARK_MODE, dark, 4);
     }
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
@@ -177,7 +178,7 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             var border = host.Kind == WindowKind.Popup && backdrop != WindowBackdrop.None
                 ? 0xFFFFFFFF
                 : Win32.DWMWA_COLOR_NONE;
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, border, 4);
+            Win32.DwmSetWindowAttribute(Handle, (int)DWMWINDOWATTRIBUTE.DWMWA_BORDER_COLOR, border, 4);
         }
     }
 
@@ -191,7 +192,7 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             WindowCorners.RoundSmall => 3,
             _ => 0
         };
-        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
+        Win32.DwmSetWindowAttribute(Handle, (int)DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
     }
 
     /// <summary>Hands the keyboard to the island, unless it already has it.</summary>

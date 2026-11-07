@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 using Winshell.Tray;
 
@@ -89,7 +90,7 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
         if (!IsExplorerTaskbar(saved.Hwnd))
             return;
         if (saved.WasVisible)
-            Win32.ShowWindow(saved.Hwnd, Win32.SW_SHOWNA);
+            Win32.ShowWindow(saved.Hwnd, (int)SHOW_WINDOW_CMD.SW_SHOWNA);
         if (!saved.Removed)
             return;
         if (!AppBars.Register(saved.Hwnd, Callback()))
@@ -108,7 +109,7 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
         _saved.Add(saved);
         if (saved.Reserves)
             saved.Removed = AppBars.Remove(hwnd);
-        Win32.ShowWindow(hwnd, Win32.SW_HIDE);
+        Win32.ShowWindow(hwnd, (int)SHOW_WINDOW_CMD.SW_HIDE);
     }
 
     private static uint Callback()

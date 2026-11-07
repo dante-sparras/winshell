@@ -1,6 +1,4 @@
 using System.Runtime.InteropServices;
-using Windows.Win32;
-using Windows.Win32.Foundation;
 using Microsoft.Win32.SafeHandles;
 
 namespace Winshell.Native;
@@ -238,7 +236,6 @@ internal static partial class Win32
     public const uint GW_HWNDNEXT = 2;
     public const uint GW_HWNDPREV = 3;
     public const uint GW_OWNER = 4;
-    public const uint WPF_RESTORETOMAXIMIZED = 0x0002;
 
     public const uint WM_NULL = 0x0000;
     public const uint WM_CREATE = 0x0001;
@@ -315,16 +312,6 @@ internal static partial class Win32
 
     public const int MA_NOACTIVATE = 3;
 
-    public const int SW_HIDE = 0;
-    public const int SW_SHOWNORMAL = 1;
-    public const int SW_SHOWMINIMIZED = 2;
-    public const int SW_SHOWMAXIMIZED = 3;
-    public const int SW_SHOWNOACTIVATE = 4;
-    public const int SW_SHOW = 5;
-    public const int SW_MINIMIZE = 6;
-    public const int SW_SHOWNA = 8;
-    public const int SW_RESTORE = 9;
-
     public const uint SWP_NOSIZE = 0x0001;
     public const uint SWP_NOMOVE = 0x0002;
     public const uint SWP_NOZORDER = 0x0004;
@@ -396,24 +383,12 @@ internal static partial class Win32
     public const int WH_KEYBOARD_LL = 13;
     public const int WH_MOUSE_LL = 14;
 
-    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-    public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-    public const int DWMWA_BORDER_COLOR = 34;
-    public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
-    public const int DWMWA_TRANSITIONS_FORCEDISABLED = 3;
-    public const int DWMWA_CLOAK = 13;
-    public const int DWMWA_EXCLUDED_FROM_PEEK = 12;
-    public const int DWMWA_NCRENDERING_POLICY = 2;
     public const uint DWMWA_COLOR_NONE = 0xFFFFFFFE;
 
-    public const uint FILE_FLAG_OVERLAPPED = 0x40000000;
     public const uint CLSCTX_INPROC_SERVER = 0x1;
-
-    public const int ERROR_ACCESS_DENIED = 5;
 
     public const uint LWA_ALPHA = 0x2;
 
-    public const uint CF_UNICODETEXT = 13;
     public const uint GMEM_MOVEABLE = 0x0002;
 
     public static readonly nint DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = -4;
@@ -755,11 +730,6 @@ internal static partial class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool SetEvent(nint handle);
 
-    public static bool CloseHandle(nint handle)
-    {
-        return PInvoke.CloseHandle(new HANDLE(handle));
-    }
-
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint CommandLineToArgvW(string commandLine, out int count);
 
@@ -776,9 +746,6 @@ internal static partial class Win32
 
     [LibraryImport("ole32.dll")]
     public static partial int CoCreateInstance(in Guid clsid, nint outer, uint context, in Guid iid, out nint instance);
-
-    [LibraryImport("combase.dll")]
-    public static partial int WindowsDeleteString(nint value);
 
     [LibraryImport("kernel32.dll")]
     public static partial uint GetTickCount();
