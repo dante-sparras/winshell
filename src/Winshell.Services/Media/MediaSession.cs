@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Apps;
 using Winshell.Native;
 
@@ -439,7 +440,7 @@ public sealed class MediaSession : ObservableObject
         }
 
         if (Win32.IsIconic(window))
-            Win32.ShowWindow(window, Win32.SW_RESTORE);
+            Win32.ShowWindow(window, (int)SHOW_WINDOW_CMD.SW_RESTORE);
         Win32.SetForegroundWindow(window);
     }
 

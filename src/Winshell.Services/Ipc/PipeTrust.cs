@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Security.Principal;
+using Windows.Win32.Foundation;
 using Microsoft.Win32.SafeHandles;
 using Winshell.Native;
 
@@ -41,11 +42,11 @@ internal static class PipeTrust
         if (labeled is not null && IsMedium(labeled))
             return labeled;
         labeled?.Dispose();
-        if (first && error == Win32.ERROR_ACCESS_DENIED)
+        if (first && error == (int)WIN32_ERROR.ERROR_ACCESS_DENIED)
             throw new PipeTakenException();
         var handle = NamedPipeServer.CreateServer(path, first, $"O:{sid}D:(A;;GA;;;{sid})", out error);
         if (handle is null)
-            throw error == Win32.ERROR_ACCESS_DENIED
+            throw error == (int)WIN32_ERROR.ERROR_ACCESS_DENIED
                 ? new PipeTakenException()
                 : new IOException($"The control pipe could not be created ({error}).");
         try

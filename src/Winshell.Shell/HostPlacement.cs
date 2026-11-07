@@ -1,4 +1,5 @@
 using Windows.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell;
@@ -100,7 +101,7 @@ internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
         else
         {
             host.Placer.Hide();
-            Win32.ShowWindow(Handle, Win32.SW_HIDE);
+            Win32.ShowWindow(Handle, (int)SHOW_WINDOW_CMD.SW_HIDE);
             host.Focus.Release();
         }
     }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Native;
 
 namespace Winshell.Services.Tests;
@@ -527,7 +528,7 @@ public sealed class FocusTakeoverTests
                 var hwnd = Win32.CreateWindowExW(0, "STATIC", "winshell-focus-target",
                     Win32.WS_OVERLAPPEDWINDOW | Win32.WS_VISIBLE, 0, 80, 80, 40, 0, 0, Win32.GetModuleHandleW(null), 0);
                 if (hwnd != 0)
-                    Win32.ShowWindow(hwnd, Win32.SW_SHOWNOACTIVATE);
+                    Win32.ShowWindow(hwnd, (int)SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
                 Win32.PeekMessageW(out _, 0, 0, 0, 0);
                 _threadId = Win32.GetCurrentThreadId();
                 _created.SetResult(hwnd);

@@ -64,7 +64,8 @@ internal sealed unsafe class DirectoryChanges : IDisposable
     {
         var handle = Win32.CreateFileW(path, FileListDirectory, (uint)(FileShare.ReadWrite | FileShare.Delete), 0,
             (uint)FileMode.Open,
-            (uint)FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS | Win32.FILE_FLAG_OVERLAPPED, 0);
+            (uint)(FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS |
+                   FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_OVERLAPPED), 0);
         if (handle.IsInvalid)
         {
             handle.Dispose();

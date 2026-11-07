@@ -352,7 +352,7 @@ internal static class ImmersiveDesktops
         }
         finally
         {
-            _ = Win32.WindowsDeleteString(name);
+            _ = PInvoke.WindowsDeleteString(new HSTRING((void*)name));
         }
     }
 
