@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
-using System.Globalization;
 using System.Text.Json;
 using Winshell.Windows;
 using static Winshell.Winland.WinlandProtocol;
@@ -171,8 +170,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
     {
         if (screen is null)
             return null;
-        // Winland names a Monitor as Windows does, \\.\DISPLAY1, which is the screen's id.
-        var monitor = _monitorList.FirstOrDefault(m => m.Name == screen.Id || m.Name == screen.Name);
+        var monitor = _monitorList.FirstOrDefault(m => m.Name == screen.Id);
         return monitor ?? (_monitorsRequested ? null : FindMonitor(screen.Id, true));
     }
 
@@ -299,7 +297,11 @@ public sealed class WinlandService : ObservableObject, IDisposable
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
 
-    /// <summary>A query that got no answer while the stream is up is asked again, so a busy Winland still fills the lists.</summary>
+    /// <summary>
+    /// Asks a query again 1 s after it got no answer while the event stream is up. Winland has no busy reply: a
+    /// request it cannot take now times out and comes back null. While the stream is up Winland is running, so
+    /// asking again fills the lists once it answers.
+    /// </summary>
     private void RetryIfConnected(string? reply, Action retry)
     {
         if (reply is not null || !_backend.IsConnected)
@@ -340,7 +342,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
             {
                 var args = ParseArgs(data, 3);
                 var monitor = FindMonitor(args[1], true)!;
-                monitor.UpdateInitial(ParseInt(args[0]), args[1], args[2]);
+                monitor.UpdateInitial(Integer(args[0]) ?? -1, args[1], args[2]);
                 RefreshMonitors(false);
                 break;
             }
@@ -353,8 +355,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
                 // id,name,monitor
                 var args = ParseArgs(data, 3);
                 var existed = FindWorkspace(args[1], args[2], false) is not null;
-                var workspace = FindWorkspace(args[1], args[2], true, ParseId(args[0], args[1]))!;
-                workspace.SetId(ParseId(args[0], args[1]));
+                var workspace = FindWorkspace(args[1], args[2], true, WorkspaceId(args[0], args[1]))!;
+                workspace.SetId(WorkspaceId(args[0], args[1]));
                 if (!existed)
                     RefreshWorkspaces(false);
                 break;
@@ -384,7 +386,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
                 var args = ParseArgs(data, 3);
                 var monitor = args[2].Length > 0 ? FindMonitor(args[2], true) : _focusedMonitor;
                 if (monitor is not null)
-                    monitor.SetActiveWorkspace(FindWorkspace(args[1], monitor.Name, true, ParseId(args[0], args[1])));
+                    monitor.SetActiveWorkspace(
+                        FindWorkspace(args[1], monitor.Name, true, WorkspaceId(args[0], args[1])));
                 break;
             }
             case "moveworkspacev2":
@@ -394,7 +397,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
                 var monitor = FindMonitor(args[2], true)!;
                 var workspace = FindWorkspace(args[1], args[2], false)
                                 ?? _workspaceList.FirstOrDefault(w => w.Name == args[1] && w.Monitor != monitor)
-                                ?? FindWorkspace(args[1], args[2], true, ParseId(args[0], args[1]))!;
+                                ?? FindWorkspace(args[1], args[2], true, WorkspaceId(args[0], args[1]))!;
                 workspace.SetMonitor(monitor);
                 // The Workspace's number can change on its new Monitor, and the Monitors' shown Workspaces with it.
                 RefreshWorkspaces(false);
@@ -451,19 +454,10 @@ public sealed class WinlandService : ObservableObject, IDisposable
         }
     }
 
-    private static int ParseInt(string text)
-    {
-        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : -1;
-    }
-
-    private static int ParseId(string id, string name)
-    {
-        return int.TryParse(id, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : IdFromName(name);
-    }
-
-    // Queries
+    // Queries. With canCreate the reply is Winland's whole state, as on connecting: Monitors and Workspaces it lists
+    // are added and Workspaces it leaves out are removed. Without it, as when an event asks, the reply only updates
+    // what events have announced, so a reply sent before an event cannot bring back what the event removed. Monitors
+    // a reply leaves out are removed either way.
 
     private void RefreshMonitors(bool canCreate)
     {
@@ -475,8 +469,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
             _requestingMonitors = false;
             if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
             {
-                if (canCreate)
-                    RetryIfConnected(reply, () => RefreshMonitors(true));
+                RetryIfConnected(reply, () => RefreshMonitors(canCreate));
                 return;
             }
 
@@ -521,8 +514,7 @@ public sealed class WinlandService : ObservableObject, IDisposable
             _requestingWorkspaces = false;
             if (ParseJson(reply) is not { ValueKind: JsonValueKind.Array } json)
             {
-                if (canCreate)
-                    RetryIfConnected(reply, () => RefreshWorkspaces(true));
+                RetryIfConnected(reply, () => RefreshWorkspaces(canCreate));
                 return;
             }
 

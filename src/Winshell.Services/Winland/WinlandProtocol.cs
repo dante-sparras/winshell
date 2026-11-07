@@ -65,22 +65,32 @@ internal static class WinlandProtocol
             : 0;
     }
 
-    /// <summary>The id Winland gives a Workspace in events when the JSON leaves it out: special ones from -99, named ones from -1.</summary>
+    public const string DefaultSpecial = "special:special";
+
+    // The ids Winland gives Workspaces that have no number: the default special one is -99, other special ones count up
+    // from -98, and named ones count down from -1.
+    private const int DefaultSpecialId = -99;
+    private const int FirstNamedId = -1;
+
+    /// <summary>A whole number in an event or a reply, or null when the text is not one.</summary>
+    public static int? Integer(string text)
+    {
+        return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
+    }
+
+    /// <summary>The id Winland gives each Workspace in events when the JSON leaves it out.</summary>
     public static Dictionary<string, int> UnnumberedIds(IEnumerable<string> names)
     {
         var ids = new Dictionary<string, int>(StringComparer.Ordinal);
-        var distinct = names.Distinct(StringComparer.Ordinal)
-            .Where(n => !int.TryParse(n, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)).ToList();
+        var distinct = names.Distinct(StringComparer.Ordinal).Where(n => Integer(n) is null).ToList();
         var named = distinct.Where(n => !IsSpecial(n)).Order(StringComparer.Ordinal).ToList();
         for (var i = 0; i < named.Count; i++)
-            ids[named[i]] = -1 - i;
-        var next = -98;
+            ids[named[i]] = FirstNamedId - i;
+        var next = DefaultSpecialId + 1;
         foreach (var special in distinct.Where(IsSpecial).Order(StringComparer.Ordinal))
-            ids[special] = special == DefaultSpecial ? -99 : next++;
+            ids[special] = special == DefaultSpecial ? DefaultSpecialId : next++;
         return ids;
     }
-
-    public const string DefaultSpecial = "special:special";
 
     public static bool IsSpecial(string name)
     {
@@ -90,8 +100,13 @@ internal static class WinlandProtocol
     /// <summary>The id of a Workspace known only by its name.</summary>
     public static int IdFromName(string name)
     {
-        return int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) ? id :
-            name == DefaultSpecial ? -99 : -1;
+        return Integer(name) ?? (name == DefaultSpecial ? DefaultSpecialId : FirstNamedId);
+    }
+
+    /// <summary>A Workspace's id from an event: its number, or the id its name gives when Winland sends none.</summary>
+    public static int WorkspaceId(string id, string name)
+    {
+        return Integer(id) ?? IdFromName(name);
     }
 
     /// <summary>A JSON value as maps and lists: objects become maps, arrays lists.</summary>
