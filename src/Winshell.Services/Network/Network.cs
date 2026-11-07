@@ -6,14 +6,15 @@ namespace Winshell.Network;
 /// <summary>A network of an adapter. Wi-Fi networks are <see cref="WifiNetwork"/> objects.</summary>
 public class Network : ObservableObject
 {
+    private readonly DeviceAction _action;
     private NetworkInfo _info;
-    private bool _busy;
     private string _error = "";
 
     internal Network(NetworkDevice device, NetworkInfo info)
     {
         Device = device;
         _info = info;
+        _action = new DeviceAction(device.Loop.Post);
     }
 
     /// <summary>An action failed, with the same text as <see cref="Error"/>.</summary>
@@ -42,7 +43,7 @@ public class Network : ObservableObject
     public ConnectionState State => _info.State;
 
     /// <summary>An action is running. Other calls are ignored until it ends.</summary>
-    public bool Busy => _busy;
+    public bool Busy => _action.Running;
 
     /// <summary>Why the last action failed. Empty while an action runs and after one succeeds.</summary>
     public string Error => _error;
@@ -129,33 +130,27 @@ public class Network : ObservableObject
         });
     }
 
-    private async Task RunAsync(Func<Task> action)
+    private Task RunAsync(Func<Task> action)
     {
-        if (_busy || Removed)
-            return;
-        Set(ref _busy, true, nameof(Busy));
-        Set(ref _error, "", nameof(Error));
-        var error = "";
-        try
+        if (Removed)
+            return Task.CompletedTask;
+        return _action.RunAsync(() =>
+        {
+            Changed(nameof(Busy));
+            Set(ref _error, "", nameof(Error));
+        }, async () =>
         {
             await action().ConfigureAwait(false);
-        }
-        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+            return null;
+        }, error =>
         {
-            error = e.Message;
-        }
-        finally
-        {
-            Device.Loop.Post(() =>
-            {
-                if (Removed)
-                    return;
-                Set(ref _busy, false, nameof(Busy));
-                Set(ref _error, error, nameof(Error));
-                if (error.Length > 0)
-                    OperationFailed?.Invoke(error);
-            });
-        }
+            if (Removed)
+                return;
+            Changed(nameof(Busy));
+            Set(ref _error, error, nameof(Error));
+            if (error.Length > 0)
+                OperationFailed?.Invoke(error);
+        });
     }
 
     internal virtual void Update(NetworkInfo info)

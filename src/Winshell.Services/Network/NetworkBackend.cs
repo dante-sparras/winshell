@@ -1,6 +1,4 @@
-using System.ComponentModel;
 using System.Net.NetworkInformation;
-using System.Runtime.InteropServices;
 using System.Security;
 using Windows.Devices.Radios;
 using Windows.Devices.WiFi;
@@ -180,7 +178,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                 _access = MapAccess(access);
             }
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             lock (_lock)
             {
@@ -224,12 +222,6 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         };
     }
 
-    internal static bool IsExpectedFailure(Exception e)
-    {
-        return e is UnauthorizedAccessException or COMException
-            or InvalidOperationException or NotSupportedException or ArgumentException
-            or Win32Exception or IOException;
-    }
 
     protected override async Task<NetworkSnapshot> ReadAsync()
     {
@@ -243,7 +235,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
             _wifiIds = ids;
             return ReadState();
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             return NetworkSnapshot.Initial with { Error = e.Message };
         }
@@ -390,7 +382,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
             {
                 error = Wlan.GetProfile(id, name, out xml, out _);
             }
-            catch (Exception e) when (IsExpectedFailure(e))
+            catch (Exception e) when (WindowsFailure.IsExpected(e))
             {
                 saved.Add(WifiProfiles.Describe(id, name, null, 0));
                 continue;
@@ -528,7 +520,7 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
                     Refresh();
                 return result.Error;
             }
-            catch (Exception e) when (IsExpectedFailure(e))
+            catch (Exception e) when (WindowsFailure.IsExpected(e))
             {
                 return e.Message;
             }

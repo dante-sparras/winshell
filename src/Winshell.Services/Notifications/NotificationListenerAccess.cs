@@ -15,7 +15,7 @@ internal static class NotificationListenerAccess
         {
             return Map(UserNotificationListener.Current.GetAccessStatus());
         }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             return NotificationAccessStatus.Unavailable;
         }

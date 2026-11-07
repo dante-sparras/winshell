@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Windows.ApplicationModel;
 using Windows.Foundation;
 using Windows.Foundation.Metadata;
@@ -78,7 +77,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                     read[key] = toast;
                     toasts.Add(toast);
                 }
-                catch (Exception e) when (IsExpectedFailure(e))
+                catch (Exception e) when (WindowsFailure.IsExpected(e))
                 {
                     // An app can disappear between enumeration and reading its toast.
                     Log.Default.Warn("notifications", e.Message);
@@ -89,7 +88,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             _changes.Read(stamp);
             return new NotificationSnapshot(access, toasts, focus, mode);
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             return new NotificationSnapshot(NotificationAccessStatus.Unavailable, [], focus, mode,
                 $"Windows notification access is unavailable: {e.Message} Check package identity and the userNotificationListener capability.");
@@ -126,7 +125,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             listener.NotificationChanged += handler;
             return () => listener.NotificationChanged -= handler;
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             return null;
         }
@@ -149,7 +148,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             // The stream stays closed until the icon thread asks. The toast is already in the snapshot.
             logo = new WindowsAppLogo(display);
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
         }
 
@@ -165,7 +164,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             if (ApiInformation.IsTypePresent("Windows.UI.Shell.FocusSessionManager") && FocusSessionManager.IsSupported)
                 return FocusSessionManager.GetDefault().IsFocusActive ? NotificationState.On : NotificationState.Off;
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
         }
 
@@ -180,7 +179,7 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
                     "NotificationMode"))
                 return MapMode((int)ToastNotificationManager.GetDefault().NotificationMode);
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
         }
 
@@ -196,12 +195,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             2 => NotificationMode.AlarmsOnly,
             _ => NotificationMode.Unknown
         };
-    }
-
-    internal static bool IsExpectedFailure(Exception e)
-    {
-        return e is COMException or UnauthorizedAccessException
-            or InvalidOperationException or ArgumentException or NotSupportedException or TypeLoadException;
     }
 }
 
