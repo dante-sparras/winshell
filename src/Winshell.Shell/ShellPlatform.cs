@@ -67,9 +67,6 @@ internal sealed class ShellPlatform : IDisposable
     /// <summary>The native windows that exist now.</summary>
     internal IReadOnlyList<HostWindow> Windows => _windows;
 
-    public string PrimaryScreenId =>
-        _screens.FirstOrDefault(s => s.IsPrimary)?.Id ?? _screens.FirstOrDefault()?.Id ?? "";
-
     /// <summary>Whether windows are dark. <see cref="ColorScheme"/> overrides Windows mode, and <see cref="ColorScheme.System"/> follows it.</summary>
     public bool IsDark => DarkFor(_scheme, _windowsDark);
 

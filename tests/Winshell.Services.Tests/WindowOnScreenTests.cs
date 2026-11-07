@@ -7,10 +7,10 @@ public sealed class WindowOnScreenTests
     // Primary work area starts 48px down. The scaled screen has no taskbar, so its work area is the whole screen.
     private static readonly RECT PrimaryMonitor = new(0, 0, 1920, 1080);
     private static readonly RECT PrimaryWork = new(0, 48, 1920, 1080);
-    private static readonly MonitorFrame Primary = MonitorFrame.Of(PrimaryMonitor, PrimaryWork, 1);
+    private static readonly MonitorFrame Primary = Monitor(PrimaryMonitor, PrimaryWork, 1).Frame;
 
     private static readonly MonitorFrame Scaled =
-        MonitorFrame.Of(new RECT(1920, 0, 4480, 1440), new RECT(1920, 0, 4480, 1440), 1.5);
+        Monitor(new RECT(1920, 0, 4480, 1440), new RECT(1920, 0, 4480, 1440), 1.5).Frame;
 
     [Fact]
     public void A_window_keeps_its_logical_size_and_work_area_offset_across_scales()
@@ -135,8 +135,13 @@ public sealed class WindowOnScreenTests
     public void The_frame_a_window_is_placed_in_is_the_work_area()
     {
         var bounds = new RECT(0, 0, 1920, 1080);
-        Assert.Equal(new MonitorFrame(0, 48, 1920, 1080, 1), MonitorFrame.Of(bounds, new RECT(0, 48, 1920, 1080), 1));
-        Assert.Equal(new MonitorFrame(0, 0, 1920, 1080, 1.5), MonitorFrame.Of(bounds, default, 1.5));
-        Assert.Equal(new MonitorFrame(0, 0, 1920, 1080, 1), MonitorFrame.Of(bounds, new RECT(0, 48, 1920, 48), 1));
+        Assert.Equal(new MonitorFrame(0, 48, 1920, 1080, 1), Monitor(bounds, new RECT(0, 48, 1920, 1080), 1).Frame);
+        Assert.Equal(new MonitorFrame(0, 0, 1920, 1080, 1.5), Monitor(bounds, default, 1.5).Frame);
+        Assert.Equal(new MonitorFrame(0, 0, 1920, 1080, 1), Monitor(bounds, new RECT(0, 48, 1920, 48), 1).Frame);
+    }
+
+    private static MonitorGeometry Monitor(RECT bounds, RECT work, double scale)
+    {
+        return new MonitorGeometry(0, "", bounds, work, scale, false);
     }
 }

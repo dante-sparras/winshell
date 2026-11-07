@@ -2,16 +2,8 @@ using Winshell.Native;
 
 namespace Winshell;
 
-/// <summary>A monitor's work area in physical pixels, and the scale that turns those pixels into logical ones.</summary>
-internal readonly record struct MonitorFrame(int Left, int Top, int Right, int Bottom, double Scale)
-{
-    /// <summary>The work area a window is placed in, or the whole monitor when that area has no size.</summary>
-    public static MonitorFrame Of(RECT bounds, RECT work, double scale)
-    {
-        var area = work.Width > 0 && work.Height > 0 ? work : bounds;
-        return new MonitorFrame(area.Left, area.Top, area.Right, area.Bottom, scale);
-    }
-}
+/// <summary>The area a window on a monitor is placed in, in physical pixels, and the scale that turns those pixels into logical ones.</summary>
+internal readonly record struct MonitorFrame(int Left, int Top, int Right, int Bottom, double Scale);
 
 /// <summary>
 /// A window about to be placed. <see cref="Shown"/> is the rectangle on screen.

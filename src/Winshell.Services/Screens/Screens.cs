@@ -1,9 +1,26 @@
+using Windows.Foundation;
 using Winshell.Native;
 
 namespace Winshell;
 
 /// <summary>
-/// A connected monitor: its identity, its device interface path such as
+/// A connected monitor's handle, device name such as <c>\\.\DISPLAY1</c>, physical rectangles and scale: what placing
+/// a window needs. Reading it asks Windows nothing about the monitor's model, size or refresh rate.
+/// </summary>
+internal sealed record MonitorGeometry(nint Handle, string Id, RECT Bounds, RECT Work, double Scale, bool IsPrimary)
+{
+    /// <summary>The area a window on this monitor lays out in: the work area, or the whole monitor when that area has no size.</summary>
+    public RECT Area => Work.Width > 0 && Work.Height > 0 ? Work : Bounds;
+
+    /// <summary>The whole monitor in logical pixels.</summary>
+    public Rect Logical => DesktopSpace.ToLogical(Bounds, Bounds, Scale);
+
+    /// <summary>The area a window is placed in, with the scale that turns its pixels into logical ones.</summary>
+    public MonitorFrame Frame => new(Area.Left, Area.Top, Area.Right, Area.Bottom, Scale);
+}
+
+/// <summary>
+/// A described monitor: its identity, its device interface path such as
 /// <c>\\?\DISPLAY#AUS32A8#5&amp;15335277&amp;0&amp;UID184582#{...}</c> ("" when Windows has none), and its physical
 /// rectangles and scale.
 /// </summary>
@@ -17,38 +34,57 @@ internal sealed record ConnectedMonitor(
 {
     /// <summary>The monitor's PnP model code, such as <c>AUS32A8</c>, or "" when Windows names none.</summary>
     public string ModelCode => Screens.ModelCode(InterfacePath);
-
-    /// <summary>The area a panel or popup on this monitor lays out in: the work area, or the whole monitor without one.</summary>
-    public RECT Area => Work.Width > 0 ? Work : Bounds;
 }
 
-/// <summary>Reads the connected monitors: their names, models, DPI and areas.</summary>
+/// <summary>
+/// Reads the connected monitors. <see cref="List"/>, <see cref="Find"/>, <see cref="Primary"/> and <see cref="Read"/>
+/// read only their geometry. <see cref="Describe"/> adds the names, model, size and refresh rate of one, and
+/// <see cref="Enumerate"/> describes them all.
+/// </summary>
 internal static class Screens
 {
-    public static List<ConnectedMonitor> Enumerate()
+    /// <summary>Every connected monitor's geometry: the primary one first, then left to right and top to bottom.</summary>
+    public static List<MonitorGeometry> List()
     {
-        var result = new List<ConnectedMonitor>();
+        var result = new List<MonitorGeometry>();
         foreach (var handle in Monitors.List())
-            if (Describe(handle) is { } monitor)
+            if (Read(handle) is { } monitor)
                 result.Add(monitor);
-        // Put the primary screen first, as Windows does.
-        return result.OrderByDescending(m => m.Info.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top)
+        return result.OrderByDescending(m => m.IsPrimary).ThenBy(m => m.Bounds.Left).ThenBy(m => m.Bounds.Top)
             .ToList();
     }
 
-    /// <summary>The connected monitor with a device name, or null once it is gone.</summary>
-    public static ConnectedMonitor? Find(string deviceName)
+    /// <summary>Every connected monitor, described, the primary one first.</summary>
+    public static List<ConnectedMonitor> Enumerate()
     {
-        return Enumerate().FirstOrDefault(m => m.Info.Id == deviceName);
+        return List().Select(Describe).ToList();
     }
 
-    public static ConnectedMonitor? Describe(nint handle)
+    /// <summary>The connected monitor with a device name, or null once it is gone.</summary>
+    public static MonitorGeometry? Find(string deviceName)
+    {
+        return List().FirstOrDefault(m => m.Id == deviceName);
+    }
+
+    /// <summary>The primary monitor, or the first one when Windows marks none, or null when none is connected.</summary>
+    public static MonitorGeometry? Primary()
+    {
+        return List().FirstOrDefault();
+    }
+
+    /// <summary>The geometry of the monitor with this handle, or null once it is gone.</summary>
+    public static MonitorGeometry? Read(nint handle)
     {
         if (!Monitors.TryRead(handle, out var mi))
             return null;
-        var device = mi.Device;
         Win32.GetDpiForMonitor(handle, 0, out var dpi, out _);
-        var scale = DesktopSpace.Scale(dpi);
+        return new MonitorGeometry(handle, mi.Device, mi.Bounds, mi.Work, DesktopSpace.Scale(dpi), mi.IsPrimary);
+    }
+
+    /// <summary>A monitor's geometry with its names, model, size and refresh rate.</summary>
+    public static ConnectedMonitor Describe(MonitorGeometry monitor)
+    {
+        var device = monitor.Id;
         var (model, id) = DisplayDevice.Monitor(device);
         var size = MonitorSize.Read(id);
         var name = device.Replace(@"\\.\", "", StringComparison.Ordinal);
@@ -58,14 +94,14 @@ internal static class Screens
             model,
             Manufacturer(ModelCode(id)),
             Serial(id),
-            DesktopSpace.ToLogical(mi.Bounds, mi.Bounds, scale),
-            DesktopSpace.ToLogical(mi.Work, mi.Bounds, scale),
-            scale,
+            monitor.Logical,
+            DesktopSpace.ToLogical(monitor.Work, monitor.Bounds, monitor.Scale),
+            monitor.Scale,
             size.WidthMm,
             size.HeightMm,
             RefreshRate(device),
-            mi.IsPrimary);
-        return new ConnectedMonitor(handle, info, id, mi.Bounds, mi.Work, scale);
+            monitor.IsPrimary);
+        return new ConnectedMonitor(monitor.Handle, info, id, monitor.Bounds, monitor.Work, monitor.Scale);
     }
 
     /// <summary>The device name and physical bounds of the monitor a window is on, without reading the rest.</summary>
