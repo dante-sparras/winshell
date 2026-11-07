@@ -22,7 +22,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
     private readonly string _config;
     private readonly OwnProbe _probe;
     private readonly List<Process> _started = [];
-    private readonly bool _taskbarHidden = new ExplorerTaskbarService().AnyHidden();
+    private readonly bool _taskbarHidden = ExplorerTaskbarRecovery.AnyHidden();
 
     /// <summary>
     /// The probe these tests build and edit, once for the class. The shared one is built first, so that no other build
@@ -162,7 +162,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
 
             var second = NextPid(first, "reloaded");
             Wait.Until(() => !File.Exists(marker), "the reloaded shell to hide the taskbar");
-            Assert.True(new ExplorerTaskbarService().AnyHidden());
+            Assert.True(ExplorerTaskbarRecovery.AnyHidden());
             // Ended without its cleanup, as a crash would end it.
             using (var crashed = Process.GetProcessById(second))
             {
@@ -171,7 +171,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
             }
 
             NextPid(second, "reloaded");
-            Assert.False(new ExplorerTaskbarService().AnyHidden());
+            Assert.False(ExplorerTaskbarRecovery.AnyHidden());
             Assert.False(run.HasExited);
         }
         finally
@@ -370,7 +370,7 @@ public sealed class ReloadCommandTests : IDisposable, IClassFixture<ReloadComman
 
         // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
         if (!_taskbarHidden)
-            new ExplorerTaskbarService().RestoreHidden();
+            ExplorerTaskbarRecovery.RestoreHidden();
         try
         {
             Directory.Delete(_dir, true);

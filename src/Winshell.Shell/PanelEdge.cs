@@ -12,7 +12,6 @@ namespace Winshell;
 internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place)
 {
     internal static readonly uint Message = Win32.WM_APP + 1;
-    private static readonly uint TaskbarCreatedMessage = Win32.RegisterWindowMessageW("TaskbarCreated");
 
     // Every window that holds an edge now, so a crash can give them back without the windows.
     private static readonly ConcurrentDictionary<nint, IPanelDesktop> Held = new();
@@ -92,7 +91,7 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
     /// <summary>Handles Explorer's notices to the app bar. Returns null for any other message.</summary>
     internal nint? OnMessage(uint msg, nint wParam)
     {
-        if (msg == TaskbarCreatedMessage)
+        if (msg == TaskbarWindows.Created)
         {
             ExplorerRestarted();
             return 0;
@@ -125,7 +124,6 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
     {
         Remove();
         desktop.Post(place);
-        desktop.TaskbarCreated();
     }
 
     /// <summary>The edge a panel with these anchors reserves: the one it spans, or none for a corner or the whole screen.</summary>

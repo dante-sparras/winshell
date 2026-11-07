@@ -3,22 +3,22 @@ using Winshell.ExplorerTaskbar;
 
 namespace Winshell.Services.Tests;
 
-/// <summary>Hiding, re-hiding and recovering Explorer's taskbar go through the module, against a stand-in.</summary>
+/// <summary>Hiding, re-hiding and restoring Explorer's taskbar go through the module, against a stand-in.</summary>
 public class ExplorerTaskbarTests
 {
+    private readonly List<string> _warnings = [];
+
     private sealed class Fake : IExplorerTaskbarBackend
     {
+        public event Action? TaskbarMayHaveChanged;
+
         public int Hides { get; private set; }
 
         public int Restores { get; private set; }
 
-        public int HiddenQueries { get; private set; }
-
-        public int HiddenRestores { get; private set; }
-
-        public bool AnyHiddenResult { get; set; }
-
         public bool FailHide { get; set; }
+
+        public bool FailRestore { get; set; }
 
         public void Hide()
         {
@@ -30,18 +30,24 @@ public class ExplorerTaskbarTests
         public void Restore()
         {
             Restores++;
+            if (FailRestore)
+                throw new InvalidOperationException("The taskbar could not be shown.");
         }
 
-        public bool AnyHidden()
+        public void Dispose()
         {
-            HiddenQueries++;
-            return AnyHiddenResult;
         }
 
-        public void RestoreHidden()
+        public void ExplorerMadeATaskbar()
         {
-            HiddenRestores++;
+            TaskbarMayHaveChanged?.Invoke();
         }
+    }
+
+    private ExplorerTaskbarService Service(Fake fake)
+    {
+        var log = new Log { Sink = (_, category, message) => _warnings.Add($"{category}: {message}") };
+        return new ExplorerTaskbarService(new ManualEventLoop(), log, fake);
     }
 
     private static List<string> Watch(INotifyPropertyChanged source)
@@ -55,11 +61,11 @@ public class ExplorerTaskbarTests
     public void Leaving_it_shown_never_calls_the_taskbar_and_exit_does_not_either()
     {
         var fake = new Fake();
-        var taskbar = new ExplorerTaskbarService(fake);
+        var taskbar = Service(fake);
         var changes = Watch(taskbar);
 
         taskbar.Hidden = false;
-        taskbar.Rehide();
+        fake.ExplorerMadeATaskbar();
         taskbar.Restore();
         taskbar.Dispose();
         taskbar.Dispose();
@@ -67,8 +73,6 @@ public class ExplorerTaskbarTests
         Assert.False(taskbar.Hidden);
         Assert.Equal(0, fake.Hides);
         Assert.Equal(0, fake.Restores);
-        Assert.Equal(0, fake.HiddenQueries);
-        Assert.Equal(0, fake.HiddenRestores);
         Assert.Empty(changes);
     }
 
@@ -76,7 +80,7 @@ public class ExplorerTaskbarTests
     public void Hiding_and_restoring_each_happen_once_and_exit_puts_it_back()
     {
         var fake = new Fake();
-        var taskbar = new ExplorerTaskbarService(fake);
+        var taskbar = Service(fake);
         var changes = Watch(taskbar);
 
         taskbar.Hidden = true;
@@ -102,20 +106,20 @@ public class ExplorerTaskbarTests
     }
 
     [Fact]
-    public void A_new_taskbar_window_is_taken_while_hidden_and_never_otherwise()
+    public void A_taskbar_Explorer_makes_is_hidden_while_hidden_and_never_otherwise()
     {
         var fake = new Fake();
-        var taskbar = new ExplorerTaskbarService(fake);
+        var taskbar = Service(fake);
 
-        taskbar.Rehide();
+        fake.ExplorerMadeATaskbar();
         Assert.Equal(0, fake.Hides);
 
         taskbar.Hidden = true;
-        taskbar.Rehide();
+        fake.ExplorerMadeATaskbar();
         Assert.Equal(2, fake.Hides);
 
         taskbar.Hidden = false;
-        taskbar.Rehide();
+        fake.ExplorerMadeATaskbar();
         Assert.Equal(2, fake.Hides);
     }
 
@@ -123,7 +127,7 @@ public class ExplorerTaskbarTests
     public void A_hide_that_fails_puts_back_what_it_took_and_stays_shown()
     {
         var fake = new Fake { FailHide = true };
-        var taskbar = new ExplorerTaskbarService(fake);
+        var taskbar = Service(fake);
 
         Assert.Throws<InvalidOperationException>(() => taskbar.Hidden = true);
 
@@ -133,20 +137,23 @@ public class ExplorerTaskbarTests
     }
 
     [Fact]
-    public void Recovery_asks_whether_any_taskbar_is_hidden_and_puts_those_back()
+    public void A_hide_whose_rollback_fails_reports_it_and_exit_tries_the_restore_again()
     {
-        var fake = new Fake { AnyHiddenResult = true };
-        var taskbar = new ExplorerTaskbarService(fake);
+        var fake = new Fake { FailHide = true, FailRestore = true };
+        var taskbar = Service(fake);
 
-        Assert.True(taskbar.AnyHidden());
-        fake.AnyHiddenResult = false;
-        Assert.False(taskbar.AnyHidden());
-        taskbar.RestoreHidden();
+        var thrown = Assert.Throws<InvalidOperationException>(() => taskbar.Hidden = true);
 
+        Assert.Equal("The taskbar could not be hidden.", thrown.Message);
+        Assert.Equal(
+            [
+                "explorer-taskbar: Could not put the taskbar back after hiding it failed: The taskbar could not be shown."
+            ],
+            _warnings);
+        Assert.True(taskbar.Hidden);
+        fake.FailRestore = false;
+        taskbar.Dispose();
+        Assert.Equal(2, fake.Restores);
         Assert.False(taskbar.Hidden);
-        Assert.Equal(2, fake.HiddenQueries);
-        Assert.Equal(1, fake.HiddenRestores);
-        Assert.Equal(0, fake.Hides);
-        Assert.Equal(0, fake.Restores);
     }
 }

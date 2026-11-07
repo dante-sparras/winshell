@@ -76,8 +76,8 @@ internal static class RunCommand
             return ShellProcess.Start(shell, Path.GetDirectoryName(shell.FileName));
         }
 
-        var taskbar = new ExplorerTaskbarService();
-        var supervisor = new ShellSupervisor(Start, taskbar.AnyHidden, taskbar.RestoreHidden, TimeProvider.System);
+        var supervisor = new ShellSupervisor(Start, ExplorerTaskbarRecovery.AnyHidden,
+            ExplorerTaskbarRecovery.RestoreHidden, TimeProvider.System);
         using var stop = new CancellationTokenSource();
         Task<int>? supervision = null;
 

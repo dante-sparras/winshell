@@ -16,7 +16,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
     private readonly List<Process> _started = [];
     private readonly StringBuilder _printed = new();
-    private readonly bool _taskbarHidden = new ExplorerTaskbarService().AnyHidden();
+    private readonly bool _taskbarHidden = ExplorerTaskbarRecovery.AnyHidden();
 
     public SupervisionTests()
     {
@@ -121,7 +121,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         var run = Supervise();
         var first = NextShell(0);
         Wait.Until(() => !File.Exists(marker), "the shell to hide the taskbar");
-        Assert.True(new ExplorerTaskbarService().AnyHidden());
+        Assert.True(ExplorerTaskbarRecovery.AnyHidden());
 
         // Ended without its cleanup, as a crash would end it.
         using (var crashed = Process.GetProcessById(first))
@@ -133,7 +133,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
         NextShell(first);
 
         // The taskbar came back before the second shell started, and that shell found no file telling it to hide it.
-        Assert.False(new ExplorerTaskbarService().AnyHidden());
+        Assert.False(ExplorerTaskbarRecovery.AnyHidden());
         Assert.False(run.HasExited);
     }
 
@@ -229,7 +229,7 @@ public sealed partial class SupervisionTests : IDisposable, IClassFixture<ProbeB
 
         // A test that failed can leave the taskbar its probe hid. One that another program hid stays hidden.
         if (!_taskbarHidden)
-            new ExplorerTaskbarService().RestoreHidden();
+            ExplorerTaskbarRecovery.RestoreHidden();
         try
         {
             Directory.Delete(_dir, true);

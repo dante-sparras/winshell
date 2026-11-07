@@ -9,7 +9,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.Win32;
 using Winshell.Native;
-using Winshell.Tray;
 using Winshell.Windows;
 
 namespace Winshell;
@@ -131,12 +130,6 @@ internal sealed class ShellPlatform : IDisposable
 
     public SystemBackdropTheme BackdropTheme => IsDark ? SystemBackdropTheme.Dark : SystemBackdropTheme.Light;
 
-    /// <summary>Puts the tray windows behind Explorer's while an app bar changes.</summary>
-    internal static IDisposable ExplorerFirst()
-    {
-        return SystemTray.ExplorerFirst();
-    }
-
     public event Action? ThemeChanged;
 
     public HostWindow CreateWindow(WindowKind kind, IHostClient client)
@@ -153,21 +146,9 @@ internal sealed class ShellPlatform : IDisposable
 
     // Screens and the work area
 
-    /// <summary>
-    /// Raised on the shell's thread when a panel hears <c>TaskbarCreated</c> or the display changes. The taskbar
-    /// module decides whether that hides a new taskbar window.
-    /// </summary>
-    internal event Action? TaskbarMayHaveChanged;
-
-    internal void TaskbarCreated()
-    {
-        TaskbarMayHaveChanged?.Invoke();
-    }
-
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         Loop.Post(RefreshScreens);
-        Loop.Post(TaskbarCreated);
     }
 
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Winshell.Native;
+using Winshell.Tray;
 
 namespace Winshell.ExplorerTaskbar;
 
@@ -11,85 +12,79 @@ namespace Winshell.ExplorerTaskbar;
 internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
 {
     private static uint _callback;
+    private readonly object _gate = new();
     private readonly List<Saved> _saved = [];
     private bool _active;
+    private bool _disposed;
+    private IDisposable? _watch;
+
+    /// <summary>Starts hearing Explorer make taskbar windows, on <paramref name="loop"/>'s thread.</summary>
+    internal ExplorerTaskbarBackend(IEventLoop loop, Log log)
+    {
+        // The watch gets its messages on the thread that makes it.
+        loop.Post(() =>
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                    return;
+                _watch = TaskbarWindows.Watch(() => TaskbarMayHaveChanged?.Invoke(),
+                    e => log.Warn("explorer-taskbar", e.Message));
+                if (_watch is null)
+                    log.Warn("explorer-taskbar",
+                        "Could not watch for a new Explorer taskbar; one Explorer makes stays shown");
+            }
+        });
+    }
+
+    public event Action? TaskbarMayHaveChanged;
 
     /// <summary>Takes every taskbar window not yet taken, so calling it again picks up one Explorer made since.</summary>
     public void Hide()
     {
         _active = true;
         _saved.RemoveAll(s => !IsExplorerTaskbar(s.Hwnd));
-        var primary = Windows("Shell_TrayWnd").Where(NotTaken).ToList();
-        var secondary = Windows("Shell_SecondaryTrayWnd").Where(NotTaken).ToList();
-        var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
-        var autohide = sample != 0 && Autohide(sample);
-        foreach (var hwnd in primary)
-            Take(hwnd, true, autohide);
-        foreach (var hwnd in secondary)
-            Take(hwnd, false, autohide);
+        using var explorerFirst = SystemTray.ExplorerFirst();
+        var (windows, autohide) = Find();
+        foreach (var (hwnd, primary) in windows)
+            if (_saved.All(s => s.Hwnd != hwnd))
+                Take(hwnd, primary, autohide);
     }
 
     public void Restore()
     {
         if (!_active)
             return;
-        for (var i = _saved.Count - 1; i >= 0; i--)
-            PutBack(_saved[i]);
+        using (SystemTray.ExplorerFirst())
+        {
+            for (var i = _saved.Count - 1; i >= 0; i--)
+                PutBack(_saved[i]);
+        }
+
         _saved.Clear();
         _active = false;
     }
 
-    public bool AnyHidden()
+    public void Dispose()
     {
-        return Windows("Shell_TrayWnd").Concat(Windows("Shell_SecondaryTrayWnd"))
-            .Any(hwnd => !Win32.IsWindowVisible(hwnd));
-    }
-
-    public void RestoreHidden()
-    {
-        var primary = Windows("Shell_TrayWnd");
-        var secondary = Windows("Shell_SecondaryTrayWnd");
-        var sample = primary.Count > 0 ? primary[0] : secondary.Count > 0 ? secondary[0] : 0;
-        var autohide = sample != 0 && Autohide(sample);
-        foreach (var (hwnd, isPrimary) in primary.Select(h => (h, true)).Concat(secondary.Select(h => (h, false))))
+        lock (_gate)
         {
-            if (Win32.IsWindowVisible(hwnd))
-                continue;
-            var saved = new Saved { Hwnd = hwnd, WasVisible = true };
-            if (!autohide && TryPosition(hwnd, isPrimary, out var edge, out var rect))
-            {
-                saved.Edge = edge;
-                saved.Rect = rect;
-                saved.Removed = true;
-            }
-
-            PutBack(saved);
+            _disposed = true;
+            _watch?.Dispose();
+            _watch = null;
         }
     }
 
-    private bool NotTaken(nint hwnd)
+    /// <summary>Explorer's taskbar windows, and whether its taskbar auto-hides.</summary>
+    internal static (List<(nint Hwnd, bool Primary)> Windows, bool Autohide) Find()
     {
-        return _saved.All(s => s.Hwnd != hwnd);
+        var windows = Windows(TaskbarWindows.PrimaryClass).Select(hwnd => (Hwnd: hwnd, Primary: true))
+            .Concat(Windows(TaskbarWindows.SecondaryClass).Select(hwnd => (Hwnd: hwnd, Primary: false))).ToList();
+        return (windows, windows.Count > 0 && AppBars.Autohide(windows[0].Hwnd));
     }
 
-    private void Take(nint hwnd, bool primary, bool autohide)
-    {
-        if (!Win32.IsWindow(hwnd))
-            return;
-        var saved = new Saved { Hwnd = hwnd, WasVisible = Win32.IsWindowVisible(hwnd) };
-        // Record it before changing anything, so a failure halfway can still put this window back.
-        _saved.Add(saved);
-        if (!autohide && TryPosition(hwnd, primary, out var edge, out var rect))
-        {
-            saved.Edge = edge;
-            saved.Rect = rect;
-            saved.Removed = AppBars.Remove(hwnd);
-        }
-
-        Win32.ShowWindow(hwnd, Win32.SW_HIDE);
-    }
-
-    private static void PutBack(Saved saved)
+    /// <summary>Shows a window again and, when its app bar was removed, registers it and reserves its edge.</summary>
+    internal static void PutBack(Saved saved)
     {
         if (!IsExplorerTaskbar(saved.Hwnd))
             return;
@@ -104,16 +99,23 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
         AppBars.Reserve(saved.Hwnd, saved.Edge, offered);
     }
 
+    private void Take(nint hwnd, bool primary, bool autohide)
+    {
+        if (!Win32.IsWindow(hwnd))
+            return;
+        var saved = Saved.Of(hwnd, primary, autohide, Win32.IsWindowVisible(hwnd));
+        // Record it before changing anything, so a failure halfway can still put this window back.
+        _saved.Add(saved);
+        if (saved.Reserves)
+            saved.Removed = AppBars.Remove(hwnd);
+        Win32.ShowWindow(hwnd, Win32.SW_HIDE);
+    }
+
     private static uint Callback()
     {
         if (_callback == 0)
             _callback = Win32.RegisterWindowMessageW("WinshellExplorerTaskbar");
         return _callback;
-    }
-
-    private static bool Autohide(nint hwnd)
-    {
-        return AppBars.Autohide(hwnd);
     }
 
     private static bool TryPosition(nint hwnd, bool primary, out AppBarEdge edge, out RECT rect)
@@ -178,15 +180,30 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
     /// <summary>False when the handle was destroyed or reused, so restore does not show some other window.</summary>
     private static bool IsExplorerTaskbar(nint hwnd)
     {
-        return Win32.IsWindow(hwnd) && TopLevelWindows.ClassName(hwnd) is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
+        return Win32.IsWindow(hwnd) &&
+               TopLevelWindows.ClassName(hwnd) is TaskbarWindows.PrimaryClass or TaskbarWindows.SecondaryClass;
     }
 
-    private sealed class Saved
+    /// <summary>A taskbar window as it was before it was hidden.</summary>
+    internal sealed class Saved
     {
         public nint Hwnd;
         public bool WasVisible;
+
+        /// <summary>Whether it reserved an edge: <see cref="Edge"/> and <see cref="Rect"/> say where.</summary>
+        public bool Reserves;
+
+        /// <summary>Whether its app bar was removed, so putting it back registers it again.</summary>
         public bool Removed;
+
         public AppBarEdge Edge;
         public RECT Rect;
+
+        internal static Saved Of(nint hwnd, bool primary, bool autohide, bool wasVisible)
+        {
+            var saved = new Saved { Hwnd = hwnd, WasVisible = wasVisible };
+            saved.Reserves = !autohide && TryPosition(hwnd, primary, out saved.Edge, out saved.Rect);
+            return saved;
+        }
     }
 }

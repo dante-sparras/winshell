@@ -1,4 +1,5 @@
 using Winshell.Native;
+using Winshell.Tray;
 
 namespace Winshell;
 
@@ -23,7 +24,7 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
 
     public IDisposable Explorer()
     {
-        return ShellPlatform.ExplorerFirst();
+        return SystemTray.ExplorerFirst();
     }
 
     public bool Register(nint window, uint callback)
@@ -64,11 +65,6 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
     public void Post(Action action)
     {
         platform.Loop.Post(action);
-    }
-
-    public void TaskbarCreated()
-    {
-        platform.TaskbarCreated();
     }
 
     private static PanelMonitor Of(ConnectedMonitor monitor)

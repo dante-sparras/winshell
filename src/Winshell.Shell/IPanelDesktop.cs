@@ -54,7 +54,4 @@ internal interface IPanelDesktop
 
     /// <summary>Runs <paramref name="action"/> on the shell's thread.</summary>
     void Post(Action action);
-
-    /// <summary>Explorer may have made a taskbar window.</summary>
-    void TaskbarCreated();
 }
