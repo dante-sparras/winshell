@@ -14,7 +14,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     private readonly IEventLoop _loop;
     private readonly TimeProvider _time;
-    private readonly IRadioSource _radios;
+    private readonly IRadioAccess _radioAccess;
 
     private readonly MonitorWarning _warning;
 
@@ -39,11 +39,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private volatile bool _disposed;
 
     internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null,
-        IRadioSource? radios = null)
+        IRadioAccess? radioAccess = null)
     {
         _loop = loop;
         _time = time ?? TimeProvider.System;
-        _radios = radios ?? WindowsRadioSource.Instance;
+        _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
         _warning = new MonitorWarning(() => log, "bluetooth");
         _radioChange = new DeviceAction(Post);
         _visibilityChange = new DeviceAction(Post);
@@ -267,12 +267,11 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     {
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.ReportsOn == enabled)
             return;
+        var radios = _snapshot.Adapter!.Radio.Radios;
         await ChangeAdapterAsync(adapter, _radioChange, async () =>
         {
-            var radio = await Backend.GetRadioAsync().ConfigureAwait(false);
-            if (radio is null || radio.Kind != RadioKind.Bluetooth)
-                return (RadioSwitch.NoAdapterRadio, false);
-            var error = await RadioSwitch.SetEnabledAsync(radio, enabled, _radios).ConfigureAwait(false);
+            var error = await RadioSwitch.SetEnabledAsync(RadioKind.Bluetooth, radios, enabled, _radioAccess)
+                .ConfigureAwait(false);
             return (error, error is null);
         }).ConfigureAwait(false);
     }

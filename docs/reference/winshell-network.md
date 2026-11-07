@@ -155,7 +155,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `Profiles` | ObservableCollection of [NetworkProfile](#networkprofile), read-only | The Windows connection profiles that are on an adapter now. |
 | `Ready` | bool, read-only | Whether the first read has finished. False again while the last read failed, and Error says why. |
 | `RequestingAccess` | bool, read-only | Whether an access request is waiting for Windows. RequestAccess does nothing until it ends. |
-| `WifiEnabled` | bool | Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn every Wi-Fi radio on or off, and the value stays what Windows last reported until a later read shows the radios changed. |
+| `WifiEnabled` | bool | Whether at least one Wi-Fi radio is on. Setting it asks Windows to turn on or off every Wi-Fi radio the last read found, and the value stays what Windows last reported until a later read shows the radios changed. |
 | `WifiHardwareEnabled` | bool, read-only | Whether at least one Wi-Fi radio is on or off, not disabled, so software can turn it on. |
 | `WifiState` | [WifiRadioState](#wifiradiostate), read-only | The state of the Wi-Fi radios, taken together. |
 | `OperationFailed` | Action of string | An access request or a radio change failed. |
@@ -228,10 +228,10 @@ The state of the PC's Wi-Fi radios, taken together.
 
 | Value | Number | Description |
 | --- | --- | --- |
-| `Unknown` | 0 | No Wi-Fi radio was found, or Windows would not list them. |
+| `Unknown` | 0 | No Wi-Fi radio was found, Windows would not list them, or none reports its state. |
 | `On` | 1 | At least one Wi-Fi radio is on. |
 | `Off` | 2 | No Wi-Fi radio is on, and at least one can be turned on. |
-| `Disabled` | 3 | Every Wi-Fi radio is disabled, as by a hardware switch, so software can't turn one on. |
+| `Disabled` | 3 | No Wi-Fi radio is on or off, and at least one is disabled, as by a hardware switch, so software can't turn one on. |
 
 ## WifiSecurityType
 

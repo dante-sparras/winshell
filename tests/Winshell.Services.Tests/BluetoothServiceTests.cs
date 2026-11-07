@@ -10,9 +10,10 @@ public sealed class BluetoothServiceTests
 {
     private static readonly Guid Container = Guid.Parse("71886561-73c1-4d67-a4a0-5077c90859d0");
 
-    private static BluetoothAdapterInfo Adapter(string id = "WindowsAdapter")
+    private static BluetoothAdapterInfo Adapter(string id = "WindowsAdapter", FakeRadio? radio = null)
     {
-        return new BluetoothAdapterInfo(id, "Bluetooth", "00:11:22:33:44:55", BluetoothAdapterState.On);
+        return new BluetoothAdapterInfo(id, "Bluetooth", "00:11:22:33:44:55",
+            RadioReading.Read([radio ?? new FakeRadio(RadioKind.Bluetooth, RadioState.On)]));
     }
 
     private static BluetoothDeviceInfo Device(string id = "WindowsEndpoint", bool paired = true, bool present = true,
@@ -282,7 +283,10 @@ public sealed class BluetoothServiceTests
         Assert.False(service.Discovering);
         Assert.Equal(["start", "stop"], session.Backend.Calls);
 
-        await session.ShowAsync(Snapshot() with { Adapter = Adapter() with { State = BluetoothAdapterState.Off } });
+        await session.ShowAsync(Snapshot() with
+        {
+            Adapter = Adapter(radio: new FakeRadio(RadioKind.Bluetooth, RadioState.Off))
+        });
         service.StartDiscovery();
         Assert.Equal(2, session.Backend.Calls.Count);
         Assert.Contains("must be on", service.Error, StringComparison.Ordinal);
@@ -322,8 +326,9 @@ public sealed class BluetoothServiceTests
     public async Task Setting_the_radio_follows_a_read_and_reports_a_refusal()
     {
         var radio = new FakeRadio(RadioKind.Bluetooth, RadioState.On);
-        var source = new FakeSource(radio);
-        using var session = await Session.OpenAsync(Snapshot(Device()), source, radio);
+        var access = new FakeAccess();
+        using var session =
+            await Session.OpenAsync(new BluetoothSnapshot(true, Adapter(radio: radio), [Device()]), access);
         var service = session.Service;
         var adapter = service.DefaultAdapter!;
         var failed = Failures(h => adapter.OperationFailed += h);
@@ -339,14 +344,14 @@ public sealed class BluetoothServiceTests
         Assert.Equal(RadioState.Off, radio.State);
         Assert.Empty(failed);
 
-        source.Access = RadioAccessStatus.DeniedByUser;
+        access.Access = RadioAccessStatus.DeniedByUser;
         await service.SetAdapterEnabledAsync(adapter, true);
         session.Loop.Process();
         Assert.False(adapter.Enabled);
         Assert.Equal("The user denied radio control.", adapter.Error);
         Assert.Equal(1, radio.Sets);
 
-        source.Access = RadioAccessStatus.Allowed;
+        access.Access = RadioAccessStatus.Allowed;
         radio.Result = RadioAccessStatus.DeniedBySystem;
         await service.SetAdapterEnabledAsync(adapter, true);
         session.Loop.Process();
@@ -380,42 +385,34 @@ public sealed class BluetoothServiceTests
     }
 
     [Fact]
-    public async Task Turning_bluetooth_off_changes_only_that_adapter_s_radio()
+    public async Task An_adapter_without_a_radio_reports_it_and_asks_nothing()
     {
-        var own = new FakeRadio(RadioKind.Bluetooth, RadioState.On);
-        var other = new FakeRadio(RadioKind.Bluetooth, RadioState.On);
-        var wifi = new FakeRadio(RadioKind.WiFi, RadioState.On);
-        var source = new FakeSource(own, other, wifi);
-        using var session = await Session.OpenAsync(Snapshot(), source, own);
-        var service = session.Service;
-        var adapter = service.DefaultAdapter!;
+        var access = new FakeAccess();
+        using var session = await Session.OpenAsync(
+            Snapshot() with { Adapter = Adapter() with { Radio = RadioReading.None } }, access);
+        var adapter = session.Service.DefaultAdapter!;
 
-        await service.SetAdapterEnabledAsync(adapter, false);
+        await session.Service.SetAdapterEnabledAsync(adapter, true);
         session.Loop.Process();
 
-        Assert.Equal(RadioState.Off, own.State);
-        Assert.Equal(1, own.Sets);
-        Assert.Equal(RadioState.On, other.State);
-        Assert.Equal(0, other.Sets);
-        Assert.Equal(RadioState.On, wifi.State);
-        Assert.Equal(0, wifi.Sets);
+        Assert.Equal(BluetoothAdapterState.Unknown, adapter.State);
+        Assert.Equal(RadioSwitch.Missing(RadioKind.Bluetooth), adapter.Error);
+        Assert.Empty(access.Calls);
+    }
 
-        session.Backend.Radio = null;
-        await service.SetAdapterEnabledAsync(adapter, true);
-        session.Loop.Process();
-        Assert.Equal(RadioSwitch.NoAdapterRadio, adapter.Error);
-        Assert.Equal(1, own.Sets);
-        Assert.Equal(0, other.Sets);
-        Assert.Equal(0, wifi.Sets);
+    [Theory]
+    [InlineData(RadioState.On, BluetoothAdapterState.On)]
+    [InlineData(RadioState.Off, BluetoothAdapterState.Off)]
+    [InlineData(RadioState.Disabled, BluetoothAdapterState.Disabled)]
+    [InlineData(RadioState.Unknown, BluetoothAdapterState.Unknown)]
+    public async Task The_adapter_reports_its_radio_s_state(RadioState radio, BluetoothAdapterState expected)
+    {
+        using var session = await Session.OpenAsync(new BluetoothSnapshot(true,
+            Adapter(radio: new FakeRadio(RadioKind.Bluetooth, radio)), []));
+        var adapter = session.Service.DefaultAdapter!;
 
-        var stray = new FakeRadio(RadioKind.WiFi, RadioState.Off);
-        session.Backend.Radio = stray;
-        await service.SetAdapterEnabledAsync(adapter, true);
-        session.Loop.Process();
-        Assert.Equal(RadioSwitch.NoAdapterRadio, adapter.Error);
-        Assert.Equal(RadioState.Off, stray.State);
-        Assert.Equal(0, stray.Sets);
-        Assert.Equal(RadioState.On, other.State);
+        Assert.Equal(expected, adapter.State);
+        Assert.Equal(expected == BluetoothAdapterState.On, adapter.Enabled);
     }
 
     [Fact]
@@ -423,9 +420,8 @@ public sealed class BluetoothServiceTests
     {
         var gate = new TaskCompletionSource<RadioAccessStatus>();
         var radio = new FakeRadio(RadioKind.Bluetooth, RadioState.Off) { Gate = gate };
-        using var session = await Session.OpenAsync(
-            new BluetoothSnapshot(true, Adapter() with { State = BluetoothAdapterState.Off }, []),
-            new FakeSource(radio), radio);
+        using var session =
+            await Session.OpenAsync(new BluetoothSnapshot(true, Adapter(radio: radio), []), new FakeAccess());
         var service = session.Service;
         var adapter = service.DefaultAdapter!;
 
@@ -434,7 +430,7 @@ public sealed class BluetoothServiceTests
         Assert.Equal(1, radio.Sets);
 
         await session.ShowAsync(new BluetoothSnapshot(true,
-            Adapter("Replacement") with { State = BluetoothAdapterState.Off }, []));
+            Adapter("Replacement", new FakeRadio(RadioKind.Bluetooth, RadioState.Off)), []));
         gate.SetResult(RadioAccessStatus.DeniedBySystem);
         await first;
         session.Loop.Process();
@@ -656,22 +652,9 @@ public sealed class BluetoothServiceTests
 
     private sealed class Session : IDisposable
     {
-        private Session(IRadioSource? radios, FakeRadio? radio)
+        private Session(IRadioAccess? radioAccess)
         {
-            if (radio is not null)
-            {
-                Backend.Radio = radio;
-                radio.Applied = state =>
-                {
-                    if (Backend.Snapshot.Adapter is { } adapter)
-                        Backend.Snapshot = Backend.Snapshot with
-                        {
-                            Adapter = adapter with { State = BluetoothBackend.MapRadioState(state) }
-                        };
-                };
-            }
-
-            Service = new BluetoothService(Loop, new Log(), Backend, radios: radios);
+            Service = new BluetoothService(Loop, new Log(), Backend, radioAccess: radioAccess);
         }
 
         public FakeBackend Backend { get; } = new();
@@ -682,10 +665,9 @@ public sealed class BluetoothServiceTests
 
         public BluetoothDevice Device => Assert.Single(Service.Devices);
 
-        public static async Task<Session> OpenAsync(BluetoothSnapshot snapshot, IRadioSource? radios = null,
-            FakeRadio? radio = null)
+        public static async Task<Session> OpenAsync(BluetoothSnapshot snapshot, IRadioAccess? radioAccess = null)
         {
-            var session = new Session(radios, radio);
+            var session = new Session(radioAccess);
             await session.ShowAsync(snapshot);
             return session;
         }
@@ -746,6 +728,16 @@ public sealed class BluetoothServiceTests
         public Task<bool> SetAudioConnectionAsync(Guid container, bool connect)
         {
             return Task.FromResult(true);
+        }
+
+        public Task<string?> SetDiscoverableAsync(bool discoverable)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        public Task<string?> SetPairableAsync(bool pairable)
+        {
+            return Task.FromResult<string?>(null);
         }
 
         public virtual void Dispose()
@@ -859,8 +851,6 @@ public sealed class BluetoothServiceTests
 
         public bool Disposed { get; private set; }
 
-        public IDeviceRadio? Radio { get; set; }
-
         public string? DiscoverableError { get; set; }
 
         public string? PairableError { get; set; }
@@ -889,9 +879,14 @@ public sealed class BluetoothServiceTests
         public Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
         {
             Interlocked.Increment(ref _reads);
-            return ReadFailure is { } e
-                ? Task.FromException<BluetoothSnapshot>(e)
-                : ReadTask ?? Task.FromResult(Snapshot);
+            if (ReadFailure is { } e)
+                return Task.FromException<BluetoothSnapshot>(e);
+            if (ReadTask is { } task)
+                return task;
+            // Each read asks the adapter's radio again, as a Windows read does.
+            return Task.FromResult(Snapshot.Adapter is { } adapter
+                ? Snapshot with { Adapter = adapter with { Radio = RadioReading.Read(adapter.Radio.Radios) } }
+                : Snapshot);
         }
 
         public void StartDiscovery()
@@ -929,11 +924,6 @@ public sealed class BluetoothServiceTests
             Calls.Add(connect ? "connect" : "disconnect");
             Connections.Add((container, connect));
             return Failure is { } e ? Task.FromException<bool>(e) : Task.FromResult(AudioAccepted);
-        }
-
-        public Task<IDeviceRadio?> GetRadioAsync()
-        {
-            return Task.FromResult(Radio);
         }
 
         public Task<string?> SetDiscoverableAsync(bool discoverable)

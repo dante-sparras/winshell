@@ -50,7 +50,7 @@ public sealed class NetworkingServiceTests
 
     private static NetworkSnapshot Snapshot(params NetworkInfo[] networks)
     {
-        return new NetworkSnapshot(true, [Adapter(networks)], NetworkConnectivity.InternetAccess, true, true,
+        return new NetworkSnapshot(true, [Adapter(networks)], NetworkConnectivity.InternetAccess, WifiOn(),
             [
                 new NetworkProfileInfo("profile", "Home", AdapterId, NetworkConnectivity.InternetAccess,
                     NetworkCost.Fixed, false, false,
@@ -59,9 +59,14 @@ public sealed class NetworkingServiceTests
             NetworkAccessStatus.Allowed, AirplaneModeState.Off);
     }
 
-    private static NetworkSnapshot RadioOff()
+    private static RadioReading WifiOn()
     {
-        return Snapshot() with { WifiEnabled = false, WifiState = WifiRadioState.Off };
+        return RadioReading.Read([new FakeRadio(RadioKind.WiFi, RadioState.On)]);
+    }
+
+    private static NetworkSnapshot Reading(FakeRadio radio)
+    {
+        return Snapshot() with { Wifi = RadioReading.Read([radio]) };
     }
 
     private static WifiProfileInfo Described()
@@ -258,7 +263,7 @@ public sealed class NetworkingServiceTests
 
         NetworkSnapshot Shot(NetworkDeviceInfo wifi, NetworkDeviceInfo ethernet)
         {
-            return new NetworkSnapshot(true, [wifi, ethernet], NetworkConnectivity.InternetAccess, true, true);
+            return new NetworkSnapshot(true, [wifi, ethernet], NetworkConnectivity.InternetAccess, WifiOn());
         }
 
         using var session = new Session(Shot(Adapter(), wired));
@@ -279,12 +284,26 @@ public sealed class NetworkingServiceTests
         Assert.Equal([nameof(WiredDevice.LinkSpeed), nameof(WiredDevice.HasLink)], wiredChanges);
     }
 
+    [Theory]
+    [InlineData(RadioState.On, WifiRadioState.On, true, true)]
+    [InlineData(RadioState.Off, WifiRadioState.Off, false, true)]
+    [InlineData(RadioState.Disabled, WifiRadioState.Disabled, false, false)]
+    [InlineData(RadioState.Unknown, WifiRadioState.Unknown, false, false)]
+    public void Wifi_reports_its_radios_state(RadioState radio, WifiRadioState expected, bool enabled, bool hardware)
+    {
+        using var session = new Session(Reading(new FakeRadio(RadioKind.WiFi, radio)));
+
+        Assert.Equal(expected, session.Service.WifiState);
+        Assert.Equal(enabled, session.Service.WifiEnabled);
+        Assert.Equal(hardware, session.Service.WifiHardwareEnabled);
+    }
+
     [Fact]
     public async Task Setting_wifi_follows_the_snapshot_and_a_refusal_stays_until_the_radios_change()
     {
         var radio = new FakeRadio(RadioKind.WiFi, RadioState.Off);
-        var source = new FakeSource(radio);
-        using var session = new Session(RadioOff(), source);
+        var access = new FakeAccess();
+        using var session = new Session(Reading(radio), access);
         var service = session.Service;
         var failed = Failures(h => service.OperationFailed += h);
 
@@ -299,14 +318,14 @@ public sealed class NetworkingServiceTests
         Assert.Equal("", service.Error);
         Assert.Empty(failed);
 
-        source.Access = RadioAccessStatus.DeniedByUser;
+        access.Access = RadioAccessStatus.DeniedByUser;
         await service.SetWifiEnabledAsync(false);
         session.Loop.Process();
         Assert.True(service.WifiEnabled);
         Assert.Equal("The user denied radio control.", service.Error);
         Assert.Equal(1, radio.Sets);
 
-        source.Access = RadioAccessStatus.Allowed;
+        access.Access = RadioAccessStatus.Allowed;
         radio.Result = RadioAccessStatus.DeniedBySystem;
         await service.SetWifiEnabledAsync(false);
         session.Loop.Process();
@@ -320,7 +339,7 @@ public sealed class NetworkingServiceTests
         session.Loop.Process();
         Assert.Equal(RadioSwitch.Unchanged, service.Error);
         Assert.Equal(RadioState.On, radio.State);
-        session.Show(Snapshot());
+        session.Show(Reading(radio));
         Assert.Equal(RadioSwitch.Unchanged, service.Error);
         Assert.Equal(
             [
@@ -335,7 +354,7 @@ public sealed class NetworkingServiceTests
         session.Loop.Process();
         Assert.Equal("Access revoked", service.Error);
 
-        session.Show(RadioOff());
+        session.Show(Reading(new FakeRadio(RadioKind.WiFi, RadioState.Off)));
         Assert.False(service.WifiEnabled);
         Assert.Equal("", service.Error);
     }
@@ -345,7 +364,7 @@ public sealed class NetworkingServiceTests
     {
         var gate = new TaskCompletionSource<RadioAccessStatus>();
         var radio = new FakeRadio(RadioKind.WiFi, RadioState.Off) { Gate = gate };
-        using var session = new Session(RadioOff(), new FakeSource(radio));
+        using var session = new Session(Reading(radio), new FakeAccess());
 
         var first = session.Service.SetWifiEnabledAsync(true);
         await session.Service.SetWifiEnabledAsync(false);
@@ -550,7 +569,7 @@ public sealed class NetworkingServiceTests
         var wired = new NetworkDeviceInfo(wiredId, DeviceType.Wired, "Ethernet", "aa:bb:cc:dd:ee:ff",
             ConnectionState.Connected, true, 1000, [wiredNetwork]);
         using var session =
-            new Session(new NetworkSnapshot(true, [wired], NetworkConnectivity.LocalAccess, true, true));
+            new Session(new NetworkSnapshot(true, [wired], NetworkConnectivity.LocalAccess, WifiOn()));
         var network = Assert.Single(Assert.IsType<WiredDevice>(Assert.Single(session.Service.Devices)).Networks);
         Assert.IsNotType<WifiNetwork>(network);
 
@@ -599,11 +618,9 @@ public sealed class NetworkingServiceTests
 
     private sealed class Session : IDisposable
     {
-        public Session(NetworkSnapshot snapshot, IRadioSource? radios = null)
+        public Session(NetworkSnapshot snapshot, IRadioAccess? radioAccess = null)
         {
-            if (radios is FakeSource source)
-                Backend.Radios = source;
-            Service = new NetworkingService(Loop, Backend, radios);
+            Service = new NetworkingService(Loop, Backend, radioAccess);
             Show(snapshot);
         }
 
@@ -657,8 +674,6 @@ public sealed class NetworkingServiceTests
 
         public Task AccessTask { get; set; } = Task.CompletedTask;
 
-        public FakeSource? Radios { get; set; }
-
         public string? AutoError { get; set; }
 
         public Exception? AutoException { get; set; }
@@ -696,23 +711,10 @@ public sealed class NetworkingServiceTests
             return Failure is { } e ? Task.FromException(e) : AccessTask;
         }
 
+        /// <summary>Reads the radios of the current snapshot again, as Windows would.</summary>
         public Task RefreshNowAsync()
         {
-            if (Radios is { } source)
-            {
-                var wifi = source.Radios.Where(radio => radio.Kind == RadioKind.WiFi).ToArray();
-                var enabled = wifi.Any(radio => radio.State == RadioState.On);
-                var hardware = wifi.Any(radio => radio.State is RadioState.On or RadioState.Off);
-                var state = enabled ? WifiRadioState.On
-                    : wifi.Length == 0 ? WifiRadioState.Unknown
-                    : wifi.All(radio => radio.State == RadioState.Disabled) ? WifiRadioState.Disabled
-                    : WifiRadioState.Off;
-                Current = Current with
-                {
-                    WifiEnabled = enabled, WifiHardwareEnabled = hardware, WifiState = state
-                };
-            }
-
+            Current = Current with { Wifi = RadioReading.Read(Current.Wifi.Radios) };
             return Task.CompletedTask;
         }
 
