@@ -11,10 +11,6 @@ namespace Winshell;
 /// </summary>
 internal static class StartupError
 {
-    private const uint FileTypeDisk = 1;
-    private const uint FileTypePipe = 3;
-    private const uint FileTypeRemote = 0x8000;
-
     /// <summary>
     /// Shows the message, the first argument, and offers to open the folder, the second, when it is set. Tests replace
     /// this.
@@ -24,14 +20,14 @@ internal static class StartupError
     /// <summary>Reads this process's console and reports <paramref name="message"/>.</summary>
     internal static void Report(string message, string? folder)
     {
-        Report(message, folder, ProcessConsole.Window(), StderrType());
+        Report(message, folder, ProcessConsole.Window(), ProcessConsole.Target(StandardStream.Error));
     }
 
     /// <summary>
     /// Writes <paramref name="message"/> to standard error, then asks <see cref="Show"/> when
-    /// <paramref name="consoleWindow"/> is zero and <paramref name="stderrType"/> is not a pipe or a file.
+    /// <paramref name="consoleWindow"/> is zero and <paramref name="stderr"/> is not a pipe or a file.
     /// </summary>
-    internal static void Report(string message, string? folder, nint consoleWindow, uint stderrType)
+    internal static void Report(string message, string? folder, nint consoleWindow, StreamTarget stderr)
     {
         try
         {
@@ -42,7 +38,7 @@ internal static class StartupError
             // A windowless start can have no standard error. The dialog is the message then.
         }
 
-        if (!NeedsDialog(consoleWindow, stderrType))
+        if (!NeedsDialog(consoleWindow, stderr))
             return;
         Show(message, folder);
     }
@@ -51,12 +47,9 @@ internal static class StartupError
     /// True when the error would otherwise be invisible. A console window is enough on its own.
     /// A pipe or a file means a parent is reading standard error, which is how the tests run.
     /// </summary>
-    internal static bool NeedsDialog(nint consoleWindow, uint stderrType)
+    internal static bool NeedsDialog(nint consoleWindow, StreamTarget stderr)
     {
-        if (consoleWindow != 0)
-            return false;
-        var kind = stderrType & ~FileTypeRemote;
-        return kind is not (FileTypeDisk or FileTypePipe);
+        return consoleWindow == 0 && stderr is not (StreamTarget.File or StreamTarget.Pipe);
     }
 
     /// <summary>
@@ -75,12 +68,6 @@ internal static class StartupError
         }
 
         return Directory.Exists(configRoot) ? configRoot : null;
-    }
-
-    private static uint StderrType()
-    {
-        var handle = StandardHandles.Error;
-        return handle == 0 || handle == -1 ? 0 : ProcessConsole.FileType(handle);
     }
 
     private static void Dialog(string message, string? folder)

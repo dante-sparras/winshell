@@ -1,5 +1,6 @@
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.Storage.FileSystem;
 using Windows.Win32.System.Console;
 
 namespace Winshell.Native;
@@ -11,6 +12,15 @@ internal enum StandardStream
     Error
 }
 
+/// <summary>Where a standard stream goes.</summary>
+internal enum StreamTarget
+{
+    /// <summary>No handle, a console, or something Windows does not name.</summary>
+    Other,
+    File,
+    Pipe
+}
+
 /// <summary>This process's console window and standard handles.</summary>
 internal static class ProcessConsole
 {
@@ -20,26 +30,35 @@ internal static class ProcessConsole
         return PInvoke.GetConsoleWindow();
     }
 
-    /// <summary>The handle: 0 when the process has none, and -1 when Windows could not say.</summary>
-    internal static nint StandardHandle(StandardStream stream)
+    /// <summary>Where <paramref name="stream"/> goes. A file or pipe on another computer is a file or pipe.</summary>
+    internal static StreamTarget Target(StandardStream stream)
     {
-        return PInvoke.GetStdHandle(stream switch
+        if (Handle(stream) is not { } handle)
+            return StreamTarget.Other;
+        return (PInvoke.GetFileType(handle) & ~FILE_TYPE.FILE_TYPE_REMOTE) switch
+        {
+            FILE_TYPE.FILE_TYPE_DISK => StreamTarget.File,
+            FILE_TYPE.FILE_TYPE_PIPE => StreamTarget.Pipe,
+            _ => StreamTarget.Other
+        };
+    }
+
+    /// <summary>Stops processes started from now on from inheriting <paramref name="stream"/>, when it has a handle.</summary>
+    internal static void KeepFromChildren(StandardStream stream)
+    {
+        if (Handle(stream) is { } handle)
+            _ = PInvoke.SetHandleInformation(handle, (uint)HANDLE_FLAGS.HANDLE_FLAG_INHERIT, 0);
+    }
+
+    /// <summary>Null when the process has no such handle (0) or Windows could not say (-1).</summary>
+    private static HANDLE? Handle(StandardStream stream)
+    {
+        var handle = PInvoke.GetStdHandle(stream switch
         {
             StandardStream.Input => STD_HANDLE.STD_INPUT_HANDLE,
             StandardStream.Output => STD_HANDLE.STD_OUTPUT_HANDLE,
             _ => STD_HANDLE.STD_ERROR_HANDLE
         });
-    }
-
-    /// <summary>A <c>FILE_TYPE_*</c> value: what a handle refers to.</summary>
-    internal static uint FileType(nint handle)
-    {
-        return (uint)PInvoke.GetFileType(new HANDLE(handle));
-    }
-
-    /// <summary>Stops processes started from now on from inheriting <paramref name="handle"/>.</summary>
-    internal static bool KeepFromChildren(nint handle)
-    {
-        return PInvoke.SetHandleInformation(new HANDLE(handle), (uint)HANDLE_FLAGS.HANDLE_FLAG_INHERIT, 0);
+        return (nint)handle is 0 or -1 ? null : handle;
     }
 }

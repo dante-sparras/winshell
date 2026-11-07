@@ -12,9 +12,9 @@ public class WindowAppIdTests
     public void A_package_id_is_read_only_when_the_process_has_one_that_fits()
     {
         Assert.Equal(Terminal, Read(Terminal));
-        Assert.Equal("", AppUserModelIds.Read((_, _) =>
+        Assert.Equal("", AppUserModelIds.Read(_ =>
             new AppUserModelIds.Query(WIN32_ERROR.APPMODEL_ERROR_NO_APPLICATION, 0)));
-        Assert.Equal("", AppUserModelIds.Read((_, _) =>
+        Assert.Equal("", AppUserModelIds.Read(_ =>
             new AppUserModelIds.Query(
                 WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER,
                 (uint)AppUserModelIds.MaxCharacters + 1)));
@@ -22,9 +22,9 @@ public class WindowAppIdTests
 
     private static string Read(string id)
     {
-        return AppUserModelIds.Read((buffer, _) =>
+        return AppUserModelIds.Read(buffer =>
         {
-            if (buffer is null)
+            if (buffer.Length == 0)
                 return new AppUserModelIds.Query(WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER, (uint)id.Length + 1);
             id.CopyTo(buffer);
             return new AppUserModelIds.Query(WIN32_ERROR.ERROR_SUCCESS, (uint)id.Length + 1);

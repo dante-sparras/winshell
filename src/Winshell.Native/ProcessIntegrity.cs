@@ -11,39 +11,22 @@ internal static unsafe class ProcessIntegrity
 {
     internal const uint Medium = 0x2000;
 
-    private const int TokenIntegrityLevel = 25;
-
     /// <summary>The level, or null when the process cannot be opened or its token read.</summary>
     internal static uint? TryRead(uint processId)
     {
-        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
-        if (process == 0)
+        using var process = ProcessHandle.Open(processId);
+        // A TOKEN_MANDATORY_LABEL, followed by the label's SID.
+        Span<byte> label = stackalloc byte[64];
+        if (process.ReadToken(TOKEN_INFORMATION_CLASS.TokenIntegrityLevel, label) != TokenRead.Read)
             return null;
-        try
+        fixed (byte* start = label)
         {
-            if (!Win32.OpenProcessToken(process, Win32.TOKEN_QUERY, out var token))
+            var sid = new PSID(*(void**)start);
+            var count = PInvoke.GetSidSubAuthorityCount(sid);
+            if (count == null || *count == 0)
                 return null;
-            try
-            {
-                // A TOKEN_MANDATORY_LABEL, followed by the label's SID.
-                var label = stackalloc byte[64];
-                if (!Win32.GetTokenInformation(token, TokenIntegrityLevel, label, 64, out _))
-                    return null;
-                var sid = new PSID(*(void**)label);
-                var count = PInvoke.GetSidSubAuthorityCount(sid);
-                if (count == null || *count == 0)
-                    return null;
-                var level = PInvoke.GetSidSubAuthority(sid, (uint)(*count - 1));
-                return level == null ? null : *level;
-            }
-            finally
-            {
-                Win32.CloseHandle(token);
-            }
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
+            var level = PInvoke.GetSidSubAuthority(sid, (uint)(*count - 1));
+            return level == null ? null : *level;
         }
     }
 }

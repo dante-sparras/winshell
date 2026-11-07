@@ -1,6 +1,9 @@
 LockWorkStation
 QueryFullProcessImageNameW
 CloseHandle
+OpenProcess
+OpenProcessToken
+GetTokenInformation
 GetSidSubAuthorityCount
 GetSidSubAuthority
 GetCurrentPackageFullName
