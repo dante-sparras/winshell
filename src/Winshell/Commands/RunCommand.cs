@@ -8,7 +8,8 @@ internal static class RunCommand
 {
     internal static int Run(CliOptions options)
     {
-        var project = ConfigurationSelection.FindProject(options, out var error);
+        var project = ConfigurationProject.Find(options.Path, options.Config, ShellLocations.Current.ConfigRoot,
+            out var error);
         if (error is not null)
         {
             // Before any instance log exists. An attached console prints it. Start and sign-in have no window.

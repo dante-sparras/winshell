@@ -16,7 +16,7 @@ internal sealed partial class DevOutput(string projectFolder)
     public string? Read(string line)
     {
         var text = line.StartsWith(Prefix, StringComparison.Ordinal) ? line[Prefix.Length..] : line.Trim();
-        if (CompileError().IsMatch(text))
+        if (ConfigurationProject.IsErrorLine(text))
         {
             var error = ConfigurationProject.ErrorLine(text, projectFolder);
             if (_errors.Contains(error) || _errors.Count == MostErrors)
@@ -32,9 +32,6 @@ internal sealed partial class DevOutput(string projectFolder)
         _errors.Clear();
         return "";
     }
-
-    [GeneratedRegex(@"\berror [A-Z]+\d+:")]
-    private static partial Regex CompileError();
 
     [GeneratedRegex(@"changes applied in \d+ms|^Build succeeded")]
     private static partial Regex Applied();

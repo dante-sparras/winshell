@@ -275,15 +275,7 @@ internal static class SignInEntry
     /// </summary>
     internal static string? BareFolder(string? configRoot = null)
     {
-        try
-        {
-            return ConfigurationProject.Find(null, null, configRoot ?? ShellLocations.Current.ConfigRoot, out _)
-                ?.Folder;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
+        return ConfigurationProject.Find(null, null, configRoot ?? ShellLocations.Current.ConfigRoot, out _)?.Folder;
     }
 
     private static string? ProjectOf(SignInLaunch launch, string? configRoot)

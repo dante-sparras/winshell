@@ -152,9 +152,24 @@ internal sealed partial class ConfigurationProject
     /// <summary>
     /// The project to run: <paramref name="path"/>, a project or a folder holding one; or a named folder in
     /// <paramref name="root"/>; or else the one in <paramref name="root"/>, then its <c>default</c> folder, then its only
-    /// folder with a project. Null with no error when there is none, so nothing runs.
+    /// folder with a project. Null with no error when there is none, so nothing runs. A folder Winshell cannot read is
+    /// an error.
     /// </summary>
     public static ConfigurationProject? Find(string? path, string? name, string root, out string? error)
+    {
+        try
+        {
+            return Choose(path, name, root, out error);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            var what = path ?? (name is not null ? $"config \"{name}\"" : "the config folder");
+            error = $"Winshell cannot read {what}: {e.Message}";
+            return null;
+        }
+    }
+
+    private static ConfigurationProject? Choose(string? path, string? name, string root, out string? error)
     {
         error = null;
         if (path is not null)
@@ -209,11 +224,18 @@ internal sealed partial class ConfigurationProject
     /// </summary>
     public string? Prepare(bool noBuild, RunProcess run)
     {
-        if (Downloaded() is { } file)
-            return $"{file}: {ZoneIdentifier.Blocked(file)}";
-        if (noBuild)
-            return File.Exists(Program) ? null : $"{Name} has not been built. Run winshell run once to build it.";
-        return NeedsBuild() ? Build(run) : null;
+        try
+        {
+            if (Downloaded() is { } file)
+                return $"{file}: {ZoneIdentifier.Blocked(file)}";
+            if (noBuild)
+                return File.Exists(Program) ? null : $"{Name} has not been built. Run winshell run once to build it.";
+            return NeedsBuild() ? Build(run) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return e.Message;
+        }
     }
 
     /// <summary>Whether a build would change the program: there is none, or a file of the project is newer.</summary>
@@ -375,10 +397,22 @@ internal sealed partial class ConfigurationProject
     private string Errors(string output)
     {
         var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var errors = lines.Where(line => line.Contains(": error ", StringComparison.Ordinal))
+        var errors = lines.Where(IsErrorLine)
             .Select(line => ErrorLine(line, Folder)).Distinct().ToList();
         return string.Join('\n', errors.Count > 0 ? errors.Take(MostErrors) : lines.TakeLast(MostErrors));
     }
+
+    /// <summary>
+    /// Whether a line of build output is an error: <c>error</c> then its code, such as <c>error CS1002:</c>,
+    /// <c>error CsWinRT1028:</c> or <c>XamlCompiler error WMC0130:</c>, or <c>: error :</c> for one with no code.
+    /// </summary>
+    internal static bool IsErrorLine(string line)
+    {
+        return CompilerError().IsMatch(line);
+    }
+
+    [GeneratedRegex(@"\berror [A-Za-z]+\d+:|: error :")]
+    private static partial Regex CompilerError();
 
     /// <summary>
     /// A compiler line as a build-error notice shows it: without the project MSBuild adds to it, and with a file under

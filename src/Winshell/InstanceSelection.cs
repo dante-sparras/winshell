@@ -94,7 +94,8 @@ internal static class InstanceSelection
 
         if (options.Path is not null || options.Config is not null)
         {
-            var project = ConfigurationSelection.FindProject(options, out var error);
+            var project = ConfigurationProject.Find(options.Path, options.Config, ShellLocations.Current.ConfigRoot,
+                out var error);
             if (error is not null)
                 return Result.Miss(error);
             // With -c or -p a project is always found, or the error above says why not.
