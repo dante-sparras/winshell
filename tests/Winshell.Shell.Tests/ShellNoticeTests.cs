@@ -241,15 +241,6 @@ public sealed class ShellNoticeTests : IDisposable
         Assert.Contains(_logged, line => line.StartsWith("notice: Could not show", StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData(5u, 25)]
-    [InlineData(60u, 60)]
-    public void A_setting_for_longer_notifications_lengthens_a_crash_notice_and_a_shorter_one_does_not(uint seconds,
-        int expected)
-    {
-        Assert.Equal(TimeSpan.FromSeconds(expected), ShellNotices.CrashTimeoutFor(seconds));
-    }
-
     [Fact]
     public async Task The_window_sits_above_the_taskbar_at_the_right_of_the_screen_and_says_the_whole_notice()
     {

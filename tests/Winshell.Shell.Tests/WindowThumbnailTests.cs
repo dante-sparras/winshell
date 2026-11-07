@@ -9,36 +9,9 @@ namespace Winshell.ShellTests;
 public sealed class WindowThumbnailTests
 {
     [Fact]
-    public async Task A_thumbnail_finds_the_shell_window_it_is_in()
+    public async Task A_thumbnail_finds_its_shell_window_after_a_collection_and_a_loose_control_finds_none()
     {
         var found = await ShellFixture.On(async shell =>
-        {
-            var screen = shell.Screens[0].Geometry;
-            var thumbnail = new WindowThumbnail
-            {
-                Width = 80, Height = 48, HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Top
-            };
-            using var popup = new PopupWindow
-            {
-                Rect = new Rect(screen.X + 40, screen.Y + 40, 200, 120),
-                Content = new Grid { Children = { thumbnail } }
-            };
-            popup.Visible = true;
-            await ShellFixture.LaidOut(thumbnail);
-            var match = ShellWindow.Of(thumbnail);
-            var missing = ShellWindow.Of(new Grid());
-            return (Same: ReferenceEquals(match, popup), Missing: missing is null);
-        });
-
-        Assert.True(found.Same);
-        Assert.True(found.Missing);
-    }
-
-    [Fact]
-    public async Task A_thumbnail_still_finds_its_shell_window_after_a_collection()
-    {
-        var same = await ShellFixture.On(async shell =>
         {
             var screen = shell.Screens[0].Geometry;
             var thumbnail = new WindowThumbnail
@@ -59,9 +32,11 @@ public sealed class WindowThumbnailTests
             GC.WaitForPendingFinalizers();
             GC.Collect();
 
-            return ReferenceEquals(ShellWindow.Of(thumbnail), popup);
+            return (Same: ReferenceEquals(ShellWindow.Of(thumbnail), popup),
+                Missing: ShellWindow.Of(new Grid()) is null);
         });
 
-        Assert.True(same);
+        Assert.True(found.Same);
+        Assert.True(found.Missing);
     }
 }
