@@ -42,7 +42,7 @@ public sealed class PopupWindow : ShellWindow
         set
         {
             if (Set(ref _grabFocus, value))
-                OnPlacementChanged();
+                Host?.Focus.SetPopup(value);
         }
     }
 
@@ -51,7 +51,12 @@ public sealed class PopupWindow : ShellWindow
 
     private protected override void ApplyPlacement()
     {
-        Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect, _grabFocus));
+        Host!.Placement.SetPopup(new PopupPlacement(Screen, _rect));
+    }
+
+    private protected override void ApplyFocus()
+    {
+        Host!.Focus.SetPopup(_grabFocus);
     }
 
     private protected override void OnDismissed()

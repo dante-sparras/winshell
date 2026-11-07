@@ -249,11 +249,17 @@ public abstract class ShellWindow : ObservableObject, IHostClient, IDisposable
             _host.Placement.SetInputRegion(_inputRegion);
         if (_visibleMask is { } mask)
             _host.Presentation.SetVisibleMask(mask);
+        ApplyFocus();
         HostCreated?.Invoke();
     }
 
     /// <summary>Tells the native window where to be. Only called with a host.</summary>
     private protected abstract void ApplyPlacement();
+
+    /// <summary>Tells a new native window whether it takes the keyboard. A floating window always does.</summary>
+    private protected virtual void ApplyFocus()
+    {
+    }
 
     private protected void OnPlacementChanged()
     {

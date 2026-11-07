@@ -15,8 +15,7 @@ internal sealed record PanelPlacement(
     double Height,
     bool CoversScreen,
     double ReservedSize,
-    bool AboveWindows,
-    bool Focusable);
+    bool AboveWindows);
 
 /// <summary>
 /// Where a panel sits and which edge of its screen it holds. It chooses the screen, whether to cover it or reserve an
