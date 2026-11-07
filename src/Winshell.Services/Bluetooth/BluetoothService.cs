@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Runtime.CompilerServices;
 using Windows.Devices.Radios;
 
 namespace Winshell.Bluetooth;
@@ -25,9 +24,9 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     // Ends with the service, so a read that Windows does not cancel ends at its next check.
     private readonly CancellationTokenSource _ended = new();
 
-    // One radio change and one visibility change run at a time. Boxed, so ChangeAdapterAsync can hold either flag.
-    private readonly StrongBox<int> _radioSet = new();
-    private readonly StrongBox<int> _visibilitySet = new();
+    // One radio change and one visibility change run at a time.
+    private readonly DeviceAction _radioChange;
+    private readonly DeviceAction _visibilityChange;
     private ITimer? _poll;
     private BluetoothSnapshot _snapshot = BluetoothSnapshot.Initial;
     private BluetoothAdapter? _adapter;
@@ -46,6 +45,8 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         _time = time ?? TimeProvider.System;
         _radios = radios ?? WindowsRadioSource.Instance;
         _warning = new MonitorWarning(() => log, "bluetooth");
+        _radioChange = new DeviceAction(Post);
+        _visibilityChange = new DeviceAction(Post);
         Backend = backend ?? new BluetoothBackend();
         Backend.Changed += Refresh;
     }
@@ -91,7 +92,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         {
             Backend.StartWatching();
         }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             // Without events the timer still reads, only later.
             _warning.Failed(e);
@@ -200,7 +201,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         {
             return;
         }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             snapshot = BluetoothSnapshot.Initial with { Error = e.Message };
         }
@@ -251,7 +252,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
             Set(ref _error, "", nameof(Error));
         }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             Set(ref _error, e.Message, nameof(Error));
             OperationFailed?.Invoke(e.Message);
@@ -266,7 +267,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     {
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.ReportsOn == enabled)
             return;
-        await ChangeAdapterAsync(adapter, _radioSet, async () =>
+        await ChangeAdapterAsync(adapter, _radioChange, async () =>
         {
             var radio = await Backend.GetRadioAsync().ConfigureAwait(false);
             if (radio is null || radio.Kind != RadioKind.Bluetooth)
@@ -283,7 +284,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.Discoverable == discoverable)
             return;
         var openConnections = discoverable && !adapter.Pairable;
-        await ChangeAdapterAsync(adapter, _visibilitySet, async () =>
+        await ChangeAdapterAsync(adapter, _visibilityChange, async () =>
         {
             var changed = false;
             if (openConnections)
@@ -304,7 +305,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         if (_disposed || !ReferenceEquals(adapter, _adapter) || adapter.Pairable == pairable)
             return;
         var closeDiscovery = !pairable && adapter.Discoverable;
-        await ChangeAdapterAsync(adapter, _visibilitySet, async () =>
+        await ChangeAdapterAsync(adapter, _visibilityChange, async () =>
         {
             var changed = false;
             if (closeDiscovery)
@@ -320,38 +321,20 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         }).ConfigureAwait(false);
     }
 
-    private async Task ChangeAdapterAsync(BluetoothAdapter adapter, StrongBox<int> busy,
+    private Task ChangeAdapterAsync(BluetoothAdapter adapter, DeviceAction action,
         Func<Task<(string? Error, bool Changed)>> attempt)
     {
-        if (Interlocked.CompareExchange(ref busy.Value, 1, 0) != 0)
-            return;
-        var error = "";
-        var report = false;
-        try
+        return action.RunAsync(Invalidate, async () =>
         {
-            Invalidate();
             var result = await attempt().ConfigureAwait(false);
-            error = result.Error ?? "";
-            report = true;
             if (result.Changed)
                 await RefreshAsync().ConfigureAwait(false);
-        }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
+            return result.Error;
+        }, error =>
         {
-            error = e.Message;
-            report = true;
-        }
-        finally
-        {
-            var message = error;
-            var shouldReport = report;
-            Post(() =>
-            {
-                Volatile.Write(ref busy.Value, 0);
-                if (shouldReport && ReferenceEquals(adapter, _adapter))
-                    adapter.Report(message);
-            });
-        }
+            if (ReferenceEquals(adapter, _adapter))
+                adapter.Report(error);
+        });
     }
 
     private void Apply(BluetoothSnapshot snapshot)

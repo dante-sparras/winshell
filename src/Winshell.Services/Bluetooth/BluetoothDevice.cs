@@ -5,6 +5,7 @@ public sealed class BluetoothDevice : ObservableObject
 {
     private readonly BluetoothService _service;
     private readonly object _pairingLock = new();
+    private readonly DeviceAction _action;
     private BluetoothDeviceInfo _info;
     private BluetoothOperation _operation;
     private string _error = "";
@@ -16,6 +17,7 @@ public sealed class BluetoothDevice : ObservableObject
         _service = service;
         _info = info;
         Adapter = adapter;
+        _action = new DeviceAction(service.Post);
     }
 
     /// <summary>An action failed, with the same text as <see cref="Error"/>.</summary>
@@ -164,42 +166,38 @@ public sealed class BluetoothDevice : ObservableObject
         });
     }
 
-    private async Task RunAsync(BluetoothOperation operation, Func<BluetoothDeviceInfo, Task<string?>> action)
+    private Task RunAsync(BluetoothOperation operation, Func<BluetoothDeviceInfo, Task<string?>> action)
     {
-        if (Busy || _removed)
-            return;
-        SetOperation(operation);
-        Set(ref _error, "", nameof(Error));
-        _service.Invalidate();
-        string? error = null;
-        try
+        if (_removed)
+            return Task.CompletedTask;
+        return _action.RunAsync(() =>
         {
-            error = await action(_info).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
+            SetOperation(operation);
+            Set(ref _error, "", nameof(Error));
+            _service.Invalidate();
+        }, async () =>
         {
-            error = "Cancelled";
-        }
-        catch (Exception e) when (BluetoothBackend.IsExpectedFailure(e))
-        {
-            error = e.Message;
-        }
-        finally
-        {
-            _service.Post(() =>
+            try
             {
-                _service.Invalidate();
-                if (!_removed)
-                {
-                    SetOperation(BluetoothOperation.None);
-                    Set(ref _error, error ?? "", nameof(Error));
-                    if (error is not null)
-                        OperationFailed?.Invoke(error);
-                }
+                return await action(_info).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return "Cancelled";
+            }
+        }, error =>
+        {
+            _service.Invalidate();
+            if (!_removed)
+            {
+                SetOperation(BluetoothOperation.None);
+                Set(ref _error, error, nameof(Error));
+                if (error.Length > 0)
+                    OperationFailed?.Invoke(error);
+            }
 
-                _service.Refresh();
-            });
-        }
+            _service.Refresh();
+        });
     }
 
     private void SetOperation(BluetoothOperation operation)

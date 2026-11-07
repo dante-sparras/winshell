@@ -3,12 +3,13 @@ namespace Winshell.Network;
 /// <summary>A Wi-Fi adapter.</summary>
 public sealed class WifiDevice : NetworkDevice
 {
-    private bool _scanning;
+    private readonly DeviceAction _scan;
     private string _error = "";
 
     internal WifiDevice(NetworkDeviceInfo info, IEventLoop loop, INetworkBackend backend)
         : base(info, loop, backend)
     {
+        _scan = new DeviceAction(loop.Post);
     }
 
     /// <summary>A scan failed.</summary>
@@ -18,7 +19,7 @@ public sealed class WifiDevice : NetworkDevice
     public WifiDeviceMode Mode => Info.Mode;
 
     /// <summary>Whether a scan is running. <see cref="Scan"/> does nothing until it ends.</summary>
-    public bool Scanning => _scanning;
+    public bool Scanning => _scan.Running;
 
     /// <summary>Why the last scan failed. Empty while a scan runs and after one succeeds.</summary>
     public string Error => _error;
@@ -29,33 +30,27 @@ public sealed class WifiDevice : NetworkDevice
         _ = ScanAsync();
     }
 
-    internal async Task ScanAsync()
+    internal Task ScanAsync()
     {
-        if (_scanning || Removed)
-            return;
-        Set(ref _scanning, true, nameof(Scanning));
-        Set(ref _error, "", nameof(Error));
-        var error = "";
-        try
+        if (Removed)
+            return Task.CompletedTask;
+        return _scan.RunAsync(() =>
+        {
+            Changed(nameof(Scanning));
+            Set(ref _error, "", nameof(Error));
+        }, async () =>
         {
             await Backend.ScanAsync(NativeId).ConfigureAwait(false);
-        }
-        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+            return null;
+        }, error =>
         {
-            error = e.Message;
-        }
-        finally
-        {
-            Loop.Post(() =>
-            {
-                if (Removed)
-                    return;
-                Set(ref _scanning, false, nameof(Scanning));
-                Set(ref _error, error, nameof(Error));
-                if (error.Length > 0)
-                    OperationFailed?.Invoke(error);
-            });
-        }
+            if (Removed)
+                return;
+            Changed(nameof(Scanning));
+            Set(ref _error, error, nameof(Error));
+            if (error.Length > 0)
+                OperationFailed?.Invoke(error);
+        });
     }
 
     internal override void Update(NetworkDeviceInfo info)

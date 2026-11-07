@@ -106,7 +106,7 @@ public sealed class ToastMessage : ObservableObject
             _send(AppId, BuildXml(), Tag, Group, ReportFailure);
             return true;
         }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             ReportFailure(e.Message);
             return false;

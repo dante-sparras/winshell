@@ -6,14 +6,15 @@ namespace Winshell.Network;
 public sealed class WifiProfile : ObservableObject
 {
     private readonly Network _network;
+    private readonly DeviceAction _write;
     private WifiProfileInfo _info;
     private string _actionError = "";
-    private bool _writing;
 
     internal WifiProfile(Network network, WifiProfileInfo info)
     {
         _network = network;
         _info = info;
+        _write = new DeviceAction(network.Device.Loop.Post);
     }
 
     /// <summary>Setting <see cref="AutoConnect"/>, <see cref="ClearPassword"/> or <see cref="Forget"/> failed.</summary>
@@ -43,7 +44,7 @@ public sealed class WifiProfile : ObservableObject
         get => _info.AutoConnect;
         set
         {
-            if (Removed || _writing || value == _info.AutoConnect)
+            if (Removed || _write.Running || value == _info.AutoConnect)
                 return;
             _ = SetAutoConnectAsync(value);
         }
@@ -142,33 +143,17 @@ public sealed class WifiProfile : ObservableObject
         Changed(old != ShownError, nameof(Error));
     }
 
-    private async Task WriteAsync(Func<Task<string?>> action)
+    private Task WriteAsync(Func<Task<string?>> action)
     {
-        if (_writing || Removed)
-            return;
-        _writing = true;
-        SetActionError("");
-        var error = "";
-        try
+        if (Removed)
+            return Task.CompletedTask;
+        return _write.RunAsync(() => SetActionError(""), action, error =>
         {
-            error = await action().ConfigureAwait(false) ?? "";
-        }
-        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
-        {
-            error = e.Message;
-        }
-        finally
-        {
-            var message = error;
-            _network.Device.Loop.Post(() =>
-            {
-                _writing = false;
-                if (Removed)
-                    return;
-                SetActionError(message);
-                if (message.Length > 0)
-                    OperationFailed?.Invoke(message);
-            });
-        }
+            if (Removed)
+                return;
+            SetActionError(error);
+            if (error.Length > 0)
+                OperationFailed?.Invoke(error);
+        });
     }
 }

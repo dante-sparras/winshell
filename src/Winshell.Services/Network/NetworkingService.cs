@@ -13,11 +13,11 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private readonly INetworkBackend _backend;
     private readonly IRadioSource _radios;
     private readonly IDisposable _subscription;
+    private readonly DeviceAction _access;
+    private readonly DeviceAction _wifiSwitch;
     private NetworkSnapshot _snapshot = NetworkSnapshot.Initial;
     private string _error = "";
     private string _radioError = "";
-    private bool _requesting;
-    private bool _settingWifi;
     private bool _disposed;
 
     internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioSource? radios = null)
@@ -25,6 +25,8 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         _loop = loop;
         _backend = backend ?? NetworkBackend.Instance;
         _radios = radios ?? WindowsRadioSource.Instance;
+        _access = new DeviceAction(loop.Post);
+        _wifiSwitch = new DeviceAction(loop.Post);
         Apply(_backend.Current);
         _subscription = _backend.Subscribe(s => _loop.Post(() => Apply(s)));
     }
@@ -80,7 +82,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     /// <summary>
     /// Whether an access request is waiting for Windows. <see cref="RequestAccess"/> does nothing until it ends.
     /// </summary>
-    public bool RequestingAccess => _requesting;
+    public bool RequestingAccess => _access.Running;
 
     /// <summary>Reads the adapters, profiles, radios and connectivity again soon.</summary>
     public void Refresh()
@@ -94,71 +96,47 @@ public sealed class NetworkingService : ObservableObject, IDisposable
         _ = RequestAccessAsync();
     }
 
-    internal async Task RequestAccessAsync()
+    internal Task RequestAccessAsync()
     {
-        if (_requesting || _disposed)
-            return;
-        Set(ref _requesting, true, nameof(RequestingAccess));
-        var error = "";
-        try
+        if (_disposed)
+            return Task.CompletedTask;
+        return _access.RunAsync(() => Changed(nameof(RequestingAccess)), async () =>
         {
             await _backend.RequestAccessAsync().ConfigureAwait(false);
-        }
-        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+            return null;
+        }, error =>
         {
-            error = e.Message;
-        }
-        finally
-        {
-            _loop.Post(() =>
-            {
-                if (_disposed)
-                    return;
-                _radioError = "";
-                Set(ref _requesting, false, nameof(RequestingAccess));
-                Apply(_backend.Current);
-                Set(ref _error, error, nameof(Error));
-                if (error.Length > 0)
-                    OperationFailed?.Invoke(error);
-            });
-        }
+            if (_disposed)
+                return;
+            _radioError = "";
+            Changed(nameof(RequestingAccess));
+            Apply(_backend.Current);
+            Set(ref _error, error, nameof(Error));
+            if (error.Length > 0)
+                OperationFailed?.Invoke(error);
+        });
     }
 
     // Returns before Windows answers. The property changes only when a snapshot reports the radios did.
-    internal async Task SetWifiEnabledAsync(bool enabled)
+    internal Task SetWifiEnabledAsync(bool enabled)
     {
-        if (_settingWifi || _disposed || _snapshot.WifiEnabled == enabled)
-            return;
-        _settingWifi = true;
-        var error = "";
-        var report = false;
-        try
+        if (_disposed || _snapshot.WifiEnabled == enabled)
+            return Task.CompletedTask;
+        return _wifiSwitch.RunAsync(static () => { }, async () =>
         {
-            error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, enabled, _radios).ConfigureAwait(false) ?? "";
-            if (error.Length == 0)
+            var error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, enabled, _radios).ConfigureAwait(false);
+            if (error is null)
                 await _backend.RefreshNowAsync().ConfigureAwait(false);
-            report = true;
-        }
-        catch (Exception e) when (NetworkBackend.IsExpectedFailure(e))
+            return error;
+        }, error =>
         {
-            error = e.Message;
-            report = true;
-        }
-        finally
-        {
-            var message = error;
-            var shouldReport = report;
-            _loop.Post(() =>
-            {
-                _settingWifi = false;
-                if (!shouldReport || _disposed)
-                    return;
-                _radioError = message;
-                Apply(_backend.Current);
-                if (message.Length > 0)
-                    OperationFailed?.Invoke(message);
-            });
-        }
+            if (_disposed)
+                return;
+            _radioError = error;
+            Apply(_backend.Current);
+            if (error.Length > 0)
+                OperationFailed?.Invoke(error);
+        });
     }
 
     private void Apply(NetworkSnapshot snapshot)

@@ -107,7 +107,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         catch (Exception e)
 #pragma warning restore CA1031
         {
-            if (!WindowsNotificationBackend.IsExpectedFailure(e))
+            if (!WindowsFailure.IsExpected(e))
                 _log.Warn("notifications", $"Requesting access failed: {e}");
             Post(() =>
             {
@@ -194,7 +194,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         {
             return;
         }
-        catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             Post(() =>
             {
@@ -291,7 +291,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
                 SyncGroups();
                 notification.LetGo();
             }
-            catch (Exception e) when (WindowsNotificationBackend.IsExpectedFailure(e))
+            catch (Exception e) when (WindowsFailure.IsExpected(e))
             {
                 success = false;
                 failure = e.Message;

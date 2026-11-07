@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using Windows.Devices.Enumeration;
 using Windows.Devices.Radios;
 using Winshell.Native;
@@ -193,7 +192,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             {
                 radio = await adapter.GetRadioAsync().AsTask(cancellation).ConfigureAwait(false);
             }
-            catch (Exception e) when (IsExpectedFailure(e))
+            catch (Exception e) when (WindowsFailure.IsExpected(e))
             {
             }
 
@@ -243,7 +242,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
 
             return new BluetoothSnapshot(true, adapterInfo, result, discovering, discoveryError);
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
             StopDiscovery();
             throw;
@@ -336,7 +335,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
             level = nodes.Select(n => BatteryLevel(n.Properties.GetValueOrDefault(BatteryKey)))
                 .FirstOrDefault(n => n.HasValue);
         }
-        catch (Exception e) when (IsExpectedFailure(e))
+        catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
         }
 
@@ -515,7 +514,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
                 {
                     watcher.Stop();
                 }
-                catch (Exception e) when (IsExpectedFailure(e))
+                catch (Exception e) when (WindowsFailure.IsExpected(e))
                 {
                     lock (_lock)
                     {
@@ -598,12 +597,6 @@ internal sealed class BluetoothBackend : IBluetoothBackend
         return any;
     }
 
-    internal static bool IsExpectedFailure(Exception e)
-    {
-        return e is UnauthorizedAccessException or COMException
-            or InvalidOperationException or NotSupportedException or ArgumentException or IOException;
-    }
-
     public void Dispose()
     {
         lock (_lock)
@@ -656,7 +649,7 @@ internal sealed class BluetoothBackend : IBluetoothBackend
                 {
                     _watcher.Stop();
                 }
-                catch (Exception e) when (IsExpectedFailure(e))
+                catch (Exception e) when (WindowsFailure.IsExpected(e))
                 {
                 }
         }
