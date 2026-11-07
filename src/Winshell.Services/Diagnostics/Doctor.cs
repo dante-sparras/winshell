@@ -165,7 +165,7 @@ public static class Doctor
                 var project = chosen.SignInFolder;
                 var supervisor = ConfigurationProject.FolderOf(process) is null
                     ? null
-                    : ProcessImage.SupervisingWinshell();
+                    : WinshellHost.Supervising();
                 return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),
                     SignInEntry.TurnedOffInWindows(), File.Exists, DoctorProbe.ResolveLinks, project,
                     project is null ? null : SignInEntry.BareFolder(context.ConfigRoot), context.ConfigRoot);

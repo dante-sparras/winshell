@@ -52,7 +52,7 @@ public sealed class ShellStartTests
         Assert.Equal(["--after", "8", "--theme", "dark", "--", "-d"], arguments.ForNext(8));
         Assert.False(ShellArguments.Parse(arguments.ForNext(8)).Daemonize);
 
-        var start = arguments.DetachedStart(@"C:\shells\winshell-next.exe");
+        var start = InstanceStart.DetachedStart(@"C:\shells\winshell-next.exe", arguments.Detached);
         Assert.Equal(@"C:\shells\winshell-next.exe", start.FileName);
         Assert.False(start.UseShellExecute);
         Assert.True(start.CreateNoWindow);

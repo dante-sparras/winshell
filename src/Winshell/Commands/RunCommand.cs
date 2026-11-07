@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
@@ -34,32 +33,22 @@ internal static class RunCommand
         // -d leaves the program to a child that supervises it. The build is done, and its errors were in this console.
         // The child runs the tokens Parse kept, so a -d that is the value of -c or -p is not dropped.
         if (options.Daemonize)
-            return Detach(options.ChildArguments.ToList());
+            return Detach(options.ChildArguments);
 
         var program = new ProcessStartInfo(project.Program) { UseShellExecute = false };
-        foreach (var a in ProgramArguments(options))
+        foreach (var a in ShellArguments.Write(options.NoDuplicate, options.Verbose, options.Rest))
             program.ArgumentList.Add(a);
         return Supervise(program, project);
     }
 
-    /// <summary>Starts <c>winshell.exe</c> again with <paramref name="childArgs"/>, and returns at once. The child supervises the shell.</summary>
-    private static int Detach(List<string> childArgs)
+    /// <summary>Starts <c>winshell.exe</c> again with <paramref name="childArgs"/>. The child supervises the shell.</summary>
+    private static int Detach(IEnumerable<string> childArgs)
     {
         var exe = Environment.ProcessPath!; // The CLI runs from its apphost.
-        var psi = new ProcessStartInfo(exe) { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var a in childArgs)
-            psi.ArgumentList.Add(a);
-        try
-        {
-            StandardHandles.KeepFromChildren();
-            using var child = Process.Start(psi);
+        if (InstanceStart.Detach(exe, childArgs) is not { } error)
             return 0;
-        }
-        catch (Win32Exception e)
-        {
-            StartupError.Report($"Could not start \"{exe}\": {e.Message}", null);
-            return 1;
-        }
+        StartupError.Report(error, null);
+        return 1;
     }
 
     /// <summary>
@@ -125,17 +114,5 @@ internal static class RunCommand
             SystemEvents.SessionEnded -= SessionEnded;
         }
 #pragma warning restore VSTHRD002
-    }
-
-    /// <summary>What the configuration's program should see. Winshell's own selectors stay here.</summary>
-    private static List<string> ProgramArguments(CliOptions options)
-    {
-        var args = new List<string>();
-        if (options.NoDuplicate)
-            args.Add("--no-duplicate");
-        if (options.Verbose)
-            args.Add("--verbose");
-        args.AddRange(options.Rest);
-        return args;
     }
 }

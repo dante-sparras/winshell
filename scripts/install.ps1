@@ -100,6 +100,13 @@ function Receive-WinshellFile([string] $Uri, [string] $Path) {
     }
 }
 
+# The command Winshell's SignInEntry.CommandFor writes for $Exe with no arguments, so Winshell reads this entry as its
+# own. StartupRegistryTests runs this function and compares the two. It quotes only what has a space.
+function Get-WinshellSignInCommand([string] $Exe) {
+    @((Join-Path $env:SystemRoot 'System32\conhost.exe'), '--headless', $Exe, '--no-build', '--no-duplicate' |
+            ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+}
+
 function Install-Winshell([string] $Version, [switch] $AutoStart, [switch] $SessionKeepsPath) {
     $ErrorActionPreference = 'Stop'
     $ProgressPreference = 'SilentlyContinue'
@@ -205,9 +212,7 @@ function Install-Winshell([string] $Version, [switch] $AutoStart, [switch] $Sess
     $link.Save()
 
     if ($signIn) {
-        # The command Winshell's StartupService writes, so it reads this entry as its own. It quotes only what has a space.
-        $command = @((Join-Path $env:SystemRoot 'System32\conhost.exe'), '--headless', (Join-Path $bin 'winshell.exe'), '--no-build', '--no-duplicate' |
-                ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+        $command = Get-WinshellSignInCommand (Join-Path $bin 'winshell.exe')
         if ($env:WINSHELL_AUTOSTART_FILE) {
             [IO.File]::WriteAllText($env:WINSHELL_AUTOSTART_FILE, $command)
         } else {

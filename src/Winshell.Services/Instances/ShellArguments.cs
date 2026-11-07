@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 
 namespace Winshell;
@@ -27,14 +26,14 @@ internal sealed record ShellArguments(
         var list = args.ToList();
         for (var i = 0; i < list.Count; i++)
         {
-            if (list[i] == "--")
+            if (list[i] == CommandWords.End)
             {
                 kept.AddRange(list.Skip(i));
                 detached.AddRange(list.Skip(i));
                 break;
             }
 
-            if (list[i] == "--after" && i + 1 < list.Count && int.TryParse(list[i + 1], NumberStyles.None,
+            if (CommandWords.After.Is(list[i]) && i + 1 < list.Count && int.TryParse(list[i + 1], NumberStyles.None,
                     CultureInfo.InvariantCulture, out var pid))
             {
                 after = pid;
@@ -44,14 +43,14 @@ internal sealed record ShellArguments(
                 continue;
             }
 
-            if (list[i] is "-d" or "--daemonize")
+            if (CommandWords.Daemonize.Is(list[i]))
             {
                 daemonize = true;
                 continue;
             }
 
-            noDuplicate |= list[i] is "-n" or "--no-duplicate";
-            verbose |= list[i] is "-v" or "--verbose";
+            noDuplicate |= CommandWords.NoDuplicate.Is(list[i]);
+            verbose |= CommandWords.Verbose.Is(list[i]);
             kept.Add(list[i]);
             detached.Add(list[i]);
         }
@@ -59,22 +58,24 @@ internal sealed record ShellArguments(
         return new ShellArguments(after, noDuplicate, daemonize, kept, detached, verbose);
     }
 
+    /// <summary>
+    /// The words <c>winshell run</c> gives a configuration's program. <paramref name="rest"/> is the <c>--</c> and the
+    /// words after it.
+    /// </summary>
+    public static IReadOnlyList<string> Write(bool noDuplicate, bool verbose, IEnumerable<string> rest)
+    {
+        var words = new List<string>();
+        if (noDuplicate)
+            words.Add(CommandWords.NoDuplicate.Long);
+        if (verbose)
+            words.Add(CommandWords.Verbose.Long);
+        words.AddRange(rest);
+        return words;
+    }
+
     /// <summary>The arguments of the process that takes over from <paramref name="pid"/>. <c>--after</c> comes first, before any <c>--</c>.</summary>
     public IReadOnlyList<string> ForNext(int pid)
     {
-        return ["--after", pid.ToString(CultureInfo.InvariantCulture), .. Kept];
-    }
-
-    /// <summary>
-    /// The process that takes a <c>-d</c> start over. <c>CreateNoWindow</c> is what <c>winshell -d</c> uses. The window
-    /// style stays normal: a window's first show takes the state its launcher asked for, and hiding it here would hide
-    /// the shell.
-    /// </summary>
-    public ProcessStartInfo DetachedStart(string program)
-    {
-        var info = new ProcessStartInfo(program) { UseShellExecute = false, CreateNoWindow = true };
-        foreach (var argument in Detached)
-            info.ArgumentList.Add(argument);
-        return info;
+        return [CommandWords.After.Long, pid.ToString(CultureInfo.InvariantCulture), .. Kept];
     }
 }

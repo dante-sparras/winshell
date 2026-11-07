@@ -1,8 +1,7 @@
 using System.Security;
-using System.Text;
-using System.Text.RegularExpressions;
 using Windows.ApplicationModel;
 using Microsoft.Win32;
+using Winshell.Native;
 
 namespace Winshell.Session;
 
@@ -103,77 +102,6 @@ internal sealed class WindowsStartupRegistry(
     }
 
     /// <summary>
-    /// The command a sign-in runs: this install's <c>winshell.exe</c> with the arguments it was started with, under a
-    /// console host that has no window. <c>winshell.exe</c> is a console program, so started on its own it would open a
-    /// console or Windows Terminal at every sign-in. Start launches <c>winshellw.exe</c> in the same folder; that name
-    /// is written as the sibling <c>winshell.exe</c>, so the Start menu and the installer describe one entry.
-    /// <c>--no-duplicate</c> keeps a second sign-in entry from starting a second shell, and <c>--daemonize</c> is left
-    /// out because the console host already runs it in the background. <c>--no-build</c> runs the configuration's last
-    /// build, so signing in never depends on the SDK or on a broken edit. A <c>--path</c> is made absolute, since a
-    /// sign-in does not start in this working directory.
-    /// </summary>
-    public static string CommandFor(string exe, IEnumerable<string> args)
-    {
-        exe = ConsoleTwin(exe);
-        var kept = new List<string>();
-        var path = false;
-        foreach (var a in args)
-        {
-            if (a is "-d" or "--daemonize")
-                continue;
-            kept.Add(path ? Path.GetFullPath(a) : a);
-            path = a is "-p" or "--path";
-        }
-
-        if (!kept.Any(a => a is "--no-build"))
-        {
-            var duplicate = kept.FindIndex(a => a is "-n" or "--no-duplicate");
-            if (duplicate >= 0)
-                kept.Insert(duplicate, "--no-build");
-            else
-                kept.Add("--no-build");
-        }
-
-        if (!kept.Any(a => a is "-n" or "--no-duplicate"))
-            kept.Add("--no-duplicate");
-        var conhost = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "conhost.exe");
-        return string.Join(' ', new[] { conhost, "--headless", exe }.Concat(kept).Select(Quote));
-    }
-
-    /// <summary>Quotes an argument the way <c>CommandLineToArgvW</c> reads it back.</summary>
-    internal static string Quote(string arg)
-    {
-        if (arg.Length > 0 && !arg.Any(c => c is ' ' or '\t' or '"'))
-            return arg;
-        var sb = new StringBuilder("\"");
-        var slashes = 0;
-        foreach (var c in arg)
-        {
-            if (c == '\\')
-            {
-                slashes++;
-                continue;
-            }
-
-            sb.Append('\\', c == '"' ? slashes * 2 + 1 : slashes);
-            slashes = 0;
-            sb.Append(c);
-        }
-
-        sb.Append('\\', slashes * 2).Append('"');
-        return sb.ToString();
-    }
-
-    /// <summary>The console <c>winshell.exe</c> beside a <c>winshellw.exe</c>. Any other path is unchanged.</summary>
-    internal static string ConsoleTwin(string exe)
-    {
-        if (!Path.GetFileName(exe).Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase))
-            return exe;
-        var dir = Path.GetDirectoryName(exe);
-        return string.IsNullOrEmpty(dir) ? "winshell.exe" : Path.Combine(dir, "winshell.exe");
-    }
-
-    /// <summary>
     /// Whether two sign-in commands start the same install. The windowed name counts as the console name. When
     /// <paramref name="expected"/> names a configuration, the installer's command (no <c>-p</c> and no <c>-c</c>) matches
     /// it only when that configuration is <paramref name="bareFolder"/>, and a <c>-c</c> name is a folder of
@@ -183,14 +111,13 @@ internal sealed class WindowsStartupRegistry(
         string? configRoot = null)
     {
         if (!SignInEntry.Read(expected).NamesConfiguration)
-            return string.Equals(NormalizeSignInExe(actual), NormalizeSignInExe(expected),
-                StringComparison.OrdinalIgnoreCase);
+            return Words(actual).SequenceEqual(Words(expected), StringComparer.OrdinalIgnoreCase);
         return SignInEntry.IsOurs(actual, expected, bareFolder, configRoot);
     }
 
-    private static string NormalizeSignInExe(string command)
+    private static IEnumerable<string> Words(string command)
     {
-        return Regex.Replace(command, @"winshellw\.exe(?=$|[\s""])", "winshell.exe", RegexOptions.IgnoreCase);
+        return CommandLine.Split(command).Select(WinshellHost.ConsoleOf);
     }
 }
 

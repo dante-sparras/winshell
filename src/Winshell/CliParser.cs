@@ -33,18 +33,33 @@ internal static class CliParser
             .TrimEnd();
     }
 
+    private static readonly Option HelpOption = Option.Flag(new CommandWord("--help", "-h", "/?"), o => o);
+
+    private static readonly Option VersionOption = Option.Flag(new CommandWord("--version", "-V"), o => o);
+
     private static readonly Option[] Shared =
     [
-        Option.Flag("--verbose", "-v"),
-        Option.Flag("--help", "-h", "/?"),
-        Option.Flag("--version", "-V")
+        Option.Flag(CommandWords.Verbose, o => o with { Verbose = true }), HelpOption, VersionOption
     ];
 
-    private static readonly Option Path = Option.Value("--path", "-p");
+    private static readonly Option PathOption =
+        Option.Value(CommandWords.Path, (o, use) => o with { Path = use.Value });
 
-    private static readonly Option ConfigOption = Option.Value("--config", "-c");
+    private static readonly Option ConfigOption = Option.Value(CommandWords.Config,
+        (o, use) => o with { Config = ConfigName(use.Token, use.Value!) });
 
-    private static readonly Option[] Instance = [Option.Value("--id", "-i"), Option.Value("--pid"), Path, ConfigOption];
+    private static readonly Option DaemonizeOption =
+        Option.Flag(CommandWords.Daemonize, o => o with { Daemonize = true });
+
+    private static readonly Option JsonOption =
+        Option.Flag(new CommandWord("--json", "-j"), o => o with { Json = true });
+
+    private static readonly Option[] Instance =
+    [
+        Option.Value(new CommandWord("--id", "-i"), (o, use) => o with { Id = use.Value }),
+        Option.Value(new CommandWord("--pid"), (o, use) => o with { Pid = WholeNumber(use.Token, use.Value!) }),
+        PathOption, ConfigOption
+    ];
 
     private const string RunUsage = """
                                     winshell run [-c <name> | -p <path>] [-d] [-n] [--no-build] [-- <args>...]
@@ -174,17 +189,24 @@ internal static class CliParser
     /// <summary>Every command, the options and words it takes, and the help it prints. Each also takes <see cref="Shared"/>.</summary>
     private static readonly Command[] Entries =
     [
-        Entry("run", RunUsage, WordRule.None,
+        Entry(CommandWords.Run, RunUsage, WordRule.None,
         [
-            Path, ConfigOption, Option.Flag("--daemonize", "-d"), Option.Flag("--no-duplicate", "-n"),
-            Option.Flag("--no-build")
+            PathOption, ConfigOption, DaemonizeOption,
+            Option.Flag(CommandWords.NoDuplicate, o => o with { NoDuplicate = true }),
+            Option.Flag(CommandWords.NoBuild, o => o with { NoBuild = true })
         ]),
-        Entry("list", ListUsage, WordRule.None, [Option.Flag("--json", "-j")]),
-        Entry("kill", KillUsage, WordRule.None, [.. Instance, Option.Flag("--force")]),
+        Entry("list", ListUsage, WordRule.None, [JsonOption]),
+        Entry("kill", KillUsage, WordRule.None,
+            [.. Instance, Option.Flag(new CommandWord("--force"), o => o with { Force = true })]),
         Entry("reload", ReloadUsage, WordRule.None, Instance),
         Entry("log", LogUsage, WordRule.One,
-            [.. Instance, Option.Value("--tail", "-t"), Option.Flag("--follow", "-f")]),
-        Entry("ipc", IpcUsage, WordRule.Subcommand, [.. Instance, Option.Flag("--json", "-j")],
+        [
+            .. Instance,
+            Option.Value(new CommandWord("--tail", "-t"),
+                (o, use) => o with { Tail = WholeNumber(use.Token, use.Value!) }),
+            Option.Flag(new CommandWord("--follow", "-f"), o => o with { Follow = true })
+        ]),
+        Entry("ipc", IpcUsage, WordRule.Subcommand, [.. Instance, JsonOption],
         [
             new Subcommand("show"),
             new Subcommand("call", 2, "a target and a function", RawAfter: true),
@@ -199,14 +221,22 @@ internal static class CliParser
             new Subcommand("click", 1, "a name"),
             new Subcommand("hover", 1, "a name")
         ]),
-        Entry("dev", DevUsage, WordRule.None, [Path, ConfigOption]),
+        Entry("dev", DevUsage, WordRule.None, [PathOption, ConfigOption]),
         Entry("doctor", DoctorUsage, WordRule.None,
-            [Path, ConfigOption, Option.Flag("--json", "-j"), Option.Flag("--no-color")]),
+        [
+            PathOption, ConfigOption, JsonOption,
+            Option.Flag(new CommandWord("--no-color"), o => o with { NoColor = true })
+        ]),
         Entry("help", Summary, WordRule.Topic, [])
     ];
 
     private static readonly FrozenDictionary<string, Command>
         Commands = Entries.ToFrozenDictionary(entry => entry.Name);
+
+    /// <summary>
+    /// <c>run</c>. A line with no command word and only its options starts a shell, as the Start tile and sign-in do.
+    /// </summary>
+    private static readonly Command RunEntry = Commands[CommandWords.Run];
 
     private static readonly FrozenDictionary<string, Option> ByToken = IndexTokens();
 
@@ -265,7 +295,7 @@ internal static class CliParser
             Command = line.Command,
             Arguments = [.. line.Args],
             ShowVersion = line.Version,
-            ShellStartAllowed = line.ShellStart,
+            ShellStartAllowed = line.Command is null && line.Uses.All(use => RunEntry.Accepts(use.Option)),
             Positional = [.. positional],
             Rest = [.. line.Rest],
             ChildArguments = BackgroundChild(line, options)
@@ -282,9 +312,9 @@ internal static class CliParser
             return [];
         var child = line.Child.ToList();
         if (line.Command is null)
-            child.Insert(0, "run");
+            child.Insert(0, CommandWords.Run);
         if (!options.NoBuild)
-            child.Insert(0, "--no-build");
+            child.Insert(0, CommandWords.NoBuild.Long);
         return [.. child];
     }
 
@@ -295,13 +325,13 @@ internal static class CliParser
         var command = line.Command is null ? null : Commands[line.Command];
         foreach (var use in line.Uses)
         {
-            if (use.IsUnknown)
+            if (use.Option is null)
             {
                 error ??= new ArgumentException($"Unknown option \"{use.Token}\".");
                 continue;
             }
 
-            if (command is not null && !command.Accepts(use.Option.Long))
+            if (command is not null && !command.Accepts(use.Option))
             {
                 error ??= new ArgumentException($"winshell {command.Name} does not take \"{use.Token}\".");
                 continue;
@@ -315,7 +345,7 @@ internal static class CliParser
 
             try
             {
-                options = Set(options, use);
+                options = use.Option.Set(options, use);
             }
             catch (ArgumentException e)
             {
@@ -326,41 +356,6 @@ internal static class CliParser
         if (error is not null)
             throw error;
         return options;
-    }
-
-    private static CliOptions Set(CliOptions options, Use use)
-    {
-        switch (use.Option.Long)
-        {
-            case "--path":
-                return options with { Path = use.Value };
-            case "--config":
-                return options with { Config = ConfigName(use.Token, use.Value!) };
-            case "--id":
-                return options with { Id = use.Value };
-            case "--pid":
-                return options with { Pid = WholeNumber(use.Token, use.Value!) };
-            case "--tail":
-                return options with { Tail = WholeNumber(use.Token, use.Value!) };
-            case "--daemonize":
-                return options with { Daemonize = true };
-            case "--no-duplicate":
-                return options with { NoDuplicate = true };
-            case "--verbose":
-                return options with { Verbose = true };
-            case "--json":
-                return options with { Json = true };
-            case "--follow":
-                return options with { Follow = true };
-            case "--force":
-                return options with { Force = true };
-            case "--no-color":
-                return options with { NoColor = true };
-            case "--no-build":
-                return options with { NoBuild = true };
-            default:
-                return options;
-        }
     }
 
     private static void RequireSubcommand(Command command, List<string> positional)
@@ -379,10 +374,9 @@ internal static class CliParser
             throw new ArgumentException($"winshell {command.Name} {name} needs {match.Missing}.");
     }
 
-    /// <summary>A config name is one folder in the config folder, so it can't leave it. A path goes in -p.</summary>
     private static string ConfigName(string option, string name)
     {
-        if (name.Length == 0 || name is "." or ".." || name.IndexOfAny(['/', '\\', ':']) >= 0)
+        if (!CommandWords.IsConfigName(name))
             throw new ArgumentException(
                 $"{option} needs the name of a config folder, not \"{name}\". Use -p for a path.");
         return name;
@@ -419,23 +413,30 @@ internal static class CliParser
         Subcommand
     }
 
-    /// <summary>An option's long name, how many values it takes, and the other spellings it answers to.</summary>
-    private readonly record struct Option(string Long, int Values, params string[] Shorts)
+    /// <summary>An option's spellings, whether it takes a value, and what it sets.</summary>
+    private sealed class Option(CommandWord word, bool takesValue, Func<CliOptions, Use, CliOptions> set)
     {
-        public static Option Flag(string longName, params string[] shorts)
+        public bool TakesValue => takesValue;
+
+        public static Option Flag(CommandWord word, Func<CliOptions, CliOptions> set)
         {
-            return new Option(longName, 0, shorts);
+            return new Option(word, false, (options, _) => set(options));
         }
 
-        public static Option Value(string longName, params string[] shorts)
+        public static Option Value(CommandWord word, Func<CliOptions, Use, CliOptions> set)
         {
-            return new Option(longName, 1, shorts);
+            return new Option(word, true, set);
+        }
+
+        public CliOptions Set(CliOptions options, Use use)
+        {
+            return set(options, use);
         }
 
         public void Collect(Dictionary<string, Option> into)
         {
-            into.TryAdd(Long, this);
-            foreach (var name in Shorts)
+            into.TryAdd(word.Long, this);
+            foreach (var name in word.Shorts)
                 into.TryAdd(name, this);
         }
     }
@@ -454,19 +455,14 @@ internal static class CliParser
 
     private sealed record Command(string Name, string Usage, Option[] Options, Subcommand[] Subcommands, WordRule Words)
     {
-        public bool Accepts(string longName)
+        public bool Accepts(Option? option)
         {
-            return Options.Any(option => option.Long == longName);
+            return option is not null && Options.Contains(option);
         }
     }
 
-    private readonly record struct Use(string Token, Option Option, string? Value, bool Missing, bool IsUnknown)
-    {
-        public static Use Unknown(string token)
-        {
-            return new Use(token, default, null, false, true);
-        }
-    }
+    /// <summary>An option on the line. <see cref="Option"/> is null when no option is spelled <see cref="Token"/>.</summary>
+    private readonly record struct Use(string Token, Option? Option, string? Value, bool Missing);
 
     /// <summary>One walk over the arguments. The command is known by the end, including when it comes after its options.</summary>
     private sealed class Line(string[] args)
@@ -478,8 +474,6 @@ internal static class CliParser
         public bool Help { get; private set; }
 
         public bool Version { get; private set; }
-
-        public bool ShellStart { get; private set; } = true;
 
         public List<Use> Uses { get; } = [];
 
@@ -504,10 +498,10 @@ internal static class CliParser
                     continue;
                 }
 
-                if (token == "--")
+                if (token == CommandWords.End)
                 {
                     // For run, and when there is no command, the rest belongs to the configuration's program.
-                    if (Command is null or "run")
+                    if (Command is null or CommandWords.Run)
                     {
                         Rest.AddRange(Args.Skip(i));
                         Child.AddRange(Args.Skip(i));
@@ -522,7 +516,7 @@ internal static class CliParser
                 {
                     string? value = null;
                     var missing = false;
-                    if (option.Values == 1)
+                    if (option.TakesValue)
                     {
                         if (i + 1 >= Args.Length)
                             missing = true;
@@ -530,28 +524,25 @@ internal static class CliParser
                             value = Args[++i];
                     }
 
-                    Uses.Add(new Use(token, option, value, missing, false));
-                    if (option.Long != "--daemonize")
+                    Uses.Add(new Use(token, option, value, missing));
+                    if (option != DaemonizeOption)
                     {
                         Child.Add(token);
                         if (value is not null)
                             Child.Add(value);
                     }
 
-                    if (option.Long == "--help")
+                    if (option == HelpOption)
                         Help = true;
-                    else if (option.Long == "--version")
+                    else if (option == VersionOption)
                         Version = true;
-                    if (Command is null && !Commands["run"].Accepts(option.Long))
-                        ShellStart = false;
                     continue;
                 }
 
                 if (token.StartsWith('-'))
                 {
-                    Uses.Add(Use.Unknown(token));
+                    Uses.Add(new Use(token, null, null, false));
                     Child.Add(token);
-                    ShellStart = false;
                     continue;
                 }
 
@@ -560,7 +551,6 @@ internal static class CliParser
                     if (!Commands.ContainsKey(token))
                         throw UnknownCommand(token);
                     Command = token;
-                    ShellStart = false;
                     Child.Add(token);
                     continue;
                 }

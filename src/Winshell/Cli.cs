@@ -36,16 +36,17 @@ internal static class Cli
             {
                 case null:
                     // The Start tile and sign-in host still start a shell without a command word.
-                    if (options.Arguments.IsEmpty && !IsWindowlessHost())
+                    var windowless = WinshellHost.IsWindowless(Environment.ProcessPath);
+                    if (options.Arguments.IsEmpty && !windowless)
                         return HelpCommand.Run();
-                    if (!IsWindowlessHost() && !options.ShellStartAllowed)
+                    if (!windowless && !options.ShellStartAllowed)
                     {
                         Console.Error.WriteLine("No command. Use winshell run to start a shell.");
                         return 2;
                     }
 
                     return RunCommand.Run(options);
-                case "run":
+                case CommandWords.Run:
                     return RunCommand.Run(options);
                 case "list":
                     return ListCommand.Run(options);
@@ -68,18 +69,11 @@ internal static class Cli
                     throw new UnreachableException($"No command \"{command}\".");
             }
         }
-        catch (Exception e) when (e is not OutOfMemoryException && command is not (null or "run"))
+        catch (Exception e) when (e is not OutOfMemoryException && command is not (null or CommandWords.Run))
         {
             Console.Error.WriteLine(options.Verbose ? $"winshell {command}: {e}" : $"winshell {command}: {e.Message}");
             return 1;
         }
-    }
-
-    /// <summary><c>winshellw.exe</c> is the same program with no console. It still starts a shell when given no command.</summary>
-    private static bool IsWindowlessHost()
-    {
-        return string.Equals(Path.GetFileName(Environment.ProcessPath), "winshellw.exe",
-            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
