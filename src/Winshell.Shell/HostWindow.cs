@@ -36,7 +36,6 @@ internal sealed class HostWindow : IDisposable
         var (style, exStyle) = Styles(kind);
         _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage, Fail);
         Handle = _window.Handle;
-        // A window that could not be finished is destroyed here; its client never gets it to dispose.
         try
         {
             Placement.Scale = Win32.GetDpiForWindow(Handle) / 96.0;
@@ -87,7 +86,6 @@ internal sealed class HostWindow : IDisposable
 
     private nint? OnWindowMessage(WindowMessage message)
     {
-        // A window that threw handles nothing more; its client is making another.
         return _failed ? null : Messages.OnMessage(message);
     }
 

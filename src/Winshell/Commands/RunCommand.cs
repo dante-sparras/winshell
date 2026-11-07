@@ -17,10 +17,8 @@ internal static class RunCommand
             return 1;
         }
 
-        // With no configuration there is nothing to run, so nothing starts and nothing is said.
         if (project is null)
             return 0;
-        // Before the build: a duplicate exits quietly, so it must not wait on one or fail on a broken edit.
         if (options.NoDuplicate &&
             project.InstancesOf(ConfigurationBuild.Run,
                 ShellLocations.Current.Instances.List(false).Select(i => i.Info)).Any())
@@ -87,7 +85,6 @@ internal static class RunCommand
             }
             catch (AggregateException)
             {
-                // The wait below reports it.
             }
         }
 

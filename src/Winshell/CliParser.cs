@@ -14,7 +14,6 @@ internal static class CliParser
     {
         var line = new Line(args);
         line.Read();
-        // Help and the version win over the rest of validation. An unknown command is already refused.
         if (line.Help)
             return new CliOptions { Command = line.Command, ShowHelp = true };
         if (line.Command is not (null or "help") && line.Version)
@@ -500,7 +499,6 @@ internal static class CliParser
 
                 if (token == CommandWords.End)
                 {
-                    // For run, and when there is no command, the rest belongs to the configuration's program.
                     if (Command is null or CommandWords.Run)
                     {
                         Rest.AddRange(Args.Skip(i));

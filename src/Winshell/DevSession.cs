@@ -64,7 +64,6 @@ internal static class DevSession
         start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
         start.Environment["DOTNET_WATCH_SUPPRESS_EMOJIS"] = "1";
         start.Environment[Shell.DevProjectVariable] = project.Folder;
-        // Auto-reset, so a request wakes one wait once.
         using var buildRequest =
             new EventWaitHandle(false, EventResetMode.AutoReset, XamlReload.BuildRequest(project.Folder));
         using var process = Start(start);

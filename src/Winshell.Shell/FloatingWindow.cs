@@ -77,8 +77,6 @@ public sealed class FloatingWindow : ShellWindow
         {
             if (!Set(ref _maximized, value))
                 return;
-            // Fullscreen is borderless, so maximized is false while it is on. Setting it true leaves fullscreen, and
-            // only this says what comes next: leaving by Fullscreen = false goes back to what the window was.
             if (value && _fullscreen)
             {
                 _fullscreen = false;

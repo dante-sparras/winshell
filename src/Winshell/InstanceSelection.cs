@@ -53,14 +53,11 @@ internal static class InstanceSelection
     {
         var running = listed.Where(row => row.Alive).Select(row => row.Info).ToList();
         var choice = From(options, running, question.None);
-        // Several running instances is a choice the user still has to make. A stopped log must not stand in for it.
         if (!question.StoppedFallback || choice.Info is not null || choice.Code == 2)
             return choice;
 
         var asked = options.Pid is not null || options.Id is not null || options.Path is not null ||
                     options.Config is not null;
-        // A selector can name an instance that stopped, but never gets a different one instead. With no selector the
-        // newest instance left on disk is the log, running or not.
         var stopped = asked
             ? From(options, listed.Select(row => row.Info).ToList(), question.None).Info
             : listed.Count > 0
@@ -98,7 +95,6 @@ internal static class InstanceSelection
                 out var error);
             if (error is not null)
                 return Result.Miss(error);
-            // With -c or -p a project is always found, or the error above says why not.
             var match = project!.InstancesOf(ConfigurationBuild.Run, instances).FirstOrDefault();
             return match is null
                 ? Result.Miss($"No running instance of {project!.Program}.")

@@ -79,7 +79,6 @@ internal sealed class HostPlacement(HostWindow host, ShellPlatform platform)
         host.Presentation.FitIsland(width, height);
         host.Client.OnResized(width / Scale, height / Scale, Scale);
         host.Client.OnMoved();
-        // Last, since a window that follows its screen can place itself again.
         if (device != _screenId)
         {
             _screenId = device;

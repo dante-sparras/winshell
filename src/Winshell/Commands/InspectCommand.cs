@@ -4,7 +4,6 @@ internal static class InspectCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        // CliParser has checked that args is one of tree, screenshot, click and hover, with the words it needs.
         var args = options.Positional;
         if (InstanceCall.Select(options, InstanceSelection.Question.Running, out var code) is not { } info)
             return code;

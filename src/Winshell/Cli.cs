@@ -29,7 +29,6 @@ internal static class Cli
             return 0;
         }
 
-        // Commands report failures as exit 1. The shell reports its own crashes.
         try
         {
             switch (command)
@@ -65,7 +64,6 @@ internal static class Cli
                 case "dev":
                     return await DevCommand.RunAsync(options);
                 default:
-                    // The command table lists every case here, and refuses any other.
                     throw new UnreachableException($"No command \"{command}\".");
             }
         }
