@@ -22,29 +22,24 @@ internal sealed class HostPanelDesktop(HostWindow host, ShellPlatform platform) 
         return platform.FullscreenOn(screenId);
     }
 
-    public IDisposable Explorer()
-    {
-        return SystemTray.ExplorerFirst();
-    }
-
     public bool Register(uint callback)
     {
-        return AppBars.Register(host.Handle, callback);
+        return AppBarMessages.Register(host.Handle, callback);
     }
 
     public RECT Query(AppBarEdge edge, RECT proposed)
     {
-        return AppBars.Query(host.Handle, edge, proposed);
+        return AppBarMessages.Query(host.Handle, edge, proposed);
     }
 
     public RECT Reserve(AppBarEdge edge, RECT desired)
     {
-        return AppBars.Reserve(host.Handle, edge, desired);
+        return AppBarMessages.Reserve(host.Handle, edge, desired);
     }
 
     public void Remove()
     {
-        AppBars.Remove(host.Handle);
+        AppBarMessages.Remove(host.Handle);
     }
 
     public void Move(RECT rect, bool topmost, double scale)

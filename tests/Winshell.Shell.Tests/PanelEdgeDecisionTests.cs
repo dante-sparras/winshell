@@ -67,11 +67,6 @@ public class PanelEdgeDecisionTests
             return Fullscreen && screenId == PanelEdgeDecisionTests.Primary.Id;
         }
 
-        public IDisposable Explorer()
-        {
-            return new Noop();
-        }
-
         public bool Register(uint callback)
         {
             Registers++;
@@ -110,13 +105,6 @@ public class PanelEdgeDecisionTests
         public void Post(Action action)
         {
             Posted.Add(action);
-        }
-
-        private sealed class Noop : IDisposable
-        {
-            public void Dispose()
-            {
-            }
         }
     }
 

@@ -45,7 +45,6 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
     {
         _active = true;
         _saved.RemoveAll(s => !IsExplorerTaskbar(s.Hwnd));
-        using var explorerFirst = SystemTray.ExplorerFirst();
         var (windows, autohide) = Find();
         foreach (var (hwnd, primary) in windows)
             if (_saved.All(s => s.Hwnd != hwnd))
@@ -56,11 +55,8 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
     {
         if (!_active)
             return;
-        using (SystemTray.ExplorerFirst())
-        {
-            for (var i = _saved.Count - 1; i >= 0; i--)
-                PutBack(_saved[i]);
-        }
+        for (var i = _saved.Count - 1; i >= 0; i--)
+            PutBack(_saved[i]);
 
         _saved.Clear();
         _active = false;
@@ -81,7 +77,7 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
     {
         var windows = Windows(TaskbarWindows.PrimaryClass).Select(hwnd => (Hwnd: hwnd, Primary: true))
             .Concat(Windows(TaskbarWindows.SecondaryClass).Select(hwnd => (Hwnd: hwnd, Primary: false))).ToList();
-        return (windows, windows.Count > 0 && AppBars.Autohide(windows[0].Hwnd));
+        return (windows, windows.Count > 0 && AppBarMessages.Autohide(windows[0].Hwnd));
     }
 
     /// <summary>Shows a window again and, when its app bar was removed, registers it and reserves its edge.</summary>
@@ -93,11 +89,11 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
             Win32.ShowWindow(saved.Hwnd, (int)SHOW_WINDOW_CMD.SW_SHOWNA);
         if (!saved.Removed)
             return;
-        if (!AppBars.Register(saved.Hwnd, Callback()))
+        if (!AppBarMessages.Register(saved.Hwnd, Callback()))
             return;
         // Reserve the free part of the saved edge. The edge is named again: the query is its own call.
-        var offered = AppBars.Query(saved.Hwnd, saved.Edge, saved.Rect);
-        AppBars.Reserve(saved.Hwnd, saved.Edge, offered);
+        var offered = AppBarMessages.Query(saved.Hwnd, saved.Edge, saved.Rect);
+        AppBarMessages.Reserve(saved.Hwnd, saved.Edge, offered);
     }
 
     private void Take(nint hwnd, bool primary, bool autohide)
@@ -107,7 +103,7 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
         var saved = Saved.Of(hwnd, primary, autohide, Win32.IsWindowVisible(hwnd));
         _saved.Add(saved);
         if (saved.Reserves)
-            saved.Removed = AppBars.Remove(hwnd);
+            saved.Removed = AppBarMessages.Remove(hwnd);
         Win32.ShowWindow(hwnd, (int)SHOW_WINDOW_CMD.SW_HIDE);
     }
 
@@ -120,7 +116,7 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
 
     private static bool TryPosition(nint hwnd, bool primary, out AppBarEdge edge, out RECT rect)
     {
-        if (primary && AppBars.TryPosition(hwnd, out edge, out rect))
+        if (primary && AppBarMessages.TryPosition(hwnd, out edge, out rect))
             return true;
 
         if (Win32.GetWindowRect(hwnd, out rect) && rect.Width > 0 && rect.Height > 0)

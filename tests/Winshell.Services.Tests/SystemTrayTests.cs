@@ -4,8 +4,8 @@ using Winshell.Tray;
 namespace Winshell.Services.Tests;
 
 /// <summary>
-/// The tray's policy over a fake backend, on a real event queue with a fake clock. Nothing here touches the real
-/// notification area.
+/// The tray's policy over a fake backend, on a real event queue with a fake clock. Nothing here changes the real
+/// notification area; one test asks Explorer's taskbar whether it auto-hides.
 /// </summary>
 public sealed class SystemTrayTests
 {
@@ -300,17 +300,20 @@ public sealed class SystemTrayTests
     }
 
     [Fact]
-    public void App_bar_requests_of_this_process_find_Explorers_taskbar_first_and_the_tray_then_returns_to_the_front()
+    public void An_app_bar_message_finds_Explorers_taskbar_first_and_an_open_tray_then_returns_to_the_front()
     {
         using var tray = Tray();
         _backend.Calls.Clear();
 
-        using (SystemTray.ExplorerFirst())
-        {
-            Assert.Equal(["lower"], _backend.Calls);
-        }
+        AppBarMessages.Autohide(0);
 
         Assert.Equal(["lower", "raise"], _backend.Calls);
+
+        tray.Dispose();
+        _backend.Calls.Clear();
+        AppBarMessages.Autohide(0);
+
+        Assert.Empty(_backend.Calls);
     }
 
     [Fact]
