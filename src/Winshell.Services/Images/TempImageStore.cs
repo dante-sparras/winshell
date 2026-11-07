@@ -117,7 +117,7 @@ internal sealed class TempImageStore
     /// Runs <see cref="CleanOld"/> on the thread pool the first time it is called, for what earlier runs left behind.
     /// Old pictures are older than a day, so this does not have to finish before the first one is shown.
     /// </summary>
-    /// <param name="failed">Gets why the cleanup did not finish.</param>
+    /// <param name="failed">Gets why some old pictures were not deleted.</param>
     public void CleanOldOnce(Action<string> failed)
     {
         if (Interlocked.Exchange(ref _cleaning, 1) == 0)
