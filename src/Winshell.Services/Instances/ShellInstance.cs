@@ -112,7 +112,7 @@ internal sealed class ShellInstance
     /// <summary>Starts serving the pipe <see cref="OpenPipe"/> opened, on <paramref name="loop"/>.</summary>
     public void Listen(IEventLoop loop, IInstanceControl control)
     {
-        _server = new IpcServer(_listening!, Pipe, loop, control);
+        _server = new IpcServer(_listening!, Pipe, loop, Log, control);
         _listening = null;
     }
 

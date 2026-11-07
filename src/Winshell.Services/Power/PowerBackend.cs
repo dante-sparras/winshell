@@ -51,7 +51,8 @@ internal interface IPowerBackend : IDisposable
 /// battery Windows enumerates. Windows tells about changes through the batteries' ReportUpdated and the
 /// PowerManager events.
 /// </summary>
-internal sealed class PowerBackend : IPowerBackend
+/// <param name="log">Where a battery Windows cannot open is reported.</param>
+internal sealed class PowerBackend(Log log) : IPowerBackend
 {
     private readonly object _batteriesLock = new();
 
@@ -160,7 +161,7 @@ internal sealed class PowerBackend : IPowerBackend
         catch (Exception e)
 #pragma warning restore CA1031
         {
-            Log.Default.Warn("power", e.Message);
+            log.Warn("power", e.Message);
         }
     }
 

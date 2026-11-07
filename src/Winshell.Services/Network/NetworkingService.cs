@@ -20,15 +20,16 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private string _radioError = "";
     private bool _disposed;
 
-    internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioAccess? radioAccess = null)
+    internal NetworkingService(IEventLoop loop, Log log, INetworkBackend? backend = null,
+        IRadioAccess? radioAccess = null)
     {
         _loop = loop;
-        _backend = backend ?? new NetworkBackend();
+        _backend = backend ?? new NetworkBackend(log);
         _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
         _access = new DeviceAction(loop.Post);
         _wifiSwitch = new DeviceAction(loop.Post);
         _reader = new StateReader<NetworkSnapshot>(_backend.ReadAsync, Apply, loop,
-            new MonitorWarning(() => Log.Default, "network"));
+            new MonitorWarning(() => log, "network"));
         _backend.Changed += _reader.Request;
         _reader.Request();
     }

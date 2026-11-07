@@ -12,12 +12,8 @@ public sealed class KeepAwake : ObservableObject, IDisposable
     private PowerRequest? _request;
 
     /// <summary>Creates a keep-awake that is off until <see cref="Enabled"/> is set.</summary>
-    public KeepAwake()
-        : this(Log.Default)
-    {
-    }
-
-    internal KeepAwake(Log log)
+    /// <param name="log">Where a power request Windows refuses is reported: the shell's log.</param>
+    public KeepAwake(Log log)
     {
         _log = log;
     }

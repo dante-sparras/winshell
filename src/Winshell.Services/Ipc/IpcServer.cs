@@ -12,6 +12,7 @@ internal sealed class IpcServer : IDisposable
 {
     private readonly string _pipe;
     private readonly IEventLoop _loop;
+    private readonly Log _log;
     private readonly IInstanceControl _control;
     private readonly Func<SafePipeHandle, string?> _refusal;
     private readonly CancellationTokenSource _cancel = new();
@@ -44,17 +45,19 @@ internal sealed class IpcServer : IDisposable
     /// </param>
     /// <param name="pipe">The pipe's name, for the instances opened after the first.</param>
     /// <param name="loop">The UI thread's loop, which requests run on, and whose clock times <see cref="RequestTimeout"/>.</param>
+    /// <param name="log">Where a pipe instance that cannot open and a refused client are reported.</param>
     /// <param name="control">What requests do to the shell.</param>
     /// <param name="refusal">
     /// Why a connected client is refused, or null. Tests replace the integrity check: a client below the shell's
     /// integrity is a process a test can't start.
     /// </param>
-    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, IInstanceControl control,
+    public IpcServer(NamedPipeServerStream first, string pipe, IEventLoop loop, Log log, IInstanceControl control,
         Func<SafePipeHandle, string?>? refusal = null)
     {
         _pipe = pipe;
         _first = first;
         _loop = loop;
+        _log = log;
         _control = control;
         _refusal = refusal ?? PipeTrust.ClientRefusal;
         _ = Task.Run(AcceptLoop);
@@ -176,7 +179,7 @@ internal sealed class IpcServer : IDisposable
                 }
             }
 
-            Log.Default.Error("ipc", "The control pipe has no instance left, so commands can't reach this shell.");
+            _log.Error("ipc", "The control pipe has no instance left, so commands can't reach this shell.");
         }
         finally
         {
@@ -198,7 +201,7 @@ internal sealed class IpcServer : IDisposable
             catch (IOException e)
             {
                 failures++;
-                Log.Default.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
+                _log.Warn("ipc", $"Could not open the next control pipe instance: {e.Message}");
             }
     }
 
@@ -211,7 +214,7 @@ internal sealed class IpcServer : IDisposable
         }
         catch (IOException e)
         {
-            Log.Default.Warn("ipc", $"Could not wait on a control pipe instance: {e.Message}");
+            _log.Warn("ipc", $"Could not wait on a control pipe instance: {e.Message}");
             stream.Dispose();
             return false;
         }
@@ -224,7 +227,7 @@ internal sealed class IpcServer : IDisposable
             await using var _ = stream;
             var refusal = _refusal(stream.SafePipeHandle);
             if (refusal is not null)
-                Log.Default.Warn("ipc", $"Refused a control pipe client: {refusal}");
+                _log.Warn("ipc", $"Refused a control pipe client: {refusal}");
             // Only the request line is timed: a listener holds its client for as long as it runs.
             string? line;
             bool tooLong;

@@ -59,13 +59,13 @@ public sealed partial class Shell
     public MediaService Media => _media ??= new MediaService(Loop, Log);
 
     /// <summary>The network adapters, connection profiles, radios and connectivity.</summary>
-    public NetworkingService Networking => _networking ??= new NetworkingService(Loop);
+    public NetworkingService Networking => _networking ??= new NetworkingService(Loop, Log);
 
     /// <summary>Windows Notification Center. Reading this never prompts for access.</summary>
     public NotificationListener Notifications => _notifications ??= new NotificationListener(Loop, Log);
 
     /// <summary>The batteries of this PC.</summary>
-    public PowerService Power => _power ??= new PowerService(Loop);
+    public PowerService Power => _power ??= new PowerService(Loop, Log);
 
     /// <summary>The Windows power mode: best power efficiency, balanced, or best performance.</summary>
     public PowerModeService PowerMode => _powerMode ??= new PowerModeService(Loop, Log);

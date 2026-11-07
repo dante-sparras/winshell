@@ -23,24 +23,22 @@ internal sealed class TempImageStore
     private readonly string _root;
     private readonly string _folder;
     private readonly TimeProvider _time;
-    private readonly Log _log;
     private readonly Dictionary<string, Use> _uses = [];
     private readonly Lock _gate = new();
+    private int _cleaning;
 
     /// <summary>Pictures kept under <paramref name="root"/>. The directory is created when the first picture is written.</summary>
-    public TempImageStore(string root, TimeProvider time, Log log)
+    public TempImageStore(string root, TimeProvider time)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = root;
         _folder = Path.Combine(root, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
         _time = time;
-        _log = log;
     }
 
-    /// <summary>The store this process shows pictures from. What earlier runs left behind is cleaned in the background.</summary>
+    /// <summary>The store this process shows pictures from.</summary>
     public static TempImageStore Shared { get; } =
-        CleanedInBackground(new TempImageStore(Path.Combine(Path.GetTempPath(), "winshell", "images"),
-            TimeProvider.System, Log.Default));
+        new(Path.Combine(Path.GetTempPath(), "winshell", "images"), TimeProvider.System);
 
     /// <summary>
     /// Reads a picture and claims its file. Returns the file's url, or "" when the stream is empty. Returns null
@@ -115,15 +113,33 @@ internal sealed class TempImageStore
             _ = Task.Run(() => Release(url));
     }
 
-    /// <summary>Deletes pictures older than a day, and empty folders other than this process's. A root that is a link is left alone.</summary>
-    internal void CleanOld()
+    /// <summary>
+    /// Runs <see cref="CleanOld"/> on the thread pool the first time it is called, for what earlier runs left behind.
+    /// Old pictures are older than a day, so this does not have to finish before the first one is shown.
+    /// </summary>
+    /// <param name="failed">Gets why some old pictures were not deleted.</param>
+    public void CleanOldOnce(Action<string> failed)
     {
-        // One file another process holds must not keep the rest: each entry is tried, and the first failure is logged.
+        if (Interlocked.Exchange(ref _cleaning, 1) == 0)
+            _ = Task.Run(() =>
+            {
+                if (CleanOld() is { } failure)
+                    failed(failure);
+            });
+    }
+
+    /// <summary>
+    /// Deletes pictures older than a day, and empty folders other than this process's. A root that is a link is left
+    /// alone. Returns why some were not deleted, or null.
+    /// </summary>
+    internal string? CleanOld()
+    {
+        // One file another process holds must not keep the rest: each entry is tried, and the first failure is kept.
         string? failure = null;
         try
         {
             if (!Directory.Exists(_root) || (File.GetAttributes(_root) & FileAttributes.ReparsePoint) != 0)
-                return;
+                return null;
             var cutoff = _time.GetUtcNow().UtcDateTime.AddDays(-1);
             var options = new EnumerationOptions
                 { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
@@ -147,8 +163,7 @@ internal sealed class TempImageStore
             failure ??= e.Message;
         }
 
-        if (failure is not null)
-            _log.Warn("images", $"Cannot clean old pictures from {_root}: {failure}");
+        return failure is null ? null : $"Cannot clean old pictures from {_root}: {failure}";
 
         void Try(Action delete)
         {
@@ -161,13 +176,6 @@ internal sealed class TempImageStore
                 failure ??= e.Message;
             }
         }
-    }
-
-    /// <summary>Old pictures are older than a day, so this does not have to finish before the first one is shown.</summary>
-    private static TempImageStore CleanedInBackground(TempImageStore store)
-    {
-        _ = Task.Run(store.CleanOld);
-        return store;
     }
 
     /// <summary>At most <see cref="MaxBytes"/>. Null when the stream is longer.</summary>

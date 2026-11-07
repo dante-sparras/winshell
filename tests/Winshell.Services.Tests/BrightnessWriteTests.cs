@@ -24,7 +24,7 @@ public class BrightnessWriteTests
             started.Release();
             release.Wait(TestContext.Current.CancellationToken);
             return null;
-        });
+        }, Log.Default);
         var monitor = new BrightnessMonitor(writer, Log.Default);
         monitor.Update(new BrightnessInfo("DISPLAY1", "Panel", BrightnessConnection.Internal, 0, 100, 40));
 

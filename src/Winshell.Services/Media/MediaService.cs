@@ -9,11 +9,17 @@ public sealed class MediaService : ObservableObject, IDisposable
     private readonly IEventLoop _loop;
     private readonly Log _log;
 
-    internal MediaService(IEventLoop loop, Log log, IMediaSessions? sessions = null)
+    internal MediaService(IEventLoop loop, Log log)
+        : this(loop, log, SmtcSessions.Get(loop, log))
+    {
+        TempImageStore.Shared.CleanOldOnce(failure => log.Warn("images", failure));
+    }
+
+    internal MediaService(IEventLoop loop, Log log, IMediaSessions sessions)
     {
         _loop = loop;
         _log = log;
-        _sessions = sessions ?? SmtcSessions.Get(loop, log);
+        _sessions = sessions;
         Refresh(null);
         _sessions.SessionAdded += Refresh;
         _sessions.SessionRemoved += Refresh;

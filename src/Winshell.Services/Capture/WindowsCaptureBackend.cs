@@ -17,7 +17,8 @@ namespace Winshell.Capture;
 /// A two-buffer WGC pool on a private D3D device. The session samples the latest frame, so slow consumers never
 /// queue frames or UI callbacks. Only a consumed frame leaves the GPU.
 /// </summary>
-internal sealed class WindowsCaptureBackend : ICaptureBackend
+/// <param name="log">Where a teardown that fails is reported.</param>
+internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
 {
     private ID3D11Device? _device;
     private ID3D11DeviceContext? _context;
@@ -174,7 +175,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         _session = null;
         _pool = null;
         Interlocked.Increment(ref _poolGeneration);
-        ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
+        ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame(), log);
         _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(_winrtDevice!, DirectXPixelFormat.B8G8R8A8UIntNormalized,
             2, size);
         _session = _pool.CreateCaptureSession(_item!);
@@ -186,7 +187,8 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
     /// Stops capture, releases frames the pool still holds, then disposes the pool.
     /// A free-threaded pool can still be producing a buffer after the UI thread decides to drop it.
     /// </summary>
-    internal static void ReleaseSessionAndPool(IDisposable? session, IDisposable? pool, Func<IDisposable?>? nextFrame)
+    internal static void ReleaseSessionAndPool(IDisposable? session, IDisposable? pool, Func<IDisposable?>? nextFrame,
+        Log log)
     {
         try
         {
@@ -196,7 +198,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             }
             catch (Exception e) when (IsTeardown(e))
             {
-                Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
+                log.Warn("capture", $"Capture teardown: {e.Message}");
             }
 
             if (nextFrame is not null)
@@ -216,7 +218,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
             }
             catch (Exception e) when (IsTeardown(e))
             {
-                Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
+                log.Warn("capture", $"Capture teardown: {e.Message}");
             }
         }
     }
@@ -250,7 +252,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
         finally
         {
             // A lost device must not prevent the rest of the session's resources from being released.
-            ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame());
+            ReleaseSessionAndPool(session, pool, () => pool?.TryGetNextFrame(), log);
             foreach (var resource in resources)
                 try
                 {
@@ -258,7 +260,7 @@ internal sealed class WindowsCaptureBackend : ICaptureBackend
                 }
                 catch (Exception e) when (IsTeardown(e))
                 {
-                    Log.Default.Warn("capture", $"Capture teardown: {e.Message}");
+                    log.Warn("capture", $"Capture teardown: {e.Message}");
                 }
         }
     }

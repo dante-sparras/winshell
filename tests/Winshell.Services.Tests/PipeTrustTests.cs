@@ -94,7 +94,8 @@ public class PipeTrustTests
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
         var loop = new EventQueue();
         var control = new FakeInstanceControl();
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, control, _ => "refused for the test");
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, Log.Default, control,
+            _ => "refused for the test");
 
         var line = await Ask(name, """{"op":"kill"}""");
 
@@ -109,7 +110,8 @@ public class PipeTrustTests
     public async Task The_name_keeps_an_instance_after_clients_come_and_go()
     {
         var name = "winshell-test-" + Guid.NewGuid().ToString("N");
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), new FakeInstanceControl(),
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, new EventQueue(), Log.Default,
+            new FakeInstanceControl(),
             _ => "refused for the test");
         for (var i = 0; i < 20; i++)
         {

@@ -14,7 +14,8 @@ public class CapturePoolReleaseTests
         WindowsCaptureBackend.ReleaseSessionAndPool(
             new RecordingDisposable("session", order),
             new RecordingDisposable("pool", order),
-            () => frames.Count == 0 ? null : frames.Dequeue());
+            () => frames.Count == 0 ? null : frames.Dequeue(),
+            Log.Default);
 
         Assert.Equal(["session", "frame", "pool"], order);
     }
@@ -26,7 +27,8 @@ public class CapturePoolReleaseTests
         WindowsCaptureBackend.ReleaseSessionAndPool(
             new ThrowingDisposable(),
             new RecordingDisposable("pool", order),
-            () => null);
+            () => null,
+            Log.Default);
 
         Assert.Equal(["pool"], order);
     }

@@ -80,7 +80,8 @@ internal sealed record NetworkSnapshot(
 /// networks from WinRT's WiFiAdapter, which needs the location permission for desktop apps; saved
 /// networks and connection states from wlanapi; connectivity from WinRT's NetworkInformation.
 /// </summary>
-internal sealed class NetworkBackend : INetworkBackend
+/// <param name="log">Where a failed Wi-Fi callback and radios Windows will not list are reported.</param>
+internal sealed class NetworkBackend(Log log) : INetworkBackend
 {
     private readonly object _lock = new();
     private readonly Dictionary<Guid, WiFiAdapter> _wifiAdapters = [];
@@ -100,7 +101,7 @@ internal sealed class NetworkBackend : INetworkBackend
         WinNetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
         NetworkChange.NetworkAddressChanged += OnNetworkChanged;
         NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
-        Wlan.Listen(Refresh, e => Log.Default.Warn("network", e.Message));
+        Wlan.Listen(Refresh, e => log.Warn("network", e.Message));
     }
 
     /// <summary>Stops watching Windows and lets go of the radios.</summary>
@@ -158,7 +159,7 @@ internal sealed class NetworkBackend : INetworkBackend
         }
         catch (UnauthorizedAccessException e)
         {
-            Log.Default.Warn("network",
+            log.Warn("network",
                 "Windows would not list the radios, so the Wi-Fi state is unknown: " + e.Message);
         }
 

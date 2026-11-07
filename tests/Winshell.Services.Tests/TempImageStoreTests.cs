@@ -59,7 +59,7 @@ public sealed class TempImageStoreTests
     }
 
     [Fact]
-    public void A_file_cleanup_cannot_delete_is_logged_once_and_the_rest_are_still_deleted()
+    public void A_file_cleanup_cannot_delete_is_reported_and_the_rest_are_still_deleted()
     {
         using var directory = new TempFolder();
         var processFolder = Path.Combine(directory.Path, "1234");
@@ -72,17 +72,14 @@ public sealed class TempImageStoreTests
             File.SetLastWriteTimeUtc(file, Now.UtcDateTime.AddDays(-3));
         }
 
-        var messages = new List<string>();
-        var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
-
+        string? failure;
         using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            new TempImageStore(directory.Path, new FakeTimeProvider(Now), log).CleanOld();
+            failure = Store(directory.Path).CleanOld();
         }
 
         Assert.False(File.Exists(free));
-        var message = Assert.Single(messages);
-        Assert.StartsWith("images: Cannot clean old pictures", message, StringComparison.Ordinal);
+        Assert.StartsWith("Cannot clean old pictures", failure, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -180,7 +177,7 @@ public sealed class TempImageStoreTests
 
     private static TempImageStore Store(string root)
     {
-        return new TempImageStore(root, new FakeTimeProvider(Now), Log.Default);
+        return new TempImageStore(root, new FakeTimeProvider(Now));
     }
 
     private static string? Claim(TempImageStore store, byte[] data)

@@ -50,7 +50,8 @@ internal interface IBrightnessBackend : IDisposable
 /// after a burst of writes ends, so external monitors are not polled. A monitor whose read fails stays at its
 /// last reading while it is connected.
 /// </summary>
-internal sealed class BrightnessBackend : IBrightnessBackend
+/// <param name="log">Where a WMI failure is reported.</param>
+internal sealed class BrightnessBackend(Log log) : IBrightnessBackend
 {
     private volatile IReadOnlyList<BrightnessInfo> _monitors = [];
     private bool _watching;
@@ -200,7 +201,7 @@ internal sealed class BrightnessBackend : IBrightnessBackend
 
     internal sealed record WmiPanel(string Instance, int Minimum, int Maximum, int Current);
 
-    private static List<WmiPanel> ReadWmi()
+    private List<WmiPanel> ReadWmi()
     {
         var panels = new List<WmiPanel>();
         try
@@ -230,11 +231,11 @@ internal sealed class BrightnessBackend : IBrightnessBackend
     /// Logs a WMI failure, except the "not supported" Windows answers when no monitor takes brightness through WMI, as
     /// on most desktops.
     /// </summary>
-    private static void WmiFailed(string doing, Exception ex)
+    private void WmiFailed(string doing, Exception ex)
     {
         if (ex is ManagementException { ErrorCode: ManagementStatus.NotSupported })
             return;
-        Log.Default.Warn("power", $"Could not {doing}: {ex.Message}");
+        log.Warn("power", $"Could not {doing}: {ex.Message}");
     }
 
     private static string? SetWmi(string instance, int brightness)
@@ -277,9 +278,10 @@ internal sealed class BrightnessBackend : IBrightnessBackend
 /// <summary>
 /// Writes each monitor's brightness on a background thread, one write at a time. A value asked for while a
 /// write runs replaces the one waiting, so a slider drag writes the newest value and drops the steps between.
-/// <paramref name="drained"/> runs each time a monitor's writes end.
+/// <paramref name="drained"/> runs each time a monitor's writes end. A write that throws is reported to
+/// <paramref name="log"/>.
 /// </summary>
-internal sealed class BrightnessWriter(Func<string, int, string?> write, Action? drained = null)
+internal sealed class BrightnessWriter(Func<string, int, string?> write, Log log, Action? drained = null)
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, (int Brightness, Action<string> Failed)> _pending = [];
@@ -343,7 +345,7 @@ internal sealed class BrightnessWriter(Func<string, int, string?> write, Action?
                 _running.Remove(deviceName);
             }
 
-            Log.Default.Warn("power", e.Message);
+            log.Warn("power", e.Message);
         }
     }
 }

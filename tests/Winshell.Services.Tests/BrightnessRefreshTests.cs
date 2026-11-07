@@ -44,6 +44,7 @@ public class BrightnessRefreshTests
                 release.Wait(TimeSpan.FromSeconds(10));
                 return null;
             },
+            Log.Default,
             () => Interlocked.Increment(ref drained));
 
         writer.Request("DISPLAY1", 10, _ => { });

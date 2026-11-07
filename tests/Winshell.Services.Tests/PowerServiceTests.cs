@@ -34,7 +34,7 @@ public sealed class PowerServiceTests
     {
         var loop = new ManualEventLoop();
         var source = new FakePowerBackend(Snapshot(Battery("a", 0.5)));
-        using var power = new PowerService(loop, source);
+        using var power = new PowerService(loop, Log.Default, source);
         loop.Process();
         var changes = Watch(power.DisplayDevice);
 
@@ -51,7 +51,7 @@ public sealed class PowerServiceTests
     {
         var loop = new ManualEventLoop();
         var source = new FakePowerBackend(Snapshot(Battery("a"), Battery("b")));
-        using var power = new PowerService(loop, source);
+        using var power = new PowerService(loop, Log.Default, source);
         loop.Process();
         var kept = power.Devices[1];
 
@@ -68,7 +68,7 @@ public sealed class PowerServiceTests
     {
         var loop = new ManualEventLoop();
         var source = new FakePowerBackend(Snapshot());
-        var power = new PowerService(loop, source);
+        var power = new PowerService(loop, Log.Default, source);
 
         source.Push(Snapshot(Battery("a")));
         power.Dispose();

@@ -15,7 +15,7 @@ public class IpcBoundsTests
         var name = PipeName();
         var loop = new EventQueue();
         var control = new FakeInstanceControl();
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, control);
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, Log.Default, control);
         await using var client = await Connect(name);
 
         var payload = new byte[IpcServer.MaxRequestBytes + 1];
@@ -128,7 +128,7 @@ public class IpcBoundsTests
     {
         var name = PipeName();
         var loop = new ManualEventLoop();
-        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, new FakeInstanceControl());
+        using var server = new IpcServer(IpcServer.OpenFirst(name), name, loop, Log.Default, new FakeInstanceControl());
         var idle = new List<NamedPipeClientStream>();
         try
         {
@@ -345,7 +345,7 @@ public class IpcBoundsTests
             Ping = control.Ipc.Signal("probe", "ping");
             Loop = new ManualEventLoop();
             Pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
-            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, control);
+            Server = new IpcServer(IpcServer.OpenFirst(Pipe), Pipe, Loop, Log.Default, control);
         }
 
         public ManualEventLoop Loop { get; }
