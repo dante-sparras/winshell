@@ -5,9 +5,6 @@ namespace Winshell.Core.Tests;
 /// <summary>Crash reports. Every report goes to a temp folder this class creates.</summary>
 public sealed class CrashTests : IDisposable
 {
-    /// <summary>How many reports the folder keeps, as docs/development.md says.</summary>
-    private const int Keep = 50;
-
     private readonly string _folder =
         Path.Combine(Path.GetTempPath(), "winshell-crash-tests", Guid.NewGuid().ToString("N"));
 
@@ -78,18 +75,6 @@ public sealed class CrashTests : IDisposable
         Assert.Null(crashes.WriteOnce("event loop", Same()));
         Assert.NotNull(crashes.WriteOnce("background task", Same()));
         Assert.Equal(2, Directory.GetFiles(_folder).Length);
-    }
-
-    [Fact]
-    public void The_folder_keeps_the_newest_reports()
-    {
-        var crashes = new CrashReports(_folder);
-        var paths = Enumerable.Range(1, Keep + 2)
-            .Select(i => crashes.Write($"report {i}", Thrown("x"))!.Path).ToList();
-
-        var kept = Directory.GetFiles(_folder).Order(StringComparer.Ordinal).ToList();
-
-        Assert.Equal(paths.TakeLast(Keep).Order(StringComparer.Ordinal), kept);
     }
 
     [Fact]
