@@ -64,6 +64,9 @@ internal static class DevSession
         start.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en";
         start.Environment["DOTNET_WATCH_SUPPRESS_EMOJIS"] = "1";
         start.Environment[Shell.DevProjectVariable] = project.Folder;
+        // Auto-reset, so a request wakes one wait once.
+        using var buildRequest =
+            new EventWaitHandle(false, EventResetMode.AutoReset, XamlReload.BuildRequest(project.Folder));
         using var process = Start(start);
         if (process is null)
         {
@@ -81,23 +84,37 @@ internal static class DevSession
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Stop);
         using var breaks = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, Stop);
         using var close = PosixSignalRegistration.Create(PosixSignal.SIGHUP, Stop);
-        var lines = Channel.CreateUnbounded<string>();
+        // A null line is the shell's build request.
+        var lines = Channel.CreateUnbounded<string?>();
         var pumps = Task.WhenAll(Pump(process.StandardOutput, lines.Writer), Pump(process.StandardError, lines.Writer));
         _ = pumps.ContinueWith(_ => lines.Writer.Complete(), TaskScheduler.Default);
-        var output = new DevOutput(project.Folder);
-        await foreach (var line in lines.Reader.ReadAllAsync())
+        var asked = ThreadPool.RegisterWaitForSingleObject(buildRequest, (_, _) => lines.Writer.TryWrite(null), null,
+            Timeout.Infinite, true);
+        try
         {
-            // No key reaches dotnet watch, so its Ctrl+R hint would point at a key that does nothing.
-            if (line != "dotnet watch : Press Ctrl+R to restart.")
-                Console.WriteLine(line);
-            if (output.Read(line) is { } notice)
-                await Show(project, notice);
-            if (line.Contains(XamlReload.NeedsBuild, StringComparison.Ordinal))
+            var output = new DevOutput(project.Folder);
+            await foreach (var line in lines.Reader.ReadAllAsync())
             {
-                StopShellAndWatch(project, process, false);
-                await process.WaitForExitAsync();
-                return null;
+                if (line is null)
+                {
+                    // What the shell printed before it asked, such as why, may still be on its way.
+                    while (lines.Reader.TryRead(out var waiting) && waiting is not null)
+                        Console.WriteLine(waiting);
+                    StopShellAndWatch(project, process, false);
+                    await process.WaitForExitAsync();
+                    return null;
+                }
+
+                // No key reaches dotnet watch, so its Ctrl+R hint would point at a key that does nothing.
+                if (line != "dotnet watch : Press Ctrl+R to restart.")
+                    Console.WriteLine(line);
+                if (output.Read(line) is { } notice)
+                    await Show(project, notice);
             }
+        }
+        finally
+        {
+            asked.Unregister(null);
         }
 
         await process.WaitForExitAsync();
@@ -116,7 +133,7 @@ internal static class DevSession
         }
     }
 
-    private static async Task Pump(StreamReader stream, ChannelWriter<string> lines)
+    private static async Task Pump(StreamReader stream, ChannelWriter<string?> lines)
     {
         while (await stream.ReadLineAsync() is { } line)
             await lines.WriteAsync(line);

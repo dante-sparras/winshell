@@ -68,7 +68,7 @@ public sealed class XamlReloadTests : IDisposable
             var live = new LivePanel { Remembered = 7, Content = new TextBlock { Text = "old" } };
             using var panel = Panel(live);
 
-            var problem = XamlReload.Apply(shell, file);
+            var problem = XamlReload.Apply(shell, _dir, file);
 
             return (ReferenceEquals(panel.Content, live), problem, (live.Content as TextBlock)?.Text, live.Remembered,
                 live.Label?.Text);
@@ -90,7 +90,7 @@ public sealed class XamlReloadTests : IDisposable
         {
             var live = new LivePanel();
             using var panel = Panel(live);
-            XamlReload.Apply(shell, file);
+            XamlReload.Apply(shell, _dir, file);
             var button = (Button)live.Content;
             await ShellFixture.LaidOut(button);
 
@@ -120,7 +120,7 @@ public sealed class XamlReloadTests : IDisposable
             var live = new LivePanel();
             using var panel = Panel(live);
 
-            XamlReload.Apply(shell, file);
+            XamlReload.Apply(shell, _dir, file);
 
             return (live.Width, live.Opacity, live.Resources["Word"] as string, (live.Content as TextBlock)?.Text);
         });
@@ -140,7 +140,7 @@ public sealed class XamlReloadTests : IDisposable
             var live = new LivePanel { Content = content };
             using var panel = Panel(live);
 
-            var problem = XamlReload.Apply(shell, unclosed);
+            var problem = XamlReload.Apply(shell, _dir, unclosed);
 
             return (problem, ReferenceEquals(live.Content, content));
         });
@@ -159,7 +159,7 @@ public sealed class XamlReloadTests : IDisposable
             var live = new LivePanel { Content = content };
             using var panel = Panel(live);
 
-            return (XamlReload.Apply(shell, unknown), ReferenceEquals(live.Content, content));
+            return (XamlReload.Apply(shell, _dir, unknown), ReferenceEquals(live.Content, content));
         });
 
         Assert.False(string.IsNullOrEmpty(problem));
@@ -172,29 +172,19 @@ public sealed class XamlReloadTests : IDisposable
     public async Task Markup_only_the_compiler_can_read_asks_for_a_build_and_changes_nothing(string body)
     {
         var file = Saved(Open + ">" + body + "</UserControl>");
+        using var request = new EventWaitHandle(false, EventResetMode.ManualReset, XamlReload.BuildRequest(_dir));
 
-        var shown = await ShellFixture.On(shell =>
+        var unchanged = await ShellFixture.On(shell =>
         {
             var content = new TextBlock { Text = "old" };
             var live = new LivePanel { Content = content };
             using var panel = Panel(live);
-            var said = new List<string>();
-            var was = shell.Log.Sink;
-            shell.Log.Sink = (_, _, message) => said.Add(message);
-            try
-            {
-                XamlReload.Apply(shell, file);
-            }
-            finally
-            {
-                shell.Log.Sink = was;
-            }
-
-            return (ReferenceEquals(live.Content, content), said.Single());
+            XamlReload.Apply(shell, _dir, file);
+            return ReferenceEquals(live.Content, content);
         });
 
-        Assert.True(shown.Item1);
-        Assert.Contains(XamlReload.NeedsBuild, shown.Item2, StringComparison.Ordinal);
+        Assert.True(unchanged);
+        Assert.True(request.WaitOne(0));
     }
 
     [Fact]
@@ -204,7 +194,7 @@ public sealed class XamlReloadTests : IDisposable
 
         var text = await ShellFixture.On(shell =>
         {
-            XamlReload.Apply(shell, file);
+            XamlReload.Apply(shell, _dir, file);
             var made = new LivePanel { Content = new TextBlock { Text = "compiled" } };
 
             XamlReload.Refresh(made);
