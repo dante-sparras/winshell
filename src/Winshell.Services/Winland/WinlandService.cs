@@ -456,7 +456,8 @@ public sealed class WinlandService : ObservableObject, IDisposable
 
     // Queries. With canCreate the reply is Winland's whole state, as on connecting: Monitors and Workspaces it lists
     // are added and Workspaces it leaves out are removed. Without it, as when an event asks, the reply only updates
-    // what events have announced, so a reply sent before an event cannot bring back what the event removed.
+    // what events have announced, so a reply sent before an event cannot bring back what the event removed. Monitors
+    // a reply leaves out are removed either way.
 
     private void RefreshMonitors(bool canCreate)
     {
