@@ -15,14 +15,12 @@ internal static class DoctorSignIn
     /// <param name="command">The command line of the sign-in entry, or null when there is none.</param>
     /// <param name="turnedOff">Whether Startup apps in Windows turned the entry off.</param>
     /// <param name="thisExe">The path of the running <c>winshell.exe</c>.</param>
+    /// <param name="configRoot">The config folder the entry's <c>-c</c>, or its lack of <c>-p</c> and <c>-c</c>, is read against.</param>
     /// <param name="exists">Whether a file exists.</param>
     /// <param name="resolve">The file a path names in the end, past links: a winget install starts through one.</param>
     /// <param name="projectFolder">The configuration being checked, or null when the check is not about one.</param>
-    /// <param name="bareFolder">The configuration <c>winshell run</c> starts with no <c>-p</c> or <c>-c</c>.</param>
-    /// <param name="configRoot">The folder a <c>-c</c> name is inside.</param>
-    internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, Func<string, bool> exists,
-        Func<string, string>? resolve = null, string? projectFolder = null, string? bareFolder = null,
-        string? configRoot = null)
+    internal static DoctorCheck SignIn(string? command, bool turnedOff, string thisExe, string configRoot,
+        Func<string, bool> exists, Func<string, string>? resolve = null, string? projectFolder = null)
     {
         resolve ??= path => path;
         if (command is null)
@@ -39,7 +37,7 @@ internal static class DoctorSignIn
                 $"The sign-in entry starts another winshell.exe: {exe}.",
                 "Install Winshell again with -AutoStart, so the entry starts the one you use.");
         if (projectFolder is not null &&
-            !SignInEntry.RunsThis(SignInEntry.Read(command), projectFolder, bareFolder, configRoot))
+            !SignInEntry.Starts(SignInEntry.Read(command), projectFolder, configRoot))
             return new DoctorCheck("signIn", "Sign-in", CheckStatus.Warn,
                 "The sign-in entry does not start this configuration.",
                 "Turn on Run at sign-in for this configuration, so the entry starts it.");

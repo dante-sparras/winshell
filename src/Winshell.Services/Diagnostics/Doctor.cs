@@ -140,9 +140,8 @@ public static class Doctor
                     ? null
                     : WinshellHost.Supervising();
                 return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),
-                    SignInEntry.TurnedOffInWindows(), File.Exists, DoctorProbe.ResolveLinks, project,
-                    project is null ? null : SignInEntry.BareFolder(context.Locations.ConfigRoot),
-                    context.Locations.ConfigRoot);
+                    SignInEntry.TurnedOffInWindows(), context.Locations.ConfigRoot, File.Exists,
+                    DoctorProbe.ResolveLinks, project);
             }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(instances)),
@@ -248,12 +247,11 @@ public static class Doctor
     /// <paramref name="supervisor"/> that started it, which is the <c>winshell.exe</c> the entry runs.
     /// </summary>
     internal static DoctorCheck SignInForProcess(string processPath, string? supervisor, string? command,
-        bool turnedOff,
-        Func<string, bool> exists, Func<string, string>? resolve = null, string? projectFolder = null,
-        string? bareFolder = null, string? configRoot = null)
+        bool turnedOff, string configRoot, Func<string, bool> exists, Func<string, string>? resolve = null,
+        string? projectFolder = null)
     {
-        return DoctorSignIn.SignIn(command, turnedOff, SignInEntry.InstallExe(processPath, supervisor), exists, resolve,
-            projectFolder, bareFolder, configRoot);
+        return DoctorSignIn.SignIn(command, turnedOff, SignInEntry.InstallExe(processPath, supervisor), configRoot,
+            exists, resolve, projectFolder);
     }
 
     /// <summary>

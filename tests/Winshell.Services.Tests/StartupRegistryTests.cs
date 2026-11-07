@@ -10,10 +10,12 @@ namespace Winshell.Services.Tests;
 
 /// <summary>
 /// The sign-in entry is a registry value, or the package's startup task. These tests use a key of their own under
-/// <c>HKCU\Software\Winshell\Tests</c> that they delete, and a fake task. They never touch the user's Run key.
+/// <c>HKCU\Software\Winshell\Tests</c> that they delete, and a fake task. They never touch the user's Run key. A
+/// configuration is a project in a config folder of their own.
 /// </summary>
 public sealed class StartupRegistryTests : IDisposable
 {
+    private readonly TempFolder _configRoot = new();
     private readonly string _testKey = @"Software\Winshell\Tests\" + Guid.NewGuid().ToString("N");
     private readonly List<string> _warnings = [];
     private readonly Log _log;
@@ -31,6 +33,7 @@ public sealed class StartupRegistryTests : IDisposable
 
     public void Dispose()
     {
+        _configRoot.Dispose();
         Registry.CurrentUser.DeleteSubKeyTree(_testKey, false);
         foreach (var parent in new[] { @"Software\Winshell\Tests", @"Software\Winshell" })
         {
@@ -48,7 +51,8 @@ public sealed class StartupRegistryTests : IDisposable
     {
         var run = _testKey + @"\Run";
         var approved = _testKey + @"\StartupApproved";
-        var registry = new WindowsStartupRegistry("\"C:\\winshell.exe\" --no-duplicate", run, approved);
+        var registry =
+            new WindowsStartupRegistry("\"C:\\winshell.exe\" --no-duplicate", _configRoot.Path, run, approved);
 
         Assert.False(registry.IsRegistered());
         Assert.True(registry.Register());
@@ -82,7 +86,7 @@ public sealed class StartupRegistryTests : IDisposable
     public void An_entry_another_winshell_wrote_points_elsewhere_until_this_one_registers()
     {
         var run = _testKey + @"\Run";
-        var registry = new WindowsStartupRegistry("\"C:\\new\\winshell.exe\" --no-duplicate", run,
+        var registry = new WindowsStartupRegistry("\"C:\\new\\winshell.exe\" --no-duplicate", _configRoot.Path, run,
             _testKey + @"\StartupApproved");
         Assert.False(registry.PointsElsewhere());
         using (var key = Registry.CurrentUser.CreateSubKey(run))
@@ -120,7 +124,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.Equal($@"{conhost} --headless ""{folder}\winshell.exe"" --no-build --no-duplicate", console);
 
         var run = _testKey + @"\Run";
-        var registry = new WindowsStartupRegistry(console, run, _testKey + @"\StartupApproved");
+        var registry = new WindowsStartupRegistry(console, _configRoot.Path, run, _testKey + @"\StartupApproved");
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name,
@@ -220,13 +224,15 @@ public sealed class StartupRegistryTests : IDisposable
         // install.ps1 -AutoStart writes this command, which names no configuration.
         const string winshell = @"C:\Program Files\Winshell\winshell.exe";
         const string windowed = @"C:\Program Files\Winshell\winshellw.exe";
-        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
-        const string play = @"C:\Users\a\AppData\Roaming\winshell\play";
-        const string root = @"C:\config";
+        var root = _configRoot.Path;
+        var project = Configuration(root, "work");
+        // Outside the config folder, so a bare winshell run still has one configuration to start.
+        var play = Configuration(Path.Combine(root, "other"), "play");
         const string otherExe = @"C:\Other\winshell.exe";
         var conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
         var install = SignInEntry.CommandFor(winshell, []);
-        var supervised = $"{conhost} --headless \"{winshell}\" run -p {project} --no-build --no-duplicate";
+        var supervised =
+            $"{conhost} --headless \"{winshell}\" run -p {SignInEntry.Quote(project)} --no-build --no-duplicate";
         var program = project + @"\bin\shell\work.exe";
 
         Assert.Equal(supervised, SignInEntry.CommandFor(winshell, ["run", "-p", project]));
@@ -242,7 +248,7 @@ public sealed class StartupRegistryTests : IDisposable
 
         var run = _testKey + @"\Run";
         var approved = _testKey + @"\StartupApproved";
-        var registry = new WindowsStartupRegistry(supervised, run, approved, () => project);
+        var registry = new WindowsStartupRegistry(supervised, root, run, approved);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
@@ -252,7 +258,7 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.True(startup.RunAtSignIn);
         Assert.False(startup.RegisteredElsewhere);
         Assert.Equal(CheckStatus.Pass,
-            SignIn(install, false, winshell, Exists, projectFolder: project, bareFolder: project).Status);
+            SignIn(install, false, winshell, root, Exists, projectFolder: project).Status);
 
         startup.RunAtSignIn = false;
         using (var key = Registry.CurrentUser.OpenSubKey(run))
@@ -269,7 +275,7 @@ public sealed class StartupRegistryTests : IDisposable
         }
 
         Assert.Equal(CheckStatus.Pass,
-            SignIn(supervised, false, winshell, Exists, projectFolder: project, bareFolder: project).Status);
+            SignIn(supervised, false, winshell, root, Exists, projectFolder: project).Status);
 
         var playCommand = SignInEntry.CommandFor(winshell, ["run", "-p", play]);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
@@ -281,12 +287,12 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
         var otherConfiguration =
-            SignIn(playCommand, false, winshell, Exists, projectFolder: project, bareFolder: project);
+            SignIn(playCommand, false, winshell, root, Exists, projectFolder: project);
         Assert.Equal(CheckStatus.Warn, otherConfiguration.Status);
         Assert.Equal("The sign-in entry does not start this configuration.", otherConfiguration.Message);
 
         var playRegistry = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", play]), run, approved, () => project);
+            SignInEntry.CommandFor(winshell, ["run", "-p", play]), root, run, approved);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
@@ -295,9 +301,10 @@ public sealed class StartupRegistryTests : IDisposable
         var playStartup = new StartupService(_log, playRegistry);
         Assert.False(playStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Warn,
-            SignIn(install, false, winshell, Exists, projectFolder: play, bareFolder: project).Status);
+            SignIn(install, false, winshell, root, Exists, projectFolder: play).Status);
 
-        var otherInstall = $"{conhost} --headless {otherExe} run -p {project} --no-build --no-duplicate";
+        var otherInstall =
+            $"{conhost} --headless {otherExe} run -p {SignInEntry.Quote(project)} --no-build --no-duplicate";
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, otherInstall, RegistryValueKind.String);
@@ -306,14 +313,13 @@ public sealed class StartupRegistryTests : IDisposable
         startup.Refresh();
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
-        var other = SignIn(otherInstall, false, winshell, Exists, projectFolder: project, bareFolder: project);
+        var other = SignIn(otherInstall, false, winshell, root, Exists, projectFolder: project);
         Assert.Equal(CheckStatus.Warn, other.Status);
         Assert.Contains("another winshell.exe", other.Message, StringComparison.Ordinal);
 
         var byName = SignInEntry.CommandFor(winshell, ["run", "-c", "work"]);
         var named = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", root + @"\work"]),
-            run, approved, configRootOf: () => root);
+            SignInEntry.CommandFor(winshell, ["run", "-p", project]), root, run, approved);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, byName, RegistryValueKind.String);
@@ -322,7 +328,7 @@ public sealed class StartupRegistryTests : IDisposable
         var namedStartup = new StartupService(_log, named);
         Assert.True(namedStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Pass,
-            SignIn(byName, false, winshell, Exists, projectFolder: root + @"\work", configRoot: root).Status);
+            SignIn(byName, false, winshell, root, Exists, projectFolder: project).Status);
 
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
@@ -333,24 +339,19 @@ public sealed class StartupRegistryTests : IDisposable
         namedStartup.Refresh();
         Assert.False(namedStartup.RunAtSignIn);
         Assert.Equal(CheckStatus.Warn,
-            SignIn(SignInEntry.CommandFor(winshell, ["run", "-c", "play"]), false, winshell, Exists,
-                projectFolder: root + @"\work", configRoot: root).Status);
+            SignIn(SignInEntry.CommandFor(winshell, ["run", "-c", "play"]), false, winshell, root, Exists,
+                projectFolder: project).Status);
     }
 
     [Fact]
     public void Adding_a_configuration_stops_the_install_entry_counting_as_this_one()
     {
         const string winshell = @"C:\Program Files\Winshell\winshell.exe";
-        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
-        var conhost = Path.Combine(Environment.SystemDirectory, "conhost.exe");
+        var project = Configuration(_configRoot.Path, "work");
         var install = SignInEntry.CommandFor(winshell, []);
-        // The second read is after another configuration exists, so a bare run no longer starts this one.
-        var answers = new[] { project, (string?)null };
-        var read = 0;
         var run = _testKey + @"\Run";
         var registry = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", project]), run,
-            bareFolderOf: () => answers[read]);
+            SignInEntry.CommandFor(winshell, ["run", "-p", project]), _configRoot.Path, run);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, install, RegistryValueKind.String);
@@ -359,7 +360,8 @@ public sealed class StartupRegistryTests : IDisposable
         var startup = new StartupService(_log, registry);
         Assert.True(startup.RunAtSignIn);
 
-        read = 1;
+        // Now a bare winshell run has two configurations to choose from, so it starts neither.
+        Configuration(_configRoot.Path, "play");
         startup.Refresh();
         Assert.False(startup.RunAtSignIn);
         Assert.True(startup.RegisteredElsewhere);
@@ -369,10 +371,10 @@ public sealed class StartupRegistryTests : IDisposable
     public void A_sign_in_entry_whose_program_is_not_a_path_is_not_this_one()
     {
         const string winshell = @"C:\Program Files\Winshell\winshell.exe";
-        const string project = @"C:\Users\a\AppData\Roaming\winshell\work";
+        var project = Configuration(_configRoot.Path, "work");
         var run = _testKey + @"\Run";
         var registry = new WindowsStartupRegistry(
-            SignInEntry.CommandFor(winshell, ["run", "-p", project]), run, bareFolderOf: () => project);
+            SignInEntry.CommandFor(winshell, ["run", "-p", project]), _configRoot.Path, run);
         using (var key = Registry.CurrentUser.CreateSubKey(run))
         {
             key.SetValue(SignInEntry.Name, @"conhost.exe --headless ""C:\bad|winshell.exe"" --no-build",
@@ -452,6 +454,15 @@ public sealed class StartupRegistryTests : IDisposable
         Assert.False(startup.RunAtSignIn);
         Assert.Equal(StartupTaskState.Disabled, task.State);
         Assert.Equal(["startup: Windows did not let Winshell register to run at sign-in."], _warnings);
+    }
+
+    /// <summary>A configuration named <paramref name="name"/> in <paramref name="folder"/>: a folder with its project.</summary>
+    private static string Configuration(string folder, string name)
+    {
+        var project = Path.Combine(folder, name);
+        Directory.CreateDirectory(project);
+        File.WriteAllText(Path.Combine(project, name + ".csproj"), "<Project />");
+        return project;
     }
 
     /// <summary>A startup task that records calls. It is not <c>Windows.ApplicationModel.StartupTask</c>.</summary>

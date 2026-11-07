@@ -298,14 +298,15 @@ public sealed class DoctorTests : IDisposable
             return path == Here || path == @"C:\Old\winshell.exe";
         }
 
-        Assert.Equal(CheckStatus.Pass, SignIn(null, false, Here, Exists).Status);
+        Assert.Equal(CheckStatus.Pass, SignIn(null, false, Here, _dir, Exists).Status);
         Assert.Equal(new DoctorCheck("signIn", "Sign-in", CheckStatus.Pass, "Winshell starts when you sign in"),
-            SignIn(command, false, Here, Exists));
-        Assert.Equal(CheckStatus.Warn, SignIn(command, true, Here, Exists).Status);
+            SignIn(command, false, Here, _dir, Exists));
+        Assert.Equal(CheckStatus.Warn, SignIn(command, true, Here, _dir, Exists).Status);
         Assert.Equal(CheckStatus.Warn,
-            SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Old\winshell.exe -c bar", false, Here, Exists)
+            SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Old\winshell.exe -c bar", false, Here, _dir, Exists)
                 .Status);
-        var gone = SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Gone\winshell.exe", false, Here, Exists);
+        var gone = SignIn(@"C:\Windows\System32\conhost.exe --headless C:\Gone\winshell.exe", false, Here, _dir,
+            Exists);
         Assert.Equal(CheckStatus.Fail, gone.Status);
         Assert.Equal(@"The sign-in entry starts C:\Gone\winshell.exe, which is not there.", gone.Message);
         Assert.Equal(Here, ExeOf($@"""{Here}"" -p ""C:\my config"""));
@@ -324,9 +325,9 @@ public sealed class DoctorTests : IDisposable
         }
 
         Assert.Equal(CheckStatus.Pass,
-            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true, Resolve).Status);
+            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _dir, _ => true, Resolve).Status);
         Assert.Equal(CheckStatus.Warn,
-            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _ => true).Status);
+            SignIn($@"conhost.exe --headless ""{Link}"" --no-duplicate", false, Here, _dir, _ => true).Status);
 
         var target = Path.Combine(_dir, "target.exe");
         File.WriteAllText(target, "");
@@ -363,7 +364,7 @@ public sealed class DoctorTests : IDisposable
         const string windowed = @"C:\Program Files\Winshell\winshellw.exe";
         const string console = @"C:\Program Files\Winshell\winshell.exe";
         var command = $@"C:\Windows\System32\conhost.exe --headless ""{console}"" --no-duplicate";
-        Assert.Equal(CheckStatus.Pass, SignIn(command, false, windowed, path => path == console).Status);
+        Assert.Equal(CheckStatus.Pass, SignIn(command, false, windowed, _dir, path => path == console).Status);
     }
 
     [Fact]
@@ -373,9 +374,9 @@ public sealed class DoctorTests : IDisposable
         const string shell = @"C:\Users\a\work\bin\shell\work.exe";
         var command = $@"C:\Windows\System32\conhost.exe --headless ""{host}"" --no-build --no-duplicate";
         Assert.Equal(CheckStatus.Pass,
-            SignInForProcess(shell, host, command, false, _ => true).Status);
+            SignInForProcess(shell, host, command, false, _dir, _ => true).Status);
         Assert.Equal(CheckStatus.Warn,
-            SignInForProcess(shell, @"C:\Other\winshell.exe", command, false, _ => true).Status);
+            SignInForProcess(shell, @"C:\Other\winshell.exe", command, false, _dir, _ => true).Status);
     }
 
     // Notifications, instances, crashes
