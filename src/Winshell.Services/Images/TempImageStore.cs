@@ -1,36 +1,177 @@
 using System.Globalization;
+using System.Security.Cryptography;
 
 namespace Winshell;
 
 /// <summary>
-/// Picture bytes in a temp folder the caller names. The caller chooses the key, and releases every
-/// <see cref="Store"/> and <see cref="Retain"/> once; the last release deletes the file. The extension comes from
-/// the bytes. Each process has a folder of its own under the root, so one instance's cleanup cannot take a file
-/// another instance is showing.
+/// Pictures other apps hand over as bytes, such as track art and notification logos, kept as temp files a UI loads
+/// by <c>file:///</c> url. A file is named by its content, so the same picture is one file. Each claim is released
+/// once, and the last release deletes the file. Every Winshell process on the machine shares the root, and each keeps
+/// its files in a folder named by its process id, so one instance's cleanup cannot take a file another is showing.
 /// </summary>
 internal sealed class TempImageStore
 {
-    /// <summary>The most a caller can hand over, in bytes.</summary>
+    /// <summary>The most a picture can be, in bytes.</summary>
     internal const int MaxBytes = 8 * 1024 * 1024;
 
     /// <summary>The most pixels a picture can decode to.</summary>
     internal const long MaxPixels = 4096 * 4096;
 
+    /// <summary>Why <see cref="Claim"/> returned null.</summary>
+    internal const string Refused = "it is not a picture under the size limit";
+
     private readonly string _root;
     private readonly string _folder;
+    private readonly TimeProvider _time;
+    private readonly Log _log;
     private readonly Dictionary<string, Use> _uses = [];
     private readonly Lock _gate = new();
 
     /// <summary>Pictures kept under <paramref name="root"/>. The directory is created when the first picture is written.</summary>
-    public TempImageStore(string root)
+    public TempImageStore(string root, TimeProvider time, Log log)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         _root = root;
         _folder = Path.Combine(root, Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        _time = time;
+        _log = log;
     }
 
-    /// <summary>Reads at most <see cref="MaxBytes"/>. Null when the stream is longer, and empty when the stream is empty.</summary>
-    public byte[]? Read(Stream input, CancellationToken cancellation = default)
+    /// <summary>The store this process shows pictures from. What earlier runs left behind is cleaned in the background.</summary>
+    public static TempImageStore Shared { get; } =
+        CleanedInBackground(new TempImageStore(Path.Combine(Path.GetTempPath(), "winshell", "images"),
+            TimeProvider.System, Log.Default));
+
+    /// <summary>
+    /// Reads a picture and claims its file. Returns the file's url, or "" when the stream is empty. Returns null
+    /// for data that is not a PNG, JPEG, GIF, BMP or WebP within <see cref="MaxBytes"/> and <see cref="MaxPixels"/>,
+    /// and for a write that fails. SVG is left out: the shell would render it at whatever size it asks for. The read
+    /// blocks, so call off the UI thread.
+    /// </summary>
+    public string? Claim(Stream input, CancellationToken cancellation = default)
+    {
+        var data = Read(input, cancellation);
+        if (data is null)
+            return null;
+        if (data.Length == 0)
+            return "";
+        if (ImageHeader.Read(data) is not var (extension, width, height) || width == 0 || height == 0 ||
+            (ulong)width * height > MaxPixels)
+            return null;
+
+        var path = Path.Combine(_folder, Convert.ToHexStringLower(SHA256.HashData(data))[..32] + extension);
+        var url = new Uri(path).AbsoluteUri;
+        lock (_gate)
+        {
+            if (_uses.TryGetValue(url, out var use))
+            {
+                use.Count++;
+                return url;
+            }
+
+            // A failed delete leaves the previous file. It holds these bytes, so reuse it: replacing it would fail
+            // while a loader still has it open.
+            if (!File.Exists(path) && !TryWrite(path, data))
+                return null;
+            _uses.Add(url, new Use(path));
+            return url;
+        }
+    }
+
+    /// <summary>Gives up one claim of <paramref name="url"/>, and deletes the file when nothing claims it.</summary>
+    public void Release(string url)
+    {
+        lock (_gate)
+        {
+            if (!_uses.TryGetValue(url, out var use))
+                return;
+            if (use.Count > 1)
+            {
+                use.Count--;
+                return;
+            }
+
+            _uses.Remove(url);
+            // Delete before letting the lock go. The next claim of these bytes uses the same path, and a delete
+            // that ran after that claim would remove the file while the new claim hands out its url.
+            try
+            {
+                File.Delete(use.Path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // An image loader still has it open. The file stays, and the next claim of these bytes reuses it.
+            }
+        }
+    }
+
+    /// <summary>
+    /// <see cref="Release"/> on the thread pool, for the UI thread: the lock is held while a picture is written, and
+    /// the last release deletes the file.
+    /// </summary>
+    public void ReleaseLater(string url)
+    {
+        if (url.Length > 0)
+            _ = Task.Run(() => Release(url));
+    }
+
+    /// <summary>Deletes pictures older than a day, and empty folders other than this process's. A root that is a link is left alone.</summary>
+    internal void CleanOld()
+    {
+        // One file another process holds must not keep the rest: each entry is tried, and the first failure is logged.
+        string? failure = null;
+        try
+        {
+            if (!Directory.Exists(_root) || (File.GetAttributes(_root) & FileAttributes.ReparsePoint) != 0)
+                return;
+            var cutoff = _time.GetUtcNow().UtcDateTime.AddDays(-1);
+            var options = new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
+            foreach (var file in Directory.EnumerateFiles(_root, "*", options))
+                Try(() =>
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff)
+                        File.Delete(file);
+                });
+            foreach (var dir in Directory.EnumerateDirectories(_root, "*",
+                         new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
+                Try(() =>
+                {
+                    if (!string.Equals(dir, _folder, StringComparison.OrdinalIgnoreCase) &&
+                        !Directory.EnumerateFileSystemEntries(dir).Any())
+                        Directory.Delete(dir);
+                });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            failure ??= e.Message;
+        }
+
+        if (failure is not null)
+            _log.Warn("images", $"Cannot clean old pictures from {_root}: {failure}");
+
+        void Try(Action delete)
+        {
+            try
+            {
+                delete();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                failure ??= e.Message;
+            }
+        }
+    }
+
+    /// <summary>Old pictures are older than a day, so this does not have to finish before the first one is shown.</summary>
+    private static TempImageStore CleanedInBackground(TempImageStore store)
+    {
+        _ = Task.Run(store.CleanOld);
+        return store;
+    }
+
+    /// <summary>At most <see cref="MaxBytes"/>. Null when the stream is longer.</summary>
+    private static byte[]? Read(Stream input, CancellationToken cancellation)
     {
         using var bytes = new MemoryStream();
         var buffer = new byte[81920];
@@ -46,147 +187,12 @@ internal sealed class TempImageStore
         }
     }
 
-    /// <summary>The asynchronous <see cref="Read"/>.</summary>
-    public async Task<byte[]?> ReadAsync(Stream input, CancellationToken cancellation = default)
+    private static bool TryWrite(string path, byte[] data)
     {
-        using var bytes = new MemoryStream();
-        var buffer = new byte[81920];
-        while (true)
-        {
-            var read = await input.ReadAsync(buffer, cancellation).ConfigureAwait(false);
-            if (read == 0)
-                return bytes.ToArray();
-            if (bytes.Length + read > MaxBytes)
-                return null;
-            bytes.Write(buffer, 0, read);
-        }
-    }
-
-    /// <summary>
-    /// Stores a picture under <paramref name="key"/> and returns its <c>file:///</c> url. The same key is one file,
-    /// and each call is one more use. Empty data returns "". Data that is not a PNG, JPEG, GIF, BMP or WebP within
-    /// <see cref="MaxBytes"/> and <see cref="MaxPixels"/> returns null, and so does a write that fails. SVG is left
-    /// out: the shell would render it at whatever size it asks for.
-    /// </summary>
-    public string? Store(string key, ReadOnlySpan<byte> data)
-    {
-        RequireKey(key);
-        if (data.Length == 0)
-            return "";
-        if (data.Length > MaxBytes || !TryPicture(data, out var extension))
-            return null;
-
-        lock (_gate)
-        {
-            if (_uses.TryGetValue(key, out var use))
-            {
-                use.Count++;
-                return use.Url;
-            }
-
-            var path = Path.Combine(_folder, key + extension);
-            // A failed delete leaves the previous file. It is this key's picture, so reuse it: replacing it
-            // would fail while a loader still has it open.
-            if (!IsUnderFolder(path) || (!File.Exists(path) && !TryWrite(path, data)))
-                return null;
-            var url = new Uri(path).AbsoluteUri;
-            _uses.Add(key, new Use(url, path));
-            return url;
-        }
-    }
-
-    /// <summary>
-    /// <paramref name="uses"/> more uses of a key this store already holds. Null when it does not. Each use is
-    /// released once, the same as a <see cref="Store"/>.
-    /// </summary>
-    public string? Retain(string key, int uses = 1)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(uses);
-        if (string.IsNullOrEmpty(key))
-            return null;
-        lock (_gate)
-        {
-            if (!_uses.TryGetValue(key, out var use))
-                return null;
-            use.Count += uses;
-            return use.Url;
-        }
-    }
-
-    /// <summary>Gives up one use of <paramref name="key"/>, and deletes the file when nothing uses it.</summary>
-    public void Release(string key)
-    {
-        if (string.IsNullOrEmpty(key))
-            return;
-        lock (_gate)
-        {
-            if (!_uses.TryGetValue(key, out var use))
-                return;
-            if (use.Count > 1)
-            {
-                use.Count--;
-                return;
-            }
-
-            _uses.Remove(key);
-            // Delete before letting the lock go. The next store of this key uses the same path, and a delete
-            // that ran after that store would remove the file while the new use still hands out its url.
-            try
-            {
-                File.Delete(use.Path);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // An image loader still has it open. The file stays, and the next store of this key reuses it.
-            }
-        }
-    }
-
-    /// <summary>Deletes pictures older than a day, and empty folders other than this process's. A root that is a link is left alone.</summary>
-    public void CleanOld()
-    {
-        try
-        {
-            if (!Directory.Exists(_root) || (File.GetAttributes(_root) & FileAttributes.ReparsePoint) != 0)
-                return;
-            var options = new EnumerationOptions
-                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
-            foreach (var file in Directory.EnumerateFiles(_root, "*", options))
-                if (File.GetLastWriteTimeUtc(file) < TimeProvider.System.GetUtcNow().UtcDateTime.AddDays(-1))
-                    File.Delete(file);
-            foreach (var dir in Directory.EnumerateDirectories(_root, "*",
-                         new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
-                if (!string.Equals(dir, _folder, StringComparison.OrdinalIgnoreCase) &&
-                    !Directory.EnumerateFileSystemEntries(dir).Any())
-                    Directory.Delete(dir);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private bool IsUnderFolder(string path)
-    {
-        var folder = Path.GetFullPath(_folder + Path.DirectorySeparatorChar);
-        return Path.GetFullPath(path).StartsWith(folder, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryPicture(ReadOnlySpan<byte> data, out string extension)
-    {
-        if (!ImageHeader.TryRead(data, out extension, out var width, out var height) || width <= 0 || height <= 0)
-            return false;
-        return (ulong)width * (ulong)height <= (ulong)MaxPixels;
-    }
-
-    private static bool TryWrite(string path, ReadOnlySpan<byte> data)
-    {
-        var directory = Path.GetDirectoryName(path);
-        if (directory is null)
-            return false;
         var temporary = path + ".tmp";
         try
         {
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 stream.Write(data);
@@ -209,17 +215,9 @@ internal sealed class TempImageStore
         }
     }
 
-    private static void RequireKey(string key)
-    {
-        ArgumentException.ThrowIfNullOrEmpty(key);
-        if (key is "." or ".." || Path.GetFileName(key) != key)
-            throw new ArgumentException("The key must be one file name.", nameof(key));
-    }
-
-    private sealed class Use(string url, string path)
+    private sealed class Use(string path)
     {
         public int Count = 1;
-        public string Url { get; } = url;
         public string Path { get; } = path;
     }
 }

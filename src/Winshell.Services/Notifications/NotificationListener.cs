@@ -344,7 +344,6 @@ public sealed class Notification : ObservableObject
     private IncomingToast _toast;
     private string _appIcon = "";
     private string? _loadedKey;
-    private IconHold _hold;
     private int _iconRequest;
 
     internal Notification(NotificationListener listener, IncomingToast toast)
@@ -411,7 +410,7 @@ public sealed class Notification : ObservableObject
         SyncIcon();
     }
 
-    /// <summary>Starts a logo read when this notification's app does not already have one in flight.</summary>
+    /// <summary>Starts a logo read when this notification's logo source or app changes.</summary>
     private void SyncIcon()
     {
         if (_listener.IsDisposed)
@@ -431,9 +430,9 @@ public sealed class Notification : ObservableObject
         // Not the thread pool. Publishing the url has to run even when every pool thread is busy.
         var thread = new Thread(() =>
         {
-            var read = NotificationAppIcons.Read(key, label, source, log, cancellation);
+            var url = NotificationAppIcons.Read(key, label, source, log, cancellation);
             // Posted even after the listener is gone, so a finished read can still release its file.
-            loop.Post(() => ApplyIcon(read, request));
+            loop.Post(() => ApplyIcon(url, request));
         })
         {
             IsBackground = true,
@@ -442,27 +441,25 @@ public sealed class Notification : ObservableObject
         thread.Start();
     }
 
-    private void ApplyIcon(IconRead read, int request)
+    private void ApplyIcon(string url, int request)
     {
         // A read that finished after dismissal must not land here, and must not keep the file.
         if (request != _iconRequest)
         {
-            NotificationAppIcons.Release(read.Hold);
+            TempImageStore.Shared.ReleaseLater(url);
             return;
         }
 
-        _hold = read.Hold;
-        Set(ref _appIcon, read.Url, nameof(AppIcon));
+        Set(ref _appIcon, url, nameof(AppIcon));
     }
 
     /// <summary>Drops a finished read, and makes an in-flight one release itself when it lands.</summary>
     internal void LetGo()
     {
         _iconRequest++;
-        var hold = _hold;
-        _hold = default;
-        NotificationAppIcons.Release(hold);
+        var url = _appIcon;
         Set(ref _appIcon, "", nameof(AppIcon));
+        TempImageStore.Shared.ReleaseLater(url);
     }
 }
 
