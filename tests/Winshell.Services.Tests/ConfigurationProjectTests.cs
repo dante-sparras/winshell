@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.AccessControl;
+using System.Security.Principal;
 
 namespace Winshell.Services.Tests;
 
@@ -413,6 +415,48 @@ public sealed class ConfigurationProjectTests : IDisposable
         var why = project.Prepare(false, (_, _, _) => new CommandResult(1, output));
 
         Assert.Equal("Bar did not build.\nBar.cs(1,1): error CS1002: ; expected", why);
+    }
+
+    [Fact]
+    public void A_failed_build_gives_xaml_and_uncoded_errors_too()
+    {
+        var project = Found(Project("Bar.csproj"));
+        const string output = """
+                              Panel.xaml(2,5): XamlCompiler error WMC0130: Invalid value. [C:\x\Bar.csproj]
+                              Bar.targets(3,3): error : Something the build refused. [C:\x\Bar.csproj]
+                              Build FAILED.
+                              """;
+
+        var why = project.Prepare(false, (_, _, _) => new CommandResult(1, output));
+
+        Assert.Equal(
+            "Bar did not build.\nPanel.xaml(2,5): XamlCompiler error WMC0130: Invalid value.\n" +
+            "Bar.targets(3,3): error : Something the build refused.", why);
+    }
+
+    /// <summary><c>winshell run</c> and <c>winshell reload</c> say why, rather than end on the exception.</summary>
+    [Fact]
+    public void A_project_whose_folder_cannot_be_listed_is_a_reason_not_a_crash()
+    {
+        var project = Found(Project(Path.Combine("Locked", "Bar.csproj")));
+        var folder = new DirectoryInfo(project.Folder);
+        var deny = new FileSystemAccessRule(WindowsIdentity.GetCurrent().User!, FileSystemRights.ListDirectory,
+            AccessControlType.Deny);
+        var acl = folder.GetAccessControl();
+        acl.AddAccessRule(deny);
+        folder.SetAccessControl(acl);
+        try
+        {
+            var reason = project.Prepare(false, Builds);
+
+            Assert.Contains(project.Folder, reason, StringComparison.OrdinalIgnoreCase);
+            Assert.Empty(_commands);
+        }
+        finally
+        {
+            acl.RemoveAccessRule(deny);
+            folder.SetAccessControl(acl);
+        }
     }
 
     [Fact]

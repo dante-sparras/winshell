@@ -61,9 +61,9 @@ public static class Doctor
     /// </summary>
     private static Chosen ChooseUser(string configRoot, string? path, string? config)
     {
-        var found = Find(path, config, configRoot);
-        var folder = found.Project?.Folder ?? AskedFolder(configRoot, path, config);
-        return new Chosen(found.Project, found.Problem, folder, found.Project?.Folder);
+        var project = ConfigurationProject.Find(path, config, configRoot, out var problem);
+        var folder = project?.Folder ?? AskedFolder(configRoot, path, config);
+        return new Chosen(project, problem, folder, project?.Folder);
     }
 
     /// <summary>
@@ -82,27 +82,8 @@ public static class Doctor
         {
         }
 
-        var found = Find(null, null, configRoot);
-        return new Chosen(found.Project, found.Problem, configRoot, null);
-    }
-
-    private readonly record struct Found(ConfigurationProject? Project, string? Problem);
-
-    /// <summary>One read of the project the arguments name. A failure to read it is the doctor's own words.</summary>
-    private static Found Find(string? path, string? config, string configRoot)
-    {
-        try
-        {
-            var project = ConfigurationProject.Find(path, config, configRoot, out var problem);
-            return new Found(project, problem);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            var what = path is not null ? path
-                : config is not null ? $"config \"{config}\""
-                : "the config folder";
-            return new Found(null, $"Winshell cannot read {what}: {e.Message}");
-        }
+        var project = ConfigurationProject.Find(null, null, configRoot, out var problem);
+        return new Chosen(project, problem, configRoot, null);
     }
 
     private static string AskedFolder(string configRoot, string? path, string? config)

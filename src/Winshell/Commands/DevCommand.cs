@@ -4,7 +4,8 @@ internal static class DevCommand
 {
     internal static async Task<int> RunAsync(CliOptions options)
     {
-        var project = ConfigurationSelection.FindProject(options, out var error);
+        var project = ConfigurationProject.Find(options.Path, options.Config, ShellLocations.Current.ConfigRoot,
+            out var error);
         if (error is not null)
         {
             Console.Error.WriteLine(error);

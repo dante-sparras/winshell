@@ -10,8 +10,8 @@ internal static class DoctorProject
     /// </summary>
     internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
     {
-        var found = FindProject(configRoot);
-        return Configuration(found.Project, found.Problem);
+        var project = ConfigurationProject.Find(null, null, configRoot, out var problem);
+        return Configuration(project, problem);
     }
 
     /// <summary>The same checks for a project the caller has found already, or for none and <paramref name="problem"/>.</summary>
@@ -24,22 +24,6 @@ internal static class DoctorProject
             Doctor.Guard("built", "Built", () => Built(project)),
             Doctor.Guard("build", "Build", () => BuildNeeded(project))
         ];
-    }
-
-    private readonly record struct FoundProject(ConfigurationProject? Project, string? Problem);
-
-    /// <param name="root">The config folder.</param>
-    private static FoundProject FindProject(string root)
-    {
-        try
-        {
-            var project = ConfigurationProject.Find(null, null, root, out var problem);
-            return new FoundProject(project, problem);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return new FoundProject(null, $"Winshell cannot read the config folder: {e.Message}");
-        }
     }
 
     internal static DoctorCheck Project(ConfigurationProject? project, string? problem)

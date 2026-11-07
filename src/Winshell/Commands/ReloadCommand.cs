@@ -9,24 +9,12 @@ internal static class ReloadCommand
 
         var project = ConfigurationProject.ForProgram(info.ConfigPath);
         if (project is not null)
-        {
-            string? reason;
-            try
-            {
-                reason = project.Prepare(false, ConfigurationProject.Run);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                reason = e.Message;
-            }
-
-            if (reason is not null)
+            if (project.Prepare(false, ConfigurationProject.Run) is { } reason)
             {
                 Console.Error.WriteLine(reason);
                 await BuildNotice.Show(info, reason, project.ProjectFile);
                 return 1;
             }
-        }
 
         if (ShellExit.IsSupervised(info.Pid))
         {
