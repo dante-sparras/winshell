@@ -4,7 +4,7 @@ internal static class ListCommand
 {
     internal static int Run(CliOptions options)
     {
-        var instances = Instances.List(false);
+        var instances = ShellLocations.Current.Instances.List(false);
         if (options.Json)
         {
             Console.WriteLine(CliJson.Instances(instances.Select(i => i.Info)));

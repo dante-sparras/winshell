@@ -127,12 +127,12 @@ internal static class InstanceStart
         if (arguments.After is { } previous)
             Instances.WaitForExit(previous);
 
-        var identity = ShellIdentity.Resolve(launch.Program, ConfigPaths.Root(), launch.ShellId, launch.DataDir,
+        var locations = ShellLocations.Current;
+        var identity = ShellIdentity.Resolve(launch.Program, locations, launch.ShellId, launch.DataDir,
             launch.StateDir, launch.CacheDir);
         // Held until this method returns, which is the life of the shell. A second --no-duplicate start then exits.
         using var duplicate = arguments.NoDuplicate
-            ? DuplicateHold.TryClaim(DuplicateHold.ShellMutexName(identity.ShellId),
-                i => string.Equals(i.ShellId, identity.ShellId, StringComparison.OrdinalIgnoreCase))
+            ? DuplicateHold.TryClaim(locations, identity.ShellId)
             : default;
         if (arguments.NoDuplicate && !duplicate.Acquired)
             return InstanceResult.Duplicate;

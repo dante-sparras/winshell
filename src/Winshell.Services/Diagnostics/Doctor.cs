@@ -23,17 +23,10 @@ internal sealed record DoctorInstance(string Id, int Pid, string ConfigPath, str
 /// project that is, and which folder the Folders check writes to, from <paramref name="Path"/> and
 /// <paramref name="Config"/>.
 /// </summary>
-/// <param name="ConfigRoot">The config root: <c>%APPDATA%\winshell</c>, or <c>WINSHELL_CONFIG_DIR</c> if set.</param>
+/// <param name="Folders">The config and local folders, <see cref="ShellLocations.Current"/> for <c>winshell doctor</c>.</param>
 /// <param name="Path">The <c>-p</c> folder or project, as the user gave it. Null when they gave none.</param>
 /// <param name="Config">The <c>-c</c> name, as the user gave it. Null when they gave none.</param>
-/// <param name="LocalRoot">The local root: <c>%LOCALAPPDATA%\winshell</c>, or <c>WINSHELL_LOCAL_DIR</c> if set.</param>
-/// <param name="CrashRoot">The folder of crash reports.</param>
-internal sealed record DoctorContext(
-    string ConfigRoot,
-    string? Path,
-    string? Config,
-    string LocalRoot,
-    string CrashRoot);
+internal sealed record DoctorContext(ShellLocations Folders, string? Path, string? Config);
 
 /// <summary>
 /// Checks this PC's setup for Winshell. Nothing is changed: no prompt, no registry or settings write, no instance
@@ -48,7 +41,7 @@ public static class Doctor
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
     {
-        return Report(context, ChooseUser(context.ConfigRoot, context.Path, context.Config));
+        return Report(context, ChooseUser(context.Folders.ConfigRoot, context.Path, context.Config));
     }
 
     /// <summary>
@@ -131,9 +124,9 @@ public static class Doctor
         var configuration = DoctorProject.Configuration(chosen.Project, chosen.Problem).ToList();
         var blocked = configuration.Any(check => check.Id == "downloaded" && check.Status == CheckStatus.Fail);
         if (!blocked && configuration[0].Status == CheckStatus.Pass &&
-            DoctorProbe.PreferencesProblem(context.ConfigRoot) is { } preferences)
+            DoctorProbe.PreferencesProblem(context.Folders.ConfigRoot) is { } preferences)
             configuration[0] = WithPreferences(configuration[0], preferences);
-        var instances = ListedInstances(context.LocalRoot);
+        var instances = ListedInstances(context.Folders.Instances);
         DoctorCheck[] checks =
         [
             Guard("windows", "Windows",
@@ -147,7 +140,7 @@ public static class Doctor
             Guard("folders", "Folders", () => Folders(
                 [
                     ("the config folder", configFolder, DoctorProbe.CanWrite(configFolder)),
-                    ("its local folder", context.LocalRoot, DoctorProbe.CanWrite(context.LocalRoot))
+                    ("its local folder", context.Folders.LocalRoot, DoctorProbe.CanWrite(context.Folders.LocalRoot))
                 ],
                 instances.Where(i => DoctorProbe.IsElevated(i.Pid)).Select(i => i.Id).ToList(),
                 Environment.IsPrivilegedProcess)),
@@ -168,12 +161,13 @@ public static class Doctor
                     : WinshellHost.Supervising();
                 return SignInForProcess(process, supervisor, SignInEntry.RegisteredCommand(),
                     SignInEntry.TurnedOffInWindows(), File.Exists, DoctorProbe.ResolveLinks, project,
-                    project is null ? null : SignInEntry.BareFolder(context.ConfigRoot), context.ConfigRoot);
+                    project is null ? null : SignInEntry.BareFolder(context.Folders.ConfigRoot),
+                    context.Folders.ConfigRoot);
             }),
             Guard("notifications", "Notifications", () => Notifications(NotificationListenerAccess.Read().ToString())),
             Guard("instances", "Running", () => Instances(instances)),
             Guard("crashes", "Crashes",
-                () => DoctorCrashes.CrashesIn(CrashReports.List(context.CrashRoot), now))
+                () => DoctorCrashes.CrashesIn(CrashReports.List(context.Folders.CrashRoot), now))
         ];
         return WithoutUserFolders(checks,
         [
@@ -293,19 +287,16 @@ public static class Doctor
     public static IReadOnlyList<DoctorCheck> ForThisProcess(string configRoot)
     {
         return Report(
-            new DoctorContext(configRoot, null, null, ShellLocations.LocalRoot, ShellLocations.CrashRoot),
+            new DoctorContext(ShellLocations.Current with { ConfigRoot = configRoot }, null, null),
             ChooseProcess(configRoot, Environment.ProcessPath ?? ""));
     }
 
-    /// <summary>
-    /// The running instances under <paramref name="localRoot"/>, or none when their folder cannot be read. The doctor
-    /// still runs its checks. The folder is <c>run</c>, the same one <see cref="ShellLocations.RunRoot"/> uses.
-    /// </summary>
-    private static List<DoctorInstance> ListedInstances(string localRoot)
+    /// <summary>The running instances, or none when their folder cannot be read. The doctor still runs its checks.</summary>
+    private static List<DoctorInstance> ListedInstances(Instances instances)
     {
         try
         {
-            return Winshell.Instances.ListIn(Path.Combine(localRoot, "run"), false)
+            return instances.List(false)
                 .Select(i => new DoctorInstance(i.Info.Id, i.Info.Pid, i.Info.ConfigPath, i.Info.Log)).ToList();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

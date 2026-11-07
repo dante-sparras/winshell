@@ -8,23 +8,21 @@ internal sealed record ShellIdentity(string ShellId, string DataDir, string Stat
 {
     /// <summary>The identity of a shell defined by <paramref name="rootFile"/>, its program.</summary>
     /// <param name="rootFile">A full path. A relative folder is next to this file.</param>
-    /// <param name="configRoot">The folder configurations live in, or empty when there is none.</param>
+    /// <param name="locations">The folders: configurations in <see cref="ShellLocations.ConfigRoot"/>, which can be empty when there is none, and the named folders under its local root.</param>
     /// <param name="shellId">The id it asks for. Null names it after where it is.</param>
     /// <param name="dataDir">Another data folder. Null is the one named after the id. <paramref name="stateDir"/> and <paramref name="cacheDir"/> are the same.</param>
     /// <param name="stateDir">Another state folder.</param>
     /// <param name="cacheDir">Another cache folder.</param>
-    public static ShellIdentity Resolve(string rootFile, string configRoot, string? shellId, string? dataDir,
+    public static ShellIdentity Resolve(string rootFile, ShellLocations locations, string? shellId, string? dataDir,
         string? stateDir, string? cacheDir)
     {
-        var id = shellId ?? DefaultId(rootFile, configRoot);
+        var id = shellId ?? DefaultId(rootFile, locations.ConfigRoot);
         var shellDir = Path.GetDirectoryName(rootFile)!;
         return new ShellIdentity(
             id,
-            Expand(dataDir, ShellLocations.DataRoot, shellDir) ?? Path.Combine(ShellLocations.DataRoot, "by-shell", id),
-            Expand(stateDir, ShellLocations.StateRoot, shellDir) ??
-            Path.Combine(ShellLocations.StateRoot, "by-shell", id),
-            Expand(cacheDir, ShellLocations.CacheRoot, shellDir) ??
-            Path.Combine(ShellLocations.CacheRoot, "by-shell", id));
+            Expand(dataDir, locations.DataRoot, shellDir) ?? Path.Combine(locations.DataRoot, "by-shell", id),
+            Expand(stateDir, locations.StateRoot, shellDir) ?? Path.Combine(locations.StateRoot, "by-shell", id),
+            Expand(cacheDir, locations.CacheRoot, shellDir) ?? Path.Combine(locations.CacheRoot, "by-shell", id));
     }
 
     /// <summary>

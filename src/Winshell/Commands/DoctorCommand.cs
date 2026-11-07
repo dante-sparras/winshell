@@ -7,12 +7,7 @@ internal static class DoctorCommand
     /// <summary>winshell doctor: checks this PC's setup, prints a line each, and fails when a check fails. It never builds.</summary>
     internal static int Run(CliOptions options)
     {
-        var checks = Doctor.Run(new DoctorContext(
-            ConfigPaths.Root(),
-            options.Path,
-            options.Config,
-            ShellLocations.LocalRoot,
-            ShellLocations.CrashRoot));
+        var checks = Doctor.Run(new DoctorContext(ShellLocations.Current, options.Path, options.Config));
         if (options.Json)
         {
             Console.WriteLine(DoctorReport.ToJson(checks, CliMetadata.Version));

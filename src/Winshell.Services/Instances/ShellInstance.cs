@@ -14,6 +14,7 @@ internal sealed class ShellInstance
 {
     private readonly object _logGate = new();
     private readonly InstanceLog _file;
+    private readonly Instances _instances;
     private readonly string _dir;
     private readonly string _shellId;
     private readonly string _configPath;
@@ -22,17 +23,19 @@ internal sealed class ShellInstance
     private bool _logClosed;
     private Exception? _fatal;
 
-    private ShellInstance(string id, string dir, string shellId, string configPath, Log log)
+    private ShellInstance(ShellLocations locations, string id, string shellId, string configPath, Log log)
     {
         Id = id;
-        _dir = dir;
+        _instances = locations.Instances;
+        _dir = _instances.DirOf(id);
+        Directory.CreateDirectory(_dir);
         _shellId = shellId;
         _configPath = configPath;
         Log = log;
-        LogPath = Path.Combine(dir, "log.txt");
+        LogPath = Path.Combine(_dir, "log.txt");
         Pipe = $"winshell-{id}";
         _file = new InstanceLog(LogPath);
-        Crashes = new CrashReports(ShellLocations.CrashRoot, log, shellId, configPath, LogPath);
+        Crashes = new CrashReports(locations.CrashRoot, log, shellId, configPath, LogPath);
     }
 
     public string Id { get; }
@@ -47,7 +50,7 @@ internal sealed class ShellInstance
     public string Pipe { get; private set; }
 
     /// <summary>The record of the last clean exit, which <see cref="CrashReports"/> reads.</summary>
-    public static string ExitState => Path.Combine(ShellLocations.StateRoot, "last-exit.toml");
+    public static string ExitState => Path.Combine(ShellLocations.Current.StateRoot, "last-exit.toml");
 
     /// <summary>Runs first when a crash on another thread is ending the process, which skips every <c>finally</c>.</summary>
     public Action? Crashing { get; set; }
@@ -58,11 +61,9 @@ internal sealed class ShellInstance
     /// </summary>
     public static ShellInstance Open(string shellId, string configPath, Log log, bool verbose = false)
     {
-        Instances.Clean();
-        var id = Instances.NewId();
-        var dir = Instances.DirOf(id);
-        Directory.CreateDirectory(dir);
-        var instance = new ShellInstance(id, dir, shellId, configPath, log);
+        var locations = ShellLocations.Current;
+        locations.Instances.Clean();
+        var instance = new ShellInstance(locations, Instances.NewId(), shellId, configPath, log);
         // Objects with no engine log through Log.Default. That is this process's log.
         log.MinimumLevel = verbose ? LogLevel.Debug : LogLevel.Info;
         log.Sink = instance.WriteLog;
@@ -122,7 +123,7 @@ internal sealed class ShellInstance
         // What the startup logged lands first, so a listed shell always has a log to show.
         _file.Flush();
         using var process = Process.GetCurrentProcess();
-        Instances.Write(new InstanceInfo(
+        _instances.Write(new InstanceInfo(
             Id,
             Environment.ProcessId,
             _shellId,
@@ -169,7 +170,7 @@ internal sealed class ShellInstance
         _server?.Dispose();
         _listening?.Dispose();
         _listening = null;
-        Instances.Remove(Id);
+        _instances.Remove(Id);
         CloseLog();
     }
 

@@ -10,7 +10,7 @@ public sealed class ShellInstanceTests
     private static async Task<InstanceInfo> Own()
     {
         await ShellFixture.Current();
-        return Instances.List(false).Single(i => i.Info.Pid == Environment.ProcessId).Info;
+        return ShellLocations.Current.Instances.List(false).Single(i => i.Info.Pid == Environment.ProcessId).Info;
     }
 
     private static async Task<List<IpcResponse>> Ask(IpcRequest request)
@@ -59,11 +59,11 @@ public sealed class ShellInstanceTests
     {
         var shell = await ShellFixture.Current();
 
-        Assert.Equal(Path.Combine(ShellLocations.DataRoot, "by-shell", "winshell-tests", "a.txt"),
+        Assert.Equal(Path.Combine(ShellLocations.Current.DataRoot, "by-shell", "winshell-tests", "a.txt"),
             shell.DataPath("a.txt"));
-        Assert.Equal(Path.Combine(ShellLocations.StateRoot, "by-shell", "winshell-tests", "a.txt"),
+        Assert.Equal(Path.Combine(ShellLocations.Current.StateRoot, "by-shell", "winshell-tests", "a.txt"),
             shell.StatePath("a.txt"));
-        Assert.Equal(Path.Combine(ShellLocations.CacheRoot, "by-shell", "winshell-tests", "a.txt"),
+        Assert.Equal(Path.Combine(ShellLocations.Current.CacheRoot, "by-shell", "winshell-tests", "a.txt"),
             shell.CachePath("a.txt"));
         Assert.Equal(Path.Combine(Path.GetDirectoryName(Environment.ProcessPath)!, "a.txt"), shell.ConfigPath("a.txt"));
         Assert.True(Directory.Exists(shell.DataDir));
@@ -137,8 +137,8 @@ public sealed class ShellInstanceTests
             shell.Loop.Post(() => throw new InvalidOperationException("SENTINEL posted failure"));
 
             await Wait.UntilAsync(
-                () => Directory.Exists(ShellLocations.CrashRoot)
-                      && Directory.GetFiles(ShellLocations.CrashRoot).Any(f =>
+                () => Directory.Exists(ShellLocations.Current.CrashRoot)
+                      && Directory.GetFiles(ShellLocations.Current.CrashRoot).Any(f =>
                           ReadClosed(f).Contains("SENTINEL posted failure", StringComparison.Ordinal)),
                 "a crash report for the posted failure");
             Assert.True(await ShellFixture.On(_ => true));

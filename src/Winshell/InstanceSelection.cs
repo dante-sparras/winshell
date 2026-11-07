@@ -47,9 +47,12 @@ internal static class InstanceSelection
         }
     }
 
-    internal static Result Select(CliOptions options, Question question, string runDir)
+    /// <summary>The instance <paramref name="options"/> select from <paramref name="listed"/>, every instance on disk, newest first.</summary>
+    internal static Result Select(CliOptions options, Question question,
+        IReadOnlyList<(InstanceInfo Info, bool Alive)> listed)
     {
-        var choice = From(options, Listed(runDir, false), question.None);
+        var running = listed.Where(row => row.Alive).Select(row => row.Info).ToList();
+        var choice = From(options, running, question.None);
         // Several running instances is a choice the user still has to make. A stopped log must not stand in for it.
         if (!question.StoppedFallback || choice.Info is not null || choice.Code == 2)
             return choice;
@@ -59,16 +62,13 @@ internal static class InstanceSelection
         // A selector can name an instance that stopped, but never gets a different one instead. With no selector the
         // newest instance left on disk is the log, running or not.
         var stopped = asked
-            ? From(options, Listed(runDir, true), question.None).Info
-            : Instances.ListIn(runDir, true).FirstOrDefault().Info;
+            ? From(options, listed.Select(row => row.Info).ToList(), question.None).Info
+            : listed.Count > 0
+                ? listed[0].Info
+                : null;
         return stopped is null
             ? choice
             : Result.Found(stopped, $"Showing the log of stopped instance {stopped.Id}.");
-    }
-
-    private static List<InstanceInfo> Listed(string runDir, bool includeDead)
-    {
-        return Instances.ListIn(runDir, includeDead).Select(row => row.Info).ToList();
     }
 
     private static Result From(CliOptions options, List<InstanceInfo> instances, string none)

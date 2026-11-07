@@ -249,7 +249,7 @@ internal static class SignInEntry
 
         if (launch.Name is { } name)
             return CommandWords.IsConfigName(name) &&
-                   SamePath(Path.Combine(configRoot ?? ConfigPaths.Root(), name), projectFolder);
+                   SamePath(Path.Combine(configRoot ?? ShellLocations.Current.ConfigRoot, name), projectFolder);
         return bareFolder is not null && SamePath(bareFolder, projectFolder);
     }
 
@@ -271,13 +271,14 @@ internal static class SignInEntry
 
     /// <summary>
     /// The project <c>winshell run</c> starts when it is given no <c>-p</c> and no <c>-c</c>, or null when none would
-    /// start or the config folder cannot be read. <paramref name="configRoot"/> defaults to <see cref="Winshell.ConfigPaths.Root"/>.
+    /// start or the config folder cannot be read. <paramref name="configRoot"/> defaults to the current config root.
     /// </summary>
     internal static string? BareFolder(string? configRoot = null)
     {
         try
         {
-            return ConfigurationProject.Find(null, null, configRoot ?? ConfigPaths.Root(), out _)?.Folder;
+            return ConfigurationProject.Find(null, null, configRoot ?? ShellLocations.Current.ConfigRoot, out _)
+                ?.Folder;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -298,7 +299,7 @@ internal static class SignInEntry
         }
 
         if (launch.Name is { } name && CommandWords.IsConfigName(name))
-            return Full(Path.Combine(configRoot ?? ConfigPaths.Root(), name));
+            return Full(Path.Combine(configRoot ?? ShellLocations.Current.ConfigRoot, name));
         return null;
     }
 

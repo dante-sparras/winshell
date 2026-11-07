@@ -33,22 +33,23 @@ internal sealed record InstanceInfo(
 [JsonSourceGenerationOptions(WriteIndented = true)]
 internal sealed partial class InstanceJson : JsonSerializerContext;
 
-/// <summary>The running instances, each a folder under %LOCALAPPDATA%\winshell\run. The log is log.txt in that folder.</summary>
-internal static class Instances
+/// <summary>
+/// The instances in one folder, <see cref="ShellLocations.RunRoot"/>, each in a folder of its own. The log is
+/// log.txt in that folder.
+/// </summary>
+internal sealed class Instances(string folder)
 {
-    public static string RunDir => ShellLocations.RunRoot;
-
     public static string NewId()
     {
         return Convert.ToHexStringLower(Guid.NewGuid().ToByteArray())[..12];
     }
 
-    public static string DirOf(string id)
+    public string DirOf(string id)
     {
-        return Path.Combine(RunDir, id);
+        return Path.Combine(folder, id);
     }
 
-    public static void Write(InstanceInfo info)
+    public void Write(InstanceInfo info)
     {
         var dir = DirOf(info.Id);
         Directory.CreateDirectory(dir);
@@ -60,14 +61,9 @@ internal static class Instances
     /// A clean exit keeps <c>instance.json</c>, marked with <see cref="InstanceInfo.ExitedAt"/>, so the log
     /// can still be found. <see cref="Clean"/> deletes the folder once it is a day old.
     /// </summary>
-    public static void Remove(string id)
+    public void Remove(string id)
     {
-        MarkExited(RunDir, id);
-    }
-
-    internal static void MarkExited(string runDir, string id)
-    {
-        var file = Path.Combine(runDir, id, "instance.json");
+        var file = Path.Combine(DirOf(id), "instance.json");
         try
         {
             var info = JsonSerializer.Deserialize(File.ReadAllText(file), InstanceJson.Default.InstanceInfo);
@@ -85,17 +81,12 @@ internal static class Instances
     }
 
     /// <summary>Every instance that wrote its file, newest first. Dead ones are skipped unless asked for.</summary>
-    public static List<(InstanceInfo Info, bool Alive)> List(bool includeDead)
-    {
-        return ListIn(RunDir, includeDead);
-    }
-
-    internal static List<(InstanceInfo Info, bool Alive)> ListIn(string runDir, bool includeDead)
+    public List<(InstanceInfo Info, bool Alive)> List(bool includeDead)
     {
         var result = new List<(InstanceInfo, bool)>();
-        if (!Directory.Exists(runDir))
+        if (!Directory.Exists(folder))
             return result;
-        foreach (var dir in Directory.EnumerateDirectories(runDir))
+        foreach (var dir in Directory.EnumerateDirectories(folder))
         {
             var file = Path.Combine(dir, "instance.json");
             if (!File.Exists(file))
@@ -266,21 +257,16 @@ internal static class Instances
     }
 
     /// <summary>Removes the folders of instances that are no longer running, keeping their logs a day.</summary>
-    public static void Clean()
+    /// <remarks>
+    /// A stopped instance's folder goes once it is a day old, measured from when it exited, or from the log's last
+    /// write when it left no exit time. A folder with no <c>instance.json</c> is deleted on the same rule, so a clean
+    /// exit from an older build does not leave a folder forever.
+    /// </remarks>
+    public void Clean()
     {
-        CleanIn(RunDir);
-    }
-
-    /// <summary>
-    /// Deletes a stopped instance's folder once it is a day old, measured from when it exited, or from the log's
-    /// last write when it left no exit time. A folder with no <c>instance.json</c> is deleted on the same rule,
-    /// so a clean exit from an older build does not leave a folder forever.
-    /// </summary>
-    internal static void CleanIn(string runDir)
-    {
-        if (!Directory.Exists(runDir))
+        if (!Directory.Exists(folder))
             return;
-        foreach (var dir in Directory.EnumerateDirectories(runDir))
+        foreach (var dir in Directory.EnumerateDirectories(folder))
         {
             var file = Path.Combine(dir, "instance.json");
             if (!File.Exists(file))

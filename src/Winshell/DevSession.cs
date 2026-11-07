@@ -125,7 +125,9 @@ internal static class DevSession
     /// <summary>The running shell dotnet watch started for this project, or null before its first start.</summary>
     private static InstanceInfo? ShellOf(ConfigurationProject project)
     {
-        return project.InstancesOf(ConfigurationBuild.Dev, Instances.List(false).Select(i => i.Info)).FirstOrDefault();
+        return project
+            .InstancesOf(ConfigurationBuild.Dev, ShellLocations.Current.Instances.List(false).Select(i => i.Info))
+            .FirstOrDefault();
     }
 
     /// <summary>Tells the shell of this project. Before its first start there is none, and the console has the error.</summary>

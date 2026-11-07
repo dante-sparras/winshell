@@ -511,8 +511,7 @@ public sealed class DoctorTests : IDisposable
         folder.SetAccessControl(acl);
         try
         {
-            var checks = Run(new DoctorContext(parent, asked, null, Path.Combine(_dir, "local"),
-                Path.Combine(_dir, "crashes")));
+            var checks = Run(new DoctorContext(new ShellLocations(parent, Path.Combine(_dir, "local")), asked, null));
             var folders = checks.Single(c => c.Id == "folders");
             Assert.Equal(CheckStatus.Fail, folders.Status);
             Assert.Contains(@"\asked", folders.Message, StringComparison.Ordinal);
@@ -534,8 +533,7 @@ public sealed class DoctorTests : IDisposable
         Directory.CreateDirectory(config);
         var before = Directory.EnumerateFileSystemEntries(_dir, "*", SearchOption.AllDirectories).Order().ToList();
 
-        var checks = Run(new DoctorContext(config, null, null,
-            Path.Combine(_dir, "local"), Path.Combine(_dir, "crashes")));
+        var checks = Run(new DoctorContext(new ShellLocations(config, Path.Combine(_dir, "local")), null, null));
 
         Assert.Equal(
         [

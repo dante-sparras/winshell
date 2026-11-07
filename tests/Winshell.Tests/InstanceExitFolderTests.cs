@@ -12,6 +12,8 @@ public sealed class InstanceExitFolderTests : IDisposable
         Directory.CreateDirectory(_root);
     }
 
+    private Instances Instances => new(_root);
+
     [Fact]
     public void A_clean_exit_keeps_the_folder_and_is_not_listed_as_running()
     {
@@ -24,15 +26,15 @@ public sealed class InstanceExitFolderTests : IDisposable
             JsonSerializer.Serialize(info, InstanceJson.Default.InstanceInfo));
         File.WriteAllText(info.Log, "hello");
 
-        Instances.MarkExited(_root, id);
+        Instances.Remove(id);
 
         Assert.True(File.Exists(Path.Combine(dir, "instance.json")));
         Assert.Equal("hello", File.ReadAllText(info.Log));
         var written = JsonSerializer.Deserialize(File.ReadAllText(Path.Combine(dir, "instance.json")),
             InstanceJson.Default.InstanceInfo);
         Assert.NotNull(written!.ExitedAt);
-        Assert.DoesNotContain(Instances.ListIn(_root, false), row => row.Info.Id == id);
-        Assert.Contains(Instances.ListIn(_root, true), row => row.Info.Id == id && !row.Alive);
+        Assert.DoesNotContain(Instances.List(false), row => row.Info.Id == id);
+        Assert.Contains(Instances.List(true), row => row.Info.Id == id && !row.Alive);
     }
 
     [Fact]
@@ -62,7 +64,7 @@ public sealed class InstanceExitFolderTests : IDisposable
         Directory.CreateDirectory(recentOrphan);
         File.WriteAllText(Path.Combine(recentOrphan, "log.txt"), "new");
 
-        Instances.CleanIn(_root);
+        Instances.Clean();
 
         Assert.False(Directory.Exists(oldExit));
         Assert.False(Directory.Exists(orphan));

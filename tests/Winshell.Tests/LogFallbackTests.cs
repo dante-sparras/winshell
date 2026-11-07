@@ -4,7 +4,7 @@ namespace Winshell.Tests;
 
 /// <summary>
 /// <c>log</c> may show a stopped instance, and a selector never adopts a different one. The instances are folders
-/// <see cref="Instances.ListIn"/> reads, so this does not start a shell.
+/// <see cref="Instances.List"/> reads, so this does not start a shell.
 /// </summary>
 public sealed class LogFallbackTests : IDisposable
 {
@@ -78,7 +78,8 @@ public sealed class LogFallbackTests : IDisposable
 
     private InstanceSelection.Result Ask(params string[] args)
     {
-        return InstanceSelection.Select(CliParser.Parse(args), InstanceSelection.Question.Log, _run);
+        return InstanceSelection.Select(CliParser.Parse(args), InstanceSelection.Question.Log,
+            new Instances(_run).List(true));
     }
 
     private void Write(string id, string configPath, int pid, DateTime launched)

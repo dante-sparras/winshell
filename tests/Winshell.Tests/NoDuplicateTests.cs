@@ -132,7 +132,7 @@ public sealed class NoDuplicateTests : IDisposable, IClassFixture<ProbeBuild>
 
     private string MutexName(string shellId)
     {
-        return DuplicateHold.ShellMutexName(shellId, _local);
+        return DuplicateHold.ShellMutexName(new ShellLocations(_config, _local), shellId);
     }
 
     private List<JsonElement> Listed()

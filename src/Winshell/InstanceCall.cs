@@ -9,7 +9,7 @@ internal static class InstanceCall
     /// </summary>
     internal static InstanceInfo? Select(CliOptions options, InstanceSelection.Question question, out int code)
     {
-        var choice = InstanceSelection.Select(options, question, Instances.RunDir);
+        var choice = InstanceSelection.Select(options, question, ShellLocations.Current.Instances.List(true));
         code = choice.Code;
         if (choice.Info is null)
             Console.Error.WriteLine(choice.Error);
