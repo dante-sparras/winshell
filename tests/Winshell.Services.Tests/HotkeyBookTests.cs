@@ -11,8 +11,7 @@ public sealed class HotkeyBookTests
         var chord = Parse("shift+alt+ctrl+win+k").Chords[0];
         Assert.Equal("Win+Ctrl+Alt+Shift+K", chord.Text);
         Assert.Equal('K', chord.VirtualKey);
-        Assert.Equal(HotkeyModifiers.Win | HotkeyModifiers.Ctrl | HotkeyModifiers.Alt | HotkeyModifiers.Shift,
-            chord.Modifiers);
+        Assert.Equal(0x000F, (int)chord.Modifiers);
         Assert.False(chord.IsWinOnly);
 
         Assert.Equal("Alt+F4", Parse("alt+f4").Text);
@@ -27,7 +26,7 @@ public sealed class HotkeyBookTests
         var winE = Parse("Win+E").Chords[0];
         Assert.False(winE.IsWinOnly);
         Assert.Equal('E', winE.VirtualKey);
-        Assert.Equal(HotkeyModifiers.Win, winE.Modifiers);
+        Assert.Equal(0x0008, (int)winE.Modifiers);
 
         var either = Parse("Win").Chords[0];
         Assert.True(either.IsWinOnly);

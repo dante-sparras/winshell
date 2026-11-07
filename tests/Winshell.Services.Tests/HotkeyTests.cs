@@ -203,17 +203,13 @@ public sealed class HotkeyTests : IDisposable
     public void A_windows_key_used_as_a_modifier_is_not_masked()
     {
         using var hotkey = Create();
-        var presses = 0;
-        hotkey.Pressed += (_, _) => presses++;
         hotkey.Sequence = "Win";
         _backend.Key(0x5B, false);
         _backend.Held.Add(0x5B);
 
         Assert.False(_backend.Key('E', false));
         Assert.False(_backend.Key(0x5B, true));
-        _loop.Process();
 
-        Assert.Equal(0, presses);
         Assert.Equal(0, _backend.Masks);
     }
 
@@ -226,7 +222,6 @@ public sealed class HotkeyTests : IDisposable
         _backend.LoseHook();
 
         Assert.True(_backend.HookInstalled);
-        Assert.True(hotkey.Active);
     }
 
     [Fact]

@@ -3,7 +3,8 @@ namespace Winshell.Input;
 /// <summary>
 /// What <see cref="HotkeyRegistrar"/> needs of Windows: registering a chord, the process keyboard hook, whether a key
 /// is down, and the masking key. The registrar decides which chords are shared, when the hook is installed, and when a
-/// sequence expires. Its calls come on the loop's thread, and so do <see cref="ChordPressed"/> and a lost hook.
+/// sequence expires. Its calls come on the loop's thread unless a member says otherwise, and so do
+/// <see cref="ChordPressed"/> and a lost hook.
 /// </summary>
 internal interface IHotkeyBackend : IDisposable
 {
@@ -24,7 +25,10 @@ internal interface IHotkeyBackend : IDisposable
     /// Runs on the hook thread with the key and whether it came up. True swallows the key. It does not see the
     /// masking key.
     /// </param>
-    /// <param name="onLost">Runs when Windows ends the hook without <see cref="RemoveHook"/>.</param>
+    /// <param name="onLost">
+    /// Runs when the hook thread ends without <see cref="RemoveHook"/>. Windows can also remove the hook and leave the
+    /// thread running, and then this does not run.
+    /// </param>
     bool InstallHook(Func<int, bool, bool> onKey, Action onLost);
 
     /// <summary>Removes the hook this installed, if it is installed.</summary>
