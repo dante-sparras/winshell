@@ -143,6 +143,8 @@ internal static class ShellExit
         try
         {
             process = Process.GetProcessById(info.Pid);
+            // HasExited first: a process this user cannot query throws here, which counts as exited, while Wrote counts
+            // it as the instance.
             if (!process.HasExited && Instances.Wrote(info, process))
                 return process;
         }
