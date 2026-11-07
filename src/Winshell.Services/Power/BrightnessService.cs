@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 
 namespace Winshell.Power;
 
@@ -77,20 +78,28 @@ public sealed class BrightnessMonitor : ObservableObject
 public sealed class BrightnessService : ObservableObject, IDisposable
 {
     private readonly IBrightnessBackend _backend;
+    private readonly INotifyCollectionChanged _screens;
     private readonly StateReader<BrightnessSnapshot> _reader;
     private readonly BrightnessWriter _writer;
     private readonly Log _log;
     private bool _ready;
 
-    internal BrightnessService(IEventLoop loop, Log log, IBrightnessBackend? backend = null)
+    /// <param name="loop">The loop readings are applied on.</param>
+    /// <param name="log">Where a failed read or write is reported.</param>
+    /// <param name="screens">The shell's screens. When they change, a monitor came, went or changed mode, so the monitors are read again.</param>
+    /// <param name="backend">Windows, or a fake in tests.</param>
+    internal BrightnessService(IEventLoop loop, Log log, INotifyCollectionChanged screens,
+        IBrightnessBackend? backend = null)
     {
         _log = log;
+        _screens = screens;
         _backend = backend ?? new BrightnessBackend(log);
         _reader = new StateReader<BrightnessSnapshot>(_backend.ReadAsync, Apply, loop,
-            new MonitorWarning(() => log, "power"));
+            new MonitorWarning(log, "power"));
         // A monitor's read after its writes end shows what it took.
         _writer = new BrightnessWriter(_backend.Set, log, _reader.Request);
         _backend.Changed += _reader.Request;
+        _screens.CollectionChanged += OnScreensChanged;
         _reader.Request();
     }
 
@@ -107,9 +116,15 @@ public sealed class BrightnessService : ObservableObject, IDisposable
         Set(ref _ready, snapshot.Ready, nameof(Ready));
     }
 
+    private void OnScreensChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        _reader.Request();
+    }
+
     /// <summary>Stops following brightness changes.</summary>
     public void Dispose()
     {
+        _screens.CollectionChanged -= OnScreensChanged;
         _backend.Changed -= _reader.Request;
         _reader.Stop(_backend.Dispose);
     }

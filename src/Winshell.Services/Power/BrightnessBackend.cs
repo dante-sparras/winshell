@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Management;
 using System.Runtime.InteropServices;
-using Microsoft.Win32;
 using Winshell.Native;
 
 namespace Winshell.Power;
@@ -31,7 +30,7 @@ internal sealed record BrightnessSnapshot(bool Ready, IReadOnlyList<BrightnessIn
 
 internal interface IBrightnessBackend : IDisposable
 {
-    /// <summary>Windows reported a change to the displays or a panel's brightness. Raised on any thread.</summary>
+    /// <summary>Windows reported a change to a built-in panel's brightness. Raised on any thread.</summary>
     event Action? Changed;
 
     /// <summary>Reads the monitors. The first read starts watching Windows until the backend is disposed.</summary>
@@ -46,7 +45,7 @@ internal interface IBrightnessBackend : IDisposable
 
 /// <summary>
 /// Monitor brightness. An internal panel comes from WMI. An external monitor comes from one DDC/CI read.
-/// Reads happen when the shell starts, when the displays change, when an internal panel reports a change, and
+/// Reads happen when the shell starts, when the shell's screens change, when an internal panel reports a change, and
 /// after a burst of writes ends, so external monitors are not polled. A monitor whose read fails stays at its
 /// last reading while it is connected.
 /// </summary>
@@ -69,7 +68,6 @@ internal sealed class BrightnessBackend(Log log) : IBrightnessBackend
         if (!_watching)
         {
             _watching = true;
-            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             // Starting a WMI watcher takes a few hundred milliseconds, so it starts here, off the loop.
             WatchInternal();
         }
@@ -84,7 +82,6 @@ internal sealed class BrightnessBackend(Log log) : IBrightnessBackend
         if (!_watching)
             return;
         _watching = false;
-        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         if (_watcher is { } watcher)
         {
             watcher.EventArrived -= OnPanelChanged;
@@ -92,11 +89,6 @@ internal sealed class BrightnessBackend(Log log) : IBrightnessBackend
             watcher.Dispose();
             _watcher = null;
         }
-    }
-
-    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
-    {
-        Changed?.Invoke();
     }
 
     private void OnPanelChanged(object sender, EventArrivedEventArgs e)

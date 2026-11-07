@@ -47,7 +47,7 @@ public sealed partial class Shell
     public BluetoothService Bluetooth => _bluetooth ??= new BluetoothService(Loop, Log);
 
     /// <summary>The brightness of the connected monitors that report one.</summary>
-    public BrightnessService Brightness => _brightness ??= new BrightnessService(Loop, Log);
+    public BrightnessService Brightness => _brightness ??= new BrightnessService(Loop, Log, Platform.Screens);
 
     /// <summary>Whether Explorer's taskbar is hidden. Winshell shows it again when it exits.</summary>
     public ExplorerTaskbarService ExplorerTaskbar => _explorerTaskbar ??= new ExplorerTaskbarService(Loop, Log);
@@ -120,12 +120,23 @@ public sealed partial class Shell
     /// </summary>
     private void DisposeServices()
     {
-        IDisposable?[] services =
-        [
+        DisposeEach([
             _winland, _windows, _virtualDesktops, _apps, _audio, _bluetooth, _brightness, _explorerTaskbar, _media,
             _networking, _notifications, _power, _powerMode, _systemTray, _hotkeys
-        ];
+        ], Log);
+    }
+
+    /// <summary>Disposes each service in order. One that throws is logged, and the rest are still disposed.</summary>
+    internal static void DisposeEach(IEnumerable<IDisposable?> services, Log log)
+    {
         foreach (var service in services)
-            service?.Dispose();
+            try
+            {
+                service?.Dispose();
+            }
+            catch (Exception e)
+            {
+                log.Error("shell", $"{service!.GetType().Name} did not stop: {e}");
+            }
     }
 }

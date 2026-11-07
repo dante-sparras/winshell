@@ -47,7 +47,7 @@ internal sealed class SessionManagerPoll
         _loop = loop;
         _request = request;
         _read = read;
-        _warning = new MonitorWarning(() => log, "media");
+        _warning = new MonitorWarning(log, "media");
     }
 
     /// <summary>Asks Windows now, or once the request that is out finishes. Changes while it is out share that one follow-up.</summary>

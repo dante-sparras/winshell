@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Winshell.Power;
 
@@ -118,7 +119,7 @@ public sealed class PowerServiceTests
             written.TrySetResult(value);
             return null;
         });
-        using var brightness = new BrightnessService(loop, Log.Default, source);
+        using var brightness = new BrightnessService(loop, Log.Default, new ObservableCollection<ScreenInfo>(), source);
         loop.Process();
         var monitor = brightness.Monitors[0];
 
@@ -131,6 +132,26 @@ public sealed class PowerServiceTests
         source.Push(new BrightnessSnapshot(true, [Monitor(60)]));
         loop.Process();
         Assert.Equal(60, monitor.Brightness);
+    }
+
+    [Fact]
+    public void A_change_to_the_shells_screens_reads_brightness_again_until_disposed()
+    {
+        var loop = new ManualEventLoop();
+        var screens = new ObservableCollection<ScreenInfo>();
+        var source = new FakeBrightnessBackend(new BrightnessSnapshot(true, [Monitor(10)]), (_, _) => null);
+        var brightness = new BrightnessService(loop, Log.Default, screens, source);
+        loop.Process();
+        Assert.Equal(1, source.Reads);
+
+        screens.Add(new ScreenInfo(@"\\.\DISPLAY2", "DISPLAY2", "", "", "", default, default, 1, 0, 0, 60, false));
+        loop.Process();
+        Assert.Equal(2, source.Reads);
+
+        brightness.Dispose();
+        screens.Clear();
+        loop.Process();
+        Assert.Equal(2, source.Reads);
     }
 
     [Fact]
