@@ -118,6 +118,8 @@ internal sealed class TempImageStore
     /// <summary>Deletes pictures older than a day, and empty folders other than this process's. A root that is a link is left alone.</summary>
     internal void CleanOld()
     {
+        // One file another process holds must not keep the rest: each entry is tried, and the first failure is logged.
+        string? failure = null;
         try
         {
             if (!Directory.Exists(_root) || (File.GetAttributes(_root) & FileAttributes.ReparsePoint) != 0)
@@ -126,17 +128,38 @@ internal sealed class TempImageStore
             var options = new EnumerationOptions
                 { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint };
             foreach (var file in Directory.EnumerateFiles(_root, "*", options))
-                if (File.GetLastWriteTimeUtc(file) < cutoff)
-                    File.Delete(file);
+                Try(() =>
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff)
+                        File.Delete(file);
+                });
             foreach (var dir in Directory.EnumerateDirectories(_root, "*",
                          new EnumerationOptions { AttributesToSkip = FileAttributes.ReparsePoint }))
-                if (!string.Equals(dir, _folder, StringComparison.OrdinalIgnoreCase) &&
-                    !Directory.EnumerateFileSystemEntries(dir).Any())
-                    Directory.Delete(dir);
+                Try(() =>
+                {
+                    if (!string.Equals(dir, _folder, StringComparison.OrdinalIgnoreCase) &&
+                        !Directory.EnumerateFileSystemEntries(dir).Any())
+                        Directory.Delete(dir);
+                });
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            _log.Warn("images", $"Cannot clean old pictures from {_root}: {e.Message}");
+            failure ??= e.Message;
+        }
+
+        if (failure is not null)
+            _log.Warn("images", $"Cannot clean old pictures from {_root}: {failure}");
+
+        void Try(Action delete)
+        {
+            try
+            {
+                delete();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                failure ??= e.Message;
+            }
         }
     }
 

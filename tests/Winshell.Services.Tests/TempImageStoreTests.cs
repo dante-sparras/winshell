@@ -59,22 +59,28 @@ public sealed class TempImageStoreTests
     }
 
     [Fact]
-    public void A_cleanup_that_cannot_delete_is_logged()
+    public void A_file_cleanup_cannot_delete_is_logged_once_and_the_rest_are_still_deleted()
     {
         using var directory = Temp();
         var processFolder = Path.Combine(directory.Path, "1234");
         Directory.CreateDirectory(processFolder);
-        var old = Path.Combine(processFolder, new string('a', 32) + ".png");
-        File.WriteAllText(old, "old");
-        File.SetLastWriteTimeUtc(old, Now.UtcDateTime.AddDays(-3));
+        var locked = Path.Combine(processFolder, new string('a', 32) + ".png");
+        var free = Path.Combine(processFolder, new string('b', 32) + ".png");
+        foreach (var file in new[] { locked, free })
+        {
+            File.WriteAllText(file, "old");
+            File.SetLastWriteTimeUtc(file, Now.UtcDateTime.AddDays(-3));
+        }
+
         var messages = new List<string>();
         var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
 
-        using (new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.None))
+        using (new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None))
         {
             new TempImageStore(directory.Path, new FakeTimeProvider(Now), log).CleanOld();
         }
 
+        Assert.False(File.Exists(free));
         var message = Assert.Single(messages);
         Assert.StartsWith("images: Cannot clean old pictures", message, StringComparison.Ordinal);
     }
