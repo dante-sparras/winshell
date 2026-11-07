@@ -1,5 +1,3 @@
-using Winshell.Native;
-
 namespace Winshell.Session;
 
 /// <summary>
@@ -41,9 +39,9 @@ public sealed class StartupService : ObservableObject
     internal static string? SignInCommand(string program, string? supervisor)
     {
         if (ConfigurationProject.FolderOf(program) is not { } project || supervisor is null ||
-            !SignInEntry.IsHost(supervisor))
+            !WinshellHost.Is(supervisor))
             return null;
-        return WindowsStartupRegistry.CommandFor(supervisor, ["run", "-p", project]);
+        return SignInEntry.CommandFor(supervisor, [CommandWords.Run, CommandWords.Path.Short, project]);
     }
 
     private static IStartupRegistry? RegistryForThisProcess()
@@ -53,9 +51,8 @@ public sealed class StartupService : ObservableObject
         if (Environment.ProcessPath is not { } exe)
             return null;
         if (ConfigurationProject.FolderOf(exe) is null)
-            return new WindowsStartupRegistry(
-                WindowsStartupRegistry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)));
-        if (SignInCommand(exe, ProcessImage.SupervisingWinshell()) is not { } command)
+            return new WindowsStartupRegistry(SignInEntry.CommandFor(exe, Environment.GetCommandLineArgs().Skip(1)));
+        if (SignInCommand(exe, WinshellHost.Supervising()) is not { } command)
             return null;
         return new WindowsStartupRegistry(command,
             bareFolderOf: () => SignInEntry.BareFolder(ConfigPaths.Root()),

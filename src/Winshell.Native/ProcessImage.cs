@@ -21,10 +21,10 @@ internal static class ProcessImage
     internal readonly record struct QueryResult(bool Ok, int Size, int Error);
 
     /// <summary>
-    /// The <c>winshell.exe</c> or <c>winshellw.exe</c> that started this process, walking from its parent, or null
-    /// when none of those hosts did. A configuration's own program is not that host.
+    /// The image of the nearest ancestor of this process that <paramref name="matches"/>, walking from its parent, or
+    /// null when none within eight parents does.
     /// </summary>
-    internal static string? SupervisingWinshell()
+    internal static string? Ancestor(Func<string, bool> matches)
     {
         try
         {
@@ -34,7 +34,7 @@ internal static class ProcessImage
             {
                 if (ParentOf(id) is not uint parent || parent == 0 || parent == id)
                     return null;
-                if (TryRead(parent) is { } image && IsWinshellHost(image))
+                if (TryRead(parent) is { } image && matches(image))
                     return image;
                 id = parent;
             }
@@ -80,13 +80,6 @@ internal static class ProcessImage
         }
 
         return null;
-    }
-
-    private static bool IsWinshellHost(string path)
-    {
-        var name = Path.GetFileName(path);
-        return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
-               || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The parent process id, or null when the snapshot cannot be read or the process is not in it.</summary>

@@ -118,16 +118,9 @@ internal static class InstanceStart
         // The parent of -d returns at once. It must not hold the mutex, or the child looks like a duplicate of it.
         // The child keeps --after and waits itself, so a reload's handoff still lets the old process go first.
         if (arguments.Daemonize)
-            try
-            {
-                StandardHandles.KeepFromChildren();
-                using var child = Process.Start(arguments.DetachedStart(launch.Program));
-                return InstanceResult.Detached;
-            }
-            catch (Exception e) when (e is Win32Exception or InvalidOperationException)
-            {
-                return InstanceResult.Reported($"Could not start \"{launch.Program}\": {e.Message}");
-            }
+            return Detach(launch.Program, arguments.Detached) is { } error
+                ? InstanceResult.Reported(error)
+                : InstanceResult.Detached;
 
         // A reload: the shell before this one lets go of the taskbar, the hotkeys and the tray first.
         // One that has already gone, or is still here after the wait, does not stop this start.
@@ -175,5 +168,35 @@ internal static class InstanceStart
         return session.Failure is { } failure
             ? InstanceResult.Reported(failure.Message)
             : InstanceResult.Ran;
+    }
+
+    /// <summary>
+    /// Starts <paramref name="program"/> in the background and returns at once: null when it started, or why it did not.
+    /// The child supervises what <c>-d</c> asked for, so this process can exit.
+    /// </summary>
+    internal static string? Detach(string program, IEnumerable<string> arguments)
+    {
+        try
+        {
+            StandardHandles.KeepFromChildren();
+            using var child = Process.Start(DetachedStart(program, arguments));
+            return null;
+        }
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException)
+        {
+            return $"Could not start \"{program}\": {e.Message}";
+        }
+    }
+
+    /// <summary>
+    /// The start <see cref="Detach"/> makes. The window style stays normal: a window's first show takes the state its
+    /// launcher asked for, and hiding it here would hide the shell.
+    /// </summary>
+    internal static ProcessStartInfo DetachedStart(string program, IEnumerable<string> arguments)
+    {
+        var info = new ProcessStartInfo(program) { UseShellExecute = false, CreateNoWindow = true };
+        foreach (var argument in arguments)
+            info.ArgumentList.Add(argument);
+        return info;
     }
 }

@@ -1,3 +1,4 @@
+using System.Text;
 using Windows.ApplicationModel;
 using Microsoft.Win32;
 using Winshell.Native;
@@ -19,6 +20,10 @@ internal static class SignInEntry
 
     /// <summary>Where the Startup apps page keeps its on and off, one binary value per Run value.</summary>
     public const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+
+    private const string ConsoleHost = "conhost.exe";
+
+    private const string Headless = "--headless";
 
     /// <summary>The command the <c>Run</c> value starts, or null when there is none.</summary>
     public static string? RegisteredCommand(string runKey = RunKey)
@@ -84,8 +89,8 @@ internal static class SignInEntry
         int start;
         string program;
         if (args.Length >= 3 &&
-            Path.GetFileName(args[0]).Equals("conhost.exe", StringComparison.OrdinalIgnoreCase) &&
-            args[1] == "--headless")
+            Path.GetFileName(args[0]).Equals(ConsoleHost, StringComparison.OrdinalIgnoreCase) &&
+            args[1] == Headless)
         {
             program = args[2];
             start = 3;
@@ -100,15 +105,80 @@ internal static class SignInEntry
         string? name = null;
         for (var i = start; i < args.Length; i++)
         {
-            if (args[i] == "--")
+            if (args[i] == CommandWords.End)
                 break;
-            if (args[i] is "-p" or "--path" && i + 1 < args.Length)
+            if (CommandWords.Path.Is(args[i]) && i + 1 < args.Length)
                 path = args[++i];
-            else if (args[i] is "-c" or "--config" && i + 1 < args.Length)
+            else if (CommandWords.Config.Is(args[i]) && i + 1 < args.Length)
                 name = args[++i];
         }
 
         return new SignInLaunch(program, path, name);
+    }
+
+    /// <summary>
+    /// The command a sign-in runs: <paramref name="exe"/> with <paramref name="args"/>, under a console host that has no
+    /// window. <c>winshell.exe</c> is a console program, so started on its own it would open a console or Windows
+    /// Terminal at every sign-in. Start launches <c>winshellw.exe</c>; that name is written as the <c>winshell.exe</c>
+    /// beside it, so the Start menu and the installer describe one entry. <c>--no-duplicate</c> keeps a second sign-in entry from
+    /// starting a second shell, and <c>--daemonize</c> is left out because the console host already runs it in the
+    /// background. <c>--no-build</c> runs the configuration's last build, so signing in never depends on the SDK or on a
+    /// broken edit. A <c>--path</c> is made absolute, since a sign-in does not start in this working directory. The
+    /// <c>--</c> and the words after it are the program's, and stay last as they are.
+    /// </summary>
+    internal static string CommandFor(string exe, IEnumerable<string> args)
+    {
+        var all = args.ToList();
+        var end = all.IndexOf(CommandWords.End);
+        var words = end < 0 ? all : all.GetRange(0, end);
+        var kept = new List<string>();
+        for (var i = 0; i < words.Count; i++)
+        {
+            if (CommandWords.Daemonize.Is(words[i]))
+                continue;
+            kept.Add(words[i]);
+            if (i + 1 < words.Count && CommandWords.Path.Is(words[i]))
+                kept.Add(Path.GetFullPath(words[++i]));
+            else if (i + 1 < words.Count && CommandWords.Config.Is(words[i]))
+                kept.Add(words[++i]);
+        }
+
+        if (!kept.Any(CommandWords.NoBuild.Is))
+        {
+            var duplicate = kept.FindIndex(CommandWords.NoDuplicate.Is);
+            kept.Insert(duplicate >= 0 ? duplicate : kept.Count, CommandWords.NoBuild.Long);
+        }
+
+        if (!kept.Any(CommandWords.NoDuplicate.Is))
+            kept.Add(CommandWords.NoDuplicate.Long);
+        if (end >= 0)
+            kept.AddRange(all.Skip(end));
+        var conhost = Path.Combine(Environment.SystemDirectory, ConsoleHost);
+        return string.Join(' ', new[] { conhost, Headless, WinshellHost.ConsoleOf(exe) }.Concat(kept).Select(Quote));
+    }
+
+    /// <summary>Quotes an argument the way <c>CommandLineToArgvW</c> reads it back.</summary>
+    internal static string Quote(string arg)
+    {
+        if (arg.Length > 0 && !arg.Any(c => c is ' ' or '\t' or '"'))
+            return arg;
+        var sb = new StringBuilder("\"");
+        var slashes = 0;
+        foreach (var c in arg)
+        {
+            if (c == '\\')
+            {
+                slashes++;
+                continue;
+            }
+
+            sb.Append('\\', c == '"' ? slashes * 2 + 1 : slashes);
+            slashes = 0;
+            sb.Append(c);
+        }
+
+        sb.Append('\\', slashes * 2).Append('"');
+        return sb.ToString();
     }
 
     /// <summary>The program <see cref="Read"/> found, or null when the command is blank.</summary>
@@ -141,7 +211,7 @@ internal static class SignInEntry
 
         if (string.Equals(started, here, StringComparison.OrdinalIgnoreCase))
             return true;
-        if (!Host(started) || !Host(here))
+        if (!WinshellHost.Is(started) || !WinshellHost.Is(here))
             return false;
         if (Full(started) is not { } startedFull || Full(here) is not { } hereFull)
             return false;
@@ -178,7 +248,7 @@ internal static class SignInEntry
         }
 
         if (launch.Name is { } name)
-            return ConfigName(name) &&
+            return CommandWords.IsConfigName(name) &&
                    SamePath(Path.Combine(configRoot ?? ConfigPaths.Root(), name), projectFolder);
         return bareFolder is not null && SamePath(bareFolder, projectFolder);
     }
@@ -197,12 +267,6 @@ internal static class SignInEntry
             return false;
         return SameInstall(seen.Program, wanted.Program, Resolve) &&
                RunsThis(seen, project, bareFolder, configRoot);
-    }
-
-    /// <summary>Whether <paramref name="path"/> is <c>winshell.exe</c> or the windowed <c>winshellw.exe</c>.</summary>
-    internal static bool IsHost(string path)
-    {
-        return Host(path);
     }
 
     /// <summary>
@@ -233,21 +297,9 @@ internal static class SignInEntry
                 : full;
         }
 
-        if (launch.Name is { } name && ConfigName(name))
+        if (launch.Name is { } name && CommandWords.IsConfigName(name))
             return Full(Path.Combine(configRoot ?? ConfigPaths.Root(), name));
         return null;
-    }
-
-    private static bool ConfigName(string name)
-    {
-        return name.Length > 0 && name is not ("." or "..") && name.IndexOfAny(['/', '\\', ':']) < 0;
-    }
-
-    private static bool Host(string path)
-    {
-        var name = Path.GetFileName(path);
-        return name.Equals("winshell.exe", StringComparison.OrdinalIgnoreCase)
-               || name.Equals("winshellw.exe", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool SamePath(string? left, string? right)
