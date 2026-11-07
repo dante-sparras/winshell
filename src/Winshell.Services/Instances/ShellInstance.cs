@@ -32,7 +32,7 @@ internal sealed class ShellInstance
         _shellId = shellId;
         _configPath = configPath;
         Log = log;
-        LogPath = Path.Combine(_dir, "log.txt");
+        LogPath = Path.Combine(_dir, InstanceLog.FileName);
         Pipe = $"winshell-{id}";
         _file = new InstanceLog(LogPath);
         Crashes = new CrashReports(locations.CrashRoot, log, shellId, configPath, LogPath);

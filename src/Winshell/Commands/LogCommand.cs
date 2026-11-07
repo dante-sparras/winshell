@@ -18,24 +18,15 @@ internal static class LogCommand
             return 1;
         }
 
-        await using var stream =
-            new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        await using var stream = InstanceLog.OpenToRead(path);
         using var reader = new StreamReader(stream);
         var all = (await reader.ReadToEndAsync()).TrimEnd('\n').Split('\n');
         foreach (var line in options.Tail is { } n ? all.TakeLast(n) : all)
             if (line.Length > 0)
                 Console.WriteLine(line.TrimEnd('\r'));
-        while (options.Follow)
-        {
-            var line = await reader.ReadLineAsync();
-            if (line is null)
-            {
-                await Task.Delay(200);
-                continue;
-            }
-
-            Console.WriteLine(line);
-        }
+        if (options.Follow)
+            await foreach (var line in InstanceLog.Follow(reader))
+                Console.WriteLine(line);
 
         return 0;
     }

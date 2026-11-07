@@ -5,36 +5,26 @@ namespace Winshell.Tests;
 [Trait("Category", "Slow")]
 public class InstanceListTests
 {
-    private static InstanceInfo Record(int pid, string? processName)
+    private static InstanceInfo Record(int pid, string processName, long processStart = 1)
     {
         return new InstanceInfo("id", pid, "shell", "C:\\cfg\\MyShell.exe", DateTime.Now, "pipe", "log.txt",
-            ProcessName: processName);
+            processStart, ProcessName: processName);
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("myshell")]
-    public void An_instance_id_that_now_belongs_to_a_process_this_user_cannot_open_is_not_running(string? processName)
+    [Fact]
+    public void An_instance_id_that_now_belongs_to_a_process_this_user_cannot_open_is_not_running()
     {
         // Process id 4 is always the System process, which a user cannot open.
-        Assert.False(Instances.IsCurrent(Record(4, processName)));
+        Assert.False(Instances.IsRunning(Record(4, "myshell")));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("myshell")]
-    public void An_instance_id_that_now_belongs_to_another_program_is_not_running(string? processName)
+    [Fact]
+    public void An_instance_id_that_now_belongs_to_another_program_is_not_running()
     {
-        // This test program's own name starts with Winshell, so it takes another one. cmd waits on its open input. Its
-        // banner stays out of this process's output, which carries xUnit's results.
-        var info = new ProcessStartInfo("cmd.exe")
-        {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true
-        };
-        using var other = Process.Start(info)!;
+        using var other = StartCmd();
         try
         {
-            Assert.False(Instances.IsCurrent(Record(other.Id, processName)));
+            Assert.False(Instances.IsRunning(Record(other.Id, "myshell", Started(other))));
         }
         finally
         {
@@ -43,16 +33,12 @@ public class InstanceListTests
     }
 
     [Fact]
-    public void A_configuration_program_of_any_name_is_running_under_the_name_it_recorded()
+    public void A_configuration_program_of_any_name_is_running_under_the_name_and_start_it_recorded()
     {
-        var info = new ProcessStartInfo("cmd.exe")
-        {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true
-        };
-        using var other = Process.Start(info)!;
+        using var other = StartCmd();
         try
         {
-            Assert.True(Instances.IsCurrent(Record(other.Id, "cmd")));
+            Assert.True(Instances.IsRunning(Record(other.Id, "cmd", Started(other))));
         }
         finally
         {
@@ -64,6 +50,20 @@ public class InstanceListTests
     public void An_instance_id_no_process_has_is_not_running()
     {
         // Process ids are multiples of four, so this one is never in use.
-        Assert.False(Instances.IsCurrent(Record(int.MaxValue - 2, "myshell")));
+        Assert.False(Instances.IsRunning(Record(int.MaxValue - 2, "myshell")));
+    }
+
+    /// <summary>cmd waits on its open input. Its banner stays out of this process's output, which carries xUnit's results.</summary>
+    private static Process StartCmd()
+    {
+        return Process.Start(new ProcessStartInfo("cmd.exe")
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true
+        })!;
+    }
+
+    private static long Started(Process process)
+    {
+        return process.StartTime.ToUniversalTime().Ticks;
     }
 }
