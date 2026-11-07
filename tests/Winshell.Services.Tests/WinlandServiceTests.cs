@@ -348,6 +348,26 @@ public sealed class WinlandServiceTests
     }
 
     [Fact]
+    public void A_reload_during_a_read_an_event_asked_for_still_reads_the_whole_state()
+    {
+        using var service = Connected();
+        var late = new TaskCompletionSource<string?>();
+        _backend.Pending = late;
+        Raise(@"createworkspacev2>>7,7,\\.\DISPLAY1");
+        _backend.Pending = null;
+
+        _backend.Replies["j/workspaces"] = """
+                                           [{"id":7,"name":"7","monitor":"\\\\.\\DISPLAY1","monitorID":0},
+                                            {"id":9,"name":"9","monitor":"\\\\.\\DISPLAY1","monitorID":0}]
+                                           """;
+        Raise("configreloaded>>");
+        late.SetResult(Workspaces);
+        _loop.Process();
+
+        Assert.Contains(service.Workspaces, w => w.Name == "9");
+    }
+
+    [Fact]
     public void A_query_with_no_answer_is_not_asked_again_while_Winland_is_down()
     {
         using var service = new WinlandService(_loop, Log.Default, _backend);
