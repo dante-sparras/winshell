@@ -56,39 +56,34 @@ internal static unsafe class AppUserModelIds
     {
         if (processId == 0)
             return "";
-        var process = Win32.OpenProcess(Win32.PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
-        if (process == 0)
+        using var process = ProcessHandle.Open(processId);
+        if (!process.IsOpen)
             return "";
-        try
+        var handle = process.Handle;
+        return Read(buffer =>
         {
-            return Read((buffer, capacity) =>
+            var length = (uint)buffer.Length;
+            fixed (char* text = buffer)
             {
-                var length = (uint)capacity;
-                fixed (char* text = buffer)
-                {
-                    return new Query(PInvoke.GetApplicationUserModelId(new HANDLE(process), &length, text), length);
-                }
-            });
-        }
-        finally
-        {
-            Win32.CloseHandle(process);
-        }
+                return new Query(PInvoke.GetApplicationUserModelId(handle, &length, text), length);
+            }
+        });
     }
 
     /// <summary>
     /// The id <paramref name="query"/> reports, or empty when the process has none or the answer does not fit. The
-    /// first call asks for the size with no buffer. The second fills a buffer of that size.
+    /// first call asks for the size with an empty buffer. The second fills a buffer of that size.
     /// </summary>
-    internal static string Read(Func<char[]?, int, Query> query)
+    internal static string Read(Func<char[], Query> query)
     {
-        var sized = query(null, 0);
-        if (sized.Code != WIN32_ERROR.ERROR_INSUFFICIENT_BUFFER || sized.Length <= 1 || sized.Length > MaxCharacters)
-            return "";
-        var buffer = new char[sized.Length];
-        var read = query(buffer, buffer.Length);
-        if (read.Code != WIN32_ERROR.ERROR_SUCCESS || read.Length <= 1 || read.Length > (uint)buffer.Length)
-            return "";
-        return new string(buffer, 0, (int)read.Length - 1);
+        return TextBuffer.Read(0, MaxCharacters, buffer =>
+        {
+            var answer = query(buffer);
+            if (answer.Code != WIN32_ERROR.ERROR_SUCCESS)
+                return new TextBuffer.Answer(answer.Code, (int)answer.Length);
+            // The length counts the terminating null, which must fit too.
+            return new TextBuffer.Answer(answer.Code,
+                answer.Length > (uint)buffer.Length ? -1 : (int)answer.Length - 1);
+        }) ?? "";
     }
 }

@@ -4,25 +4,28 @@ using Windows.Win32.UI.Shell;
 
 namespace Winshell.Native;
 
-/// <summary>The icons the Windows shell shows for its items: programs, files and packaged apps.</summary>
-internal static unsafe class ShellItemImage
+/// <summary>
+/// The items the Windows shell shows, found by parsing name: programs, files and packaged apps, such as
+/// <c>shell:AppsFolder\{AppUserModelID}</c>.
+/// </summary>
+internal static unsafe partial class ShellItems
 {
     private const SIIGBF IconFlags = SIIGBF.SIIGBF_ICONONLY | SIIGBF.SIIGBF_BIGGERSIZEOK | SIIGBF.SIIGBF_SCALEUP;
 
+    /// <summary>The name the shell shows for the item, or null when it has no such item.</summary>
+    internal static string? Name(string parsingName)
+    {
+        return Use<IShellItem, string>(parsingName, item => item.GetDisplayName(0, out var name) == 0 ? name : null);
+    }
+
     /// <summary>
-    /// The icon for the item <paramref name="parsingName"/> names, at <paramref name="size"/> by
-    /// <paramref name="size"/> pixels or larger, as premultiplied BGRA with the top row first. Null when the shell has
-    /// no such item or no 32-bit icon for it.
+    /// The item's icon at <paramref name="size"/> by <paramref name="size"/> pixels or larger, as premultiplied BGRA
+    /// with the top row first. Null when the shell has no such item or no 32-bit icon for it.
     /// </summary>
     internal static (int Width, int Height, byte[] Bgra)? Icon(string parsingName, int size)
     {
-        if (Win32.SHCreateItemFromParsingName(parsingName, 0, typeof(IShellItemImageFactory).GUID, out var pointer) <
-            0 || pointer == 0)
-            return null;
-        IShellItemImageFactory? factory = null;
-        try
+        return Use<IShellItemImageFactory, (int, int, byte[])?>(parsingName, factory =>
         {
-            factory = (IShellItemImageFactory)Marshal.GetObjectForIUnknown(pointer);
             var result = factory.GetImage(new SIZE(size, size), IconFlags, out var bitmap);
             if (bitmap == 0)
                 return null;
@@ -34,11 +37,27 @@ internal static unsafe class ShellItemImage
             {
                 Win32.DeleteObject(bitmap);
             }
+        });
+    }
+
+    /// <summary>
+    /// Creates the item as <typeparamref name="T"/>, passes it to <paramref name="use"/> and releases it. Default when
+    /// the shell has no such item.
+    /// </summary>
+    private static TResult? Use<T, TResult>(string parsingName, Func<T, TResult?> use) where T : class
+    {
+        if (SHCreateItemFromParsingName(parsingName, 0, typeof(T).GUID, out var pointer) < 0 || pointer == 0)
+            return default;
+        T? item = null;
+        try
+        {
+            item = (T)Marshal.GetObjectForIUnknown(pointer);
+            return use(item);
         }
         finally
         {
-            if (factory is not null)
-                Marshal.ReleaseComObject(factory);
+            if (item is not null)
+                Marshal.ReleaseComObject(item);
             Marshal.Release(pointer);
         }
     }
@@ -65,6 +84,13 @@ internal static unsafe class ShellItemImage
 
         return (width, height, pixels);
     }
+
+    /// <summary>
+    /// Handwritten: CsWin32's declaration takes an <c>IBindCtx</c>, whose generated monikers use the banned
+    /// <c>System.Runtime.InteropServices.ComTypes.FILETIME</c>.
+    /// </summary>
+    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial int SHCreateItemFromParsingName(string path, nint bindContext, in Guid iid, out nint item);
 
     [ComImport]
     [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]

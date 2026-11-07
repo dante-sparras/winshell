@@ -15,7 +15,7 @@ public static class ShellImage
     {
         ArgumentNullException.ThrowIfNull(shellPath);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
-        return ShellItemImage.Icon(shellPath, size) is { } icon
+        return ShellItems.Icon(shellPath, size) is { } icon
             ? new PixelImage(icon.Width, icon.Height, icon.Bgra, true)
             : null;
     }

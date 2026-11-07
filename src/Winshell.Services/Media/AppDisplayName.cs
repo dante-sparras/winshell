@@ -14,7 +14,7 @@ internal static class AppDisplayName
     /// </summary>
     public static string Find(string appId)
     {
-        var name = appId.Length == 0 ? null : ShellItemName.Find(AppIdentity.AppsFolderPath(appId));
+        var name = appId.Length == 0 ? null : ShellItems.Name(AppIdentity.AppsFolderPath(appId));
         if (string.IsNullOrWhiteSpace(name) && AppIdentity.ProgramName(appId) is { } program)
             name = RunningProgramDescription(program);
         return string.IsNullOrWhiteSpace(name) ? AppIdentity.FallbackName(appId) : name;

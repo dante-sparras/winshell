@@ -406,13 +406,10 @@ internal static partial class Win32
     public const int DWMWA_NCRENDERING_POLICY = 2;
     public const uint DWMWA_COLOR_NONE = 0xFFFFFFFE;
 
-    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
-    public const uint TOKEN_QUERY = 0x0008;
     public const uint FILE_FLAG_OVERLAPPED = 0x40000000;
     public const uint CLSCTX_INPROC_SERVER = 0x1;
 
     public const int ERROR_ACCESS_DENIED = 5;
-    public const int ERROR_INSUFFICIENT_BUFFER = 122;
 
     public const uint LWA_ALPHA = 0x2;
 
@@ -729,13 +726,6 @@ internal static partial class Win32
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmSetWindowAttribute(nint hwnd, int attribute, in uint value, int size);
 
-    /// <summary>
-    /// Handwritten: CsWin32's declaration takes an <c>IBindCtx</c>, whose generated monikers use the banned
-    /// <c>System.Runtime.InteropServices.ComTypes.FILETIME</c>.
-    /// </summary>
-    [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
-    public static partial int SHCreateItemFromParsingName(string path, nint bindContext, in Guid iid, out nint item);
-
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmUpdateThumbnailProperties(nint thumbnail, in DWM_THUMBNAIL_PROPERTIES properties);
 
@@ -769,18 +759,6 @@ internal static partial class Win32
     {
         return PInvoke.CloseHandle(new HANDLE(handle));
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    public static partial nint OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint processId);
-
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool OpenProcessToken(nint process, uint access, out nint token);
-
-    [LibraryImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static unsafe partial bool GetTokenInformation(nint token, int infoClass, void* info, int length,
-        out int returned);
 
     [LibraryImport("shell32.dll", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint CommandLineToArgvW(string commandLine, out int count);
