@@ -25,29 +25,46 @@ internal sealed class EndpointNode : AudioGraphNode
         _device = device;
         DeviceId = deviceId;
         Type = render ? AudioNodeType.PlaybackDevice : AudioNodeType.RecordingDevice;
-        device.OpenPropertyStore(0, out var store);
-        Description = PropertyStore.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
-        InterfaceName = PropertyStore.ReadString(store, CoreAudio.DeviceDescription) ?? "";
         Name = deviceId;
-        var formFactor = PropertyStore.ReadUInt(store, CoreAudio.EndpointFormFactor);
-        Properties = new Dictionary<string, string>
+        device.OpenPropertyStore(0, out var store);
+        byte[]? format;
+        try
         {
-            ["endpointId"] = Name,
-            ["friendlyName"] = Description,
-            ["interfaceName"] = InterfaceName,
-            ["flow"] = render ? "playback" : "recording",
-            ["adapter"] = PropertyStore.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
-            ["icon"] = IconName(formFactor, render),
-            ["formFactor"] = FormFactorName(formFactor)
-        };
-        var format = PropertyStore.ReadBlob(store, CoreAudio.EngineDeviceFormat);
+            Description = PropertyStore.ReadString(store, CoreAudio.DeviceFriendlyName) ?? deviceId;
+            InterfaceName = PropertyStore.ReadString(store, CoreAudio.DeviceDescription) ?? "";
+            var formFactor = PropertyStore.ReadUInt(store, CoreAudio.EndpointFormFactor);
+            Properties = new Dictionary<string, string>
+            {
+                ["endpointId"] = Name,
+                ["friendlyName"] = Description,
+                ["interfaceName"] = InterfaceName,
+                ["flow"] = render ? "playback" : "recording",
+                ["adapter"] = PropertyStore.ReadString(store, CoreAudio.InterfaceFriendlyName) ?? Description,
+                ["icon"] = IconName(formFactor, render),
+                ["formFactor"] = FormFactorName(formFactor)
+            };
+            format = PropertyStore.ReadBlob(store, CoreAudio.EngineDeviceFormat);
+        }
+        finally
+        {
+            CoreAudio.Release(store);
+        }
 
         _volume = CoreAudio.Activate<IAudioEndpointVolume>(device);
-        _volume.GetChannelCount(out var channels);
-        Channels = ChannelLayout.FromFormat(format, (int)channels);
-        ReadVolume();
-        _volumeNotifications = new VolumeNotifications(this);
-        _volume.RegisterControlChangeNotify(_volumeNotifications);
+        try
+        {
+            _volume.GetChannelCount(out var channels);
+            Channels = ChannelLayout.FromFormat(format, (int)channels);
+            ReadVolume();
+            _volumeNotifications = new VolumeNotifications(this);
+            _volume.RegisterControlChangeNotify(_volumeNotifications);
+        }
+        catch
+        {
+            // No node holds the device's volume when it fails to open.
+            CoreAudio.Release(_volume);
+            throw;
+        }
     }
 
     public string DeviceId { get; }
@@ -168,13 +185,20 @@ internal sealed class EndpointNode : AudioGraphNode
             _sessionManager = CoreAudio.Activate<IAudioSessionManager2>(_device);
             // Windows only reports new sessions once the session list has been read.
             _sessionManager.GetSessionEnumerator(out var sessions);
-            _sessionNotifications = new SessionNotifications(this);
-            _sessionManager.RegisterSessionNotification(_sessionNotifications);
-            sessions.GetCount(out var count);
-            for (var i = 0; i < count; i++)
+            try
             {
-                sessions.GetSession(i, out var control);
-                AddSession(control);
+                _sessionNotifications = new SessionNotifications(this);
+                _sessionManager.RegisterSessionNotification(_sessionNotifications);
+                sessions.GetCount(out var count);
+                for (var i = 0; i < count; i++)
+                {
+                    sessions.GetSession(i, out var control);
+                    AddSession(control);
+                }
+            }
+            finally
+            {
+                CoreAudio.Release(sessions);
             }
         }
         catch (COMException e)
@@ -183,34 +207,50 @@ internal sealed class EndpointNode : AudioGraphNode
         }
     }
 
+    /// <summary>Shows the session of <paramref name="control"/>, which this takes: a new session node keeps it.</summary>
     private void AddSession(IAudioSessionControl2 control)
     {
-        if (Released)
+        SessionNode? session = null;
+        try
+        {
+            session = Open(control);
+        }
+        finally
+        {
+            if (session is null)
+                CoreAudio.Release(control);
+        }
+
+        if (session is null)
             return;
+        Sessions.Add(session);
+        _graph.AddSession(session);
+        session.Watch();
+    }
+
+    private SessionNode? Open(IAudioSessionControl2 control)
+    {
+        if (Released)
+            return null;
         control.GetSessionInstanceIdentifier(out var instance);
         if (Sessions.Any(s => s.InstanceId == instance))
-            return;
+            return null;
         control.GetState(out var state);
         control.GetProcessId(out var processId);
         // A recording device's System Sounds session records nothing, and this process's own session there is
         // the stream KeepRunning opens to make the meter work.
         if (state == AudioSessionState.AudioSessionStateExpired
             || (!IsPlayback && (control.IsSystemSoundsSession() == 0 || processId == Environment.ProcessId)))
-            return;
-        SessionNode session;
+            return null;
         try
         {
-            session = new SessionNode(_graph, this, control, instance, state);
+            return new SessionNode(_graph, this, control, instance, state);
         }
         catch (Exception e) when (e is COMException or InvalidCastException)
         {
             // The session closed while it was being read, or has no volume control.
-            return;
+            return null;
         }
-
-        Sessions.Add(session);
-        _graph.AddSession(session);
-        session.Watch();
     }
 
     public void Release()
@@ -289,6 +329,10 @@ internal sealed class EndpointNode : AudioGraphNode
             {
                 node._graph.Log.Warn("audio", e.Message);
                 return 0;
+            }
+            finally
+            {
+                CoreAudio.Release(session);
             }
 
             node._graph.Post(() => node.AddSession((IAudioSessionControl2)ComApartment.Restore(stream)));
