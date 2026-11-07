@@ -186,7 +186,7 @@ public sealed class SystemTray : ObservableObject, IDisposable
 
         if (icon.Hidden)
             return;
-        item = new SystemTrayItem(_clicker, icon);
+        item = new SystemTrayItem(_backend, _clicker, icon);
         _items[icon.Key] = item;
         Items.Add(item);
         _loop.Post(() =>
@@ -237,20 +237,21 @@ public sealed class SystemTray : ObservableObject, IDisposable
 /// </summary>
 public sealed class SystemTrayItem : ObservableObject
 {
+    private readonly ITrayBackend _backend;
     private readonly TrayClicker _clicker;
     private readonly TrayIcon _icon;
     private PixelImage? _image;
     private string _tooltip;
     private bool _overflow;
 
-    internal SystemTrayItem(TrayClicker clicker, TrayIcon icon)
+    internal SystemTrayItem(ITrayBackend backend, TrayClicker clicker, TrayIcon icon)
     {
+        _backend = backend;
         _clicker = clicker;
         _icon = icon;
         _image = icon.Image;
         _tooltip = icon.Tip;
         _overflow = icon.Overflow;
-        Menu = new SystemTrayMenu(this);
         Executable = icon.ProgramPath;
         ProcessId = icon.ProcessId;
         Id = Executable.Length > 0 ? Path.GetFileNameWithoutExtension(Executable) : icon.Key;
@@ -286,9 +287,6 @@ public sealed class SystemTrayItem : ObservableObject
     /// <summary>Windows shows this icon in the hidden icons flyout, not in the taskbar. Users choose in Settings.</summary>
     public bool Overflow => _overflow;
 
-    /// <summary>The icon's menu, which the app draws itself.</summary>
-    public SystemTrayMenu Menu { get; }
-
     /// <summary>
     /// The icon at a size in pixels, for the screen's scale. An icon loaded from a resource is drawn again at that size.
     /// Any other is the app's own bitmap, at the size it chose.
@@ -298,7 +296,7 @@ public sealed class SystemTrayItem : ObservableObject
         if (_icon.Image is not { } image)
             return null;
         return size > 0 && size != image.Width && _icon.Resource is { } resource
-            ? IconImage.FromResource(resource, size) ?? image
+            ? _backend.DrawIcon(resource, size) ?? image
             : image;
     }
 
@@ -347,28 +345,5 @@ public sealed class SystemTrayItem : ObservableObject
     internal void OnBalloon(string title, string message, BalloonIcon icon)
     {
         Balloon?.Invoke(title, message, icon);
-    }
-}
-
-/// <summary>An app's tray menu. The app draws it; <see cref="Display()"/> asks the app to open it.</summary>
-public sealed class SystemTrayMenu
-{
-    private readonly SystemTrayItem _item;
-
-    internal SystemTrayMenu(SystemTrayItem item)
-    {
-        _item = item;
-    }
-
-    /// <summary>Opens the menu at the cursor.</summary>
-    public void Display()
-    {
-        _item.Display();
-    }
-
-    /// <summary>Opens the menu at a point on the virtual desktop, in physical pixels.</summary>
-    public void Display(int x, int y)
-    {
-        _item.Display(x, y);
     }
 }

@@ -70,13 +70,12 @@ internal sealed unsafe class TrayWindow : IDisposable
         if (window is null)
             return null;
         Win32.SetLayeredWindowAttributes(window.Handle, 0, 0, Win32.LWA_ALPHA);
+        // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
+        // start, and an app at a lower level can still add its icon.
+        foreach (var allowed in new[] { TaskbarWindows.Created, PInvoke.WM_COPYDATA })
+            PInvoke.ChangeWindowMessageFilterEx((HWND)window.Handle, allowed, WINDOW_MESSAGE_FILTER_ACTION.MSGFLT_ALLOW,
+                null);
         return new TrayWindow(window);
-    }
-
-    /// <summary>Lets <paramref name="message"/> through from a process at any integrity level.</summary>
-    internal void AllowFromAnyLevel(uint message)
-    {
-        PInvoke.ChangeWindowMessageFilterEx((HWND)Handle, message, WINDOW_MESSAGE_FILTER_ACTION.MSGFLT_ALLOW, null);
     }
 
     public void Dispose()

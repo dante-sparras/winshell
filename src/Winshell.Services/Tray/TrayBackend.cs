@@ -1,3 +1,4 @@
+using Windows.Win32;
 using Winshell.Native;
 
 namespace Winshell.Tray;
@@ -12,8 +13,6 @@ namespace Winshell.Tray;
 /// <param name="names">The window class, the taskbar class and the owner name; tests pass their own.</param>
 internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : ITrayBackend
 {
-    private const uint WM_COPYDATA = 0x004A;
-
     // Apps send their icons to one window, so one instance in the session at a time is the notification area. The
     // others wait, and the first to notice takes over when it exits, even if it crashed.
     private readonly Mutex _owner = new(false, names.Owner);
@@ -75,16 +74,12 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         _window = TrayWindow.Create(names.Window, OnCopyData, OnMessage, Failed);
         if (_window is null)
             return false;
-        // Explorer's taskbar lets these through from any integrity level, so an elevated shell still hears Explorer
-        // start, and an app at a lower level can still add its icon.
-        _window.AllowFromAnyLevel(TaskbarWindows.Created);
-        _window.AllowFromAnyLevel(WM_COPYDATA);
         _settingsWatch = TrayIconSettings.Watch(loop, () => SettingsChanged?.Invoke());
         foreach (var eventType in new uint[] { Win32.EVENT_SYSTEM_FOREGROUND, Win32.EVENT_OBJECT_REORDER })
             if (WinEventHook.Start(eventType, OnOrderChanged, Failed) is { } hook)
                 _eventHooks.Add(hook);
             else
-                log.Warn("tray", "Could not watch taskbar order; the tray will check every thirty seconds.");
+                log.Warn("tray", "Could not watch the taskbar's order");
         return true;
     }
 
@@ -129,10 +124,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
 
     public void Broadcast()
     {
-        Win32.PostMessageW(HWND_BROADCAST, TaskbarWindows.Created, 0, 0);
-        // A broadcast reaches only top-level windows, and some apps, such as Hex, keep their icons on a message-only window.
-        foreach (var window in MessageOnlyWindows())
-            Win32.PostMessageW(window, TaskbarWindows.Created, 0, 0);
+        TrayApp.AskForIcons();
     }
 
     public IReadOnlyList<TrayIconSetting> ReadSettings()
@@ -143,6 +135,11 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
     public (PixelImage? Image, IconResource? Resource) ReadIcon(nint icon)
     {
         return (IconImage.FromHandle(icon), IconImage.ResourceOf(icon));
+    }
+
+    public PixelImage? DrawIcon(IconResource resource, int size)
+    {
+        return IconImage.FromResource(resource, size);
     }
 
     public uint ProcessOf(nint window)
@@ -181,25 +178,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
         TrayApp.Notify(window, message, wParam, lParam);
     }
 
-    /// <summary>
-    /// Every message-only window on this desktop, each once, from a list Windows copies at once. A walk from one window
-    /// to the next ends early, with no error, where a window closes, and the newest windows, where it starts, come and
-    /// go the most.
-    /// </summary>
-    internal static HashSet<nint> MessageOnlyWindows()
-    {
-        // Only a message-only window names their parent, and the newest one may close before it is asked.
-        nint parent = 0;
-        for (var attempt = 0; parent == 0 && attempt < 3; attempt++)
-            parent = Win32.GetAncestor(Win32.FindWindowExW(Win32.HWND_MESSAGE, 0, null, null), GA_PARENT);
-        var windows = parent != 0 ? WindowTree.Descendants(parent) : [];
-        // The list also has the child windows of message-only windows.
-        windows.RemoveWhere(hwnd => Win32.GetAncestor(hwnd, GA_PARENT) != parent);
-        return windows;
-    }
-
-    // Out-of-context events run on the thread that installed the hook, the loop's. A failure is dropped; the tray's
-    // thirty-second check remains a fallback.
+    // Out-of-context events run on the thread that installed the hook, the loop's.
     private void OnOrderChanged(uint eventType, nint hwnd, int idObject, int idChild)
     {
         if (idChild != Win32.CHILDID_SELF || Window == 0)
@@ -251,7 +230,7 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
 
         // Apps that post a menu command to the taskbar, such as minimizing every window, find this window first.
         // These carry no pointers. Private WM_USER messages have no shared layout and cannot be forwarded safely.
-        if (msg == Win32.WM_SYSCOMMAND || (msg == WM_COMMAND && lParam == 0))
+        if (msg == Win32.WM_SYSCOMMAND || (msg == PInvoke.WM_COMMAND && lParam == 0))
         {
             var explorer = Explorer;
             if (explorer != 0)
@@ -261,8 +240,4 @@ internal sealed class TrayBackend(IEventLoop loop, Log log, TrayNames names) : I
 
         return false;
     }
-
-    private static readonly nint HWND_BROADCAST = 0xffff;
-    private const uint GA_PARENT = 1;
-    private const uint WM_COMMAND = 0x0111;
 }

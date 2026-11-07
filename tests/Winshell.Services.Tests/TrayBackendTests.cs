@@ -94,7 +94,7 @@ public sealed class TrayBackendTests : IDisposable
         {
             for (var i = 0; i < 200; i++)
             {
-                var windows = TrayBackend.MessageOnlyWindows();
+                var windows = WindowTree.MessageOnly();
                 Assert.Contains(window, windows);
                 Assert.Contains(_app, windows);
             }
@@ -106,7 +106,7 @@ public sealed class TrayBackendTests : IDisposable
             Win32.DestroyWindow(window);
         }
 
-        Assert.DoesNotContain(window, TrayBackend.MessageOnlyWindows());
+        Assert.DoesNotContain(window, WindowTree.MessageOnly());
     }
 
     [Fact]
