@@ -83,5 +83,5 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 | `RefreshPosition()` | void | Raises a change of Position, so a binding reads where playback has got to. |
 | `Seek(double offset)` | void | Windows has no relative seek, so this sets the position to the current one plus the offset. |
 | `Stop()` | void | Asks the app to stop. Logs a warning when CanStop is false. |
-| `SwitchTo()` | void | Brings the app's window forward. A program's window is looked for off the UI thread, so it comes forward a moment later, and a warning is logged when the program has none. |
+| `SwitchTo()` | void | Brings the app's window forward. A program's window is looked for off the UI thread, so it comes forward a moment later. A warning is logged when the program has no window or the app cannot be opened. |
 | `TogglePlaying()` | void | Calls Pause while playing, and Play otherwise. |

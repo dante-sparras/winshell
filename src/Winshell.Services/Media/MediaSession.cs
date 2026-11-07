@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Apps;
 using Winshell.Native;
 
@@ -375,14 +374,18 @@ public sealed class MediaSession : ObservableObject
 
     /// <summary>
     /// Brings the app's window forward. A program's window is looked for off the UI thread, so it comes forward
-    /// a moment later, and a warning is logged when the program has none.
+    /// a moment later. A warning is logged when the program has no window or the app cannot be opened.
     /// </summary>
     public void SwitchTo()
     {
         if (AppIdentity.IsPackaged(AppId))
+        {
             // A Store app is single-instance: starting it again brings its window forward.
-            Process.Start(new ProcessStartInfo("explorer.exe", AppIdentity.AppsFolderPath(AppId)))?.Dispose();
+            if (AppIdentity.OpenAppsFolder(AppId) is { } failed)
+                CannotSwitch(failed);
+        }
         else if (AppIdentity.ProgramName(AppId) is { } program)
+        {
             _ = Task.Run(() =>
             {
                 // An exception in this task would be lost, so it is reported on the loop.
@@ -396,14 +399,17 @@ public sealed class MediaSession : ObservableObject
 #pragma warning restore CA1031
                 {
                     var message = e.Message;
-                    _loop.Post(() => Warn($"Cannot call SwitchTo() on {{0}}: {message}"));
+                    _loop.Post(() => CannotSwitch(message));
                     return;
                 }
 
                 _loop.Post(() => Raise(window));
             });
+        }
         else
+        {
             Warn("Cannot call SwitchTo() on {0} because CanSwitchTo is false.");
+        }
     }
 
     /// <summary>Raises a change of <see cref="Position"/>, so a binding reads where playback has got to.</summary>
@@ -440,8 +446,13 @@ public sealed class MediaSession : ObservableObject
         }
 
         if (Win32.IsIconic(window))
-            Win32.ShowWindow(window, (int)SHOW_WINDOW_CMD.SW_RESTORE);
-        Win32.SetForegroundWindow(window);
+            TopLevelWindows.Restore(window);
+        Focus.Take(window);
+    }
+
+    private void CannotSwitch(string reason)
+    {
+        _log.Warn("media", $"Cannot call SwitchTo() on {AppName}: {reason}");
     }
 
     private void Warn(string message)

@@ -5,13 +5,10 @@ namespace Winshell.Media;
 
 /// <summary>
 /// The media sessions Windows shows in its media flyout (the Global System Media Transport Controls), one per
-/// app that plays media. One list serves the whole process, so a reload does not ask Windows again. It lives on
-/// the UI thread; Windows' events arrive on other threads and are posted to it.
+/// app that plays media. It lives on the UI thread; Windows' events arrive on other threads and are posted to it.
 /// </summary>
 internal sealed class SmtcSessions : IMediaSessions
 {
-    private static SmtcSessions? _instance;
-
     private readonly IEventLoop _loop;
     private readonly Log _log;
     private readonly List<SmtcSession> _sessions = [];
@@ -38,30 +35,38 @@ internal sealed class SmtcSessions : IMediaSessions
         loop.Post(_poll.Refresh);
     }
 
-    /// <summary>The session list, made on first use. Call on the UI thread.</summary>
-    public static SmtcSessions Get(IEventLoop loop, Log log)
-    {
-        if (_instance is not null)
-            return _instance;
-        return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync);
-    }
-
     public IReadOnlyList<SmtcSession> Sessions => _sessions;
 
     public event Action<SmtcSession>? SessionAdded;
 
     public event Action<SmtcSession>? SessionRemoved;
 
+    /// <summary>Stops asking Windows and releases every session.</summary>
+    public void Dispose()
+    {
+        _poll.Dispose();
+        Unsubscribe();
+        foreach (var session in _sessions)
+            session.Release();
+        _sessions.Clear();
+    }
+
     /// <summary>The projection does not root the delegate. A collected handler never hears a later session.</summary>
     private void Subscribe(GlobalSystemMediaTransportControlsSessionManager manager)
     {
         if (ReferenceEquals(_manager, manager))
             return;
-        if (_manager is not null && _sessionsChanged is not null)
-            _manager.SessionsChanged -= _sessionsChanged;
+        Unsubscribe();
         _manager = manager;
         _sessionsChanged ??= (_, _) => _loop.Post(_poll.Refresh);
         manager.SessionsChanged += _sessionsChanged;
+    }
+
+    private void Unsubscribe()
+    {
+        if (_manager is not null && _sessionsChanged is not null)
+            _manager.SessionsChanged -= _sessionsChanged;
+        _manager = null;
     }
 
     private void Read(IReadOnlyList<GlobalSystemMediaTransportControlsSession> current)
@@ -91,7 +96,8 @@ internal sealed class SmtcSessions : IMediaSessions
                 continue;
             }
 
-            var session = new SmtcSession(_loop, _log, incoming[i], _nextId++, ids[i], _names.Get(ids[i]));
+            var session = new SmtcSession(_loop, _log, _nextId++, ids[i], _names.Get(ids[i]),
+                new SmtcSessionLink(_loop, _log, incoming[i]));
             _sessions.Add(session);
             SessionAdded?.Invoke(session);
             session.Start();

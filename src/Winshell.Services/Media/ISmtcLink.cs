@@ -6,7 +6,8 @@ namespace Winshell.Media;
 /// <summary>What a <see cref="SmtcSession"/> uses to reach Windows' session. A test gives it one that records commands.</summary>
 internal interface ISmtcLink
 {
-    void Start();
+    /// <summary>Starts following Windows' session, and reports what it says to <paramref name="target"/>.</summary>
+    void Start(SmtcSession target);
 
     /// <summary>Follows the new object Windows returned for this same session.</summary>
     void Retarget(GlobalSystemMediaTransportControlsSession session);

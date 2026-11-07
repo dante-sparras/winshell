@@ -34,14 +34,14 @@ public sealed class MediaServiceTests
     /// <summary>A session with no Windows behind it. Its commands land on the link.</summary>
     private SmtcSession Native(RecordingLink link, string appId = "test")
     {
-        return new SmtcSession(_loop, _log, 0, appId, appId, _ => link);
+        return new SmtcSession(_loop, _log, 0, appId, appId, link);
     }
 
     private sealed class RecordingLink : ISmtcLink
     {
         public List<string> Sent { get; } = [];
 
-        public void Start()
+        public void Start(SmtcSession target)
         {
         }
 
@@ -79,6 +79,8 @@ public sealed class MediaServiceTests
 
         public IReadOnlyList<SmtcSession> Sessions => _sessions;
 
+        public bool Disposed { get; private set; }
+
         public event Action<SmtcSession>? SessionAdded;
 
         public event Action<SmtcSession>? SessionRemoved;
@@ -95,6 +97,11 @@ public sealed class MediaServiceTests
         {
             _sessions.Remove(session);
             SessionRemoved?.Invoke(session);
+        }
+
+        public void Dispose()
+        {
+            Disposed = true;
         }
     }
 
@@ -166,6 +173,7 @@ public sealed class MediaServiceTests
 
         Assert.Single(media.Sessions);
         Assert.Empty(changes);
+        Assert.True(sessions.Disposed);
     }
 
     [Fact]

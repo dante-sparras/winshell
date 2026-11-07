@@ -9,7 +9,7 @@ namespace Winshell.Media;
 /// thread: a manager requested on another thread can keep returning an empty list. Each pending request holds a
 /// native thread, so only one is out at a time, until it completes or times out.
 /// </summary>
-internal sealed class SessionManagerPoll
+internal sealed class SessionManagerPoll : IDisposable
 {
     /// <summary>SessionsChanged can miss a session, so a completed read is followed by another after this delay.</summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
@@ -39,6 +39,7 @@ internal sealed class SessionManagerPoll
     private IDisposable? _timeout;
     private TimeSpan _requestTimeout = FirstRequestTimeout;
     private bool _refreshRequested;
+    private bool _disposed;
 
     public SessionManagerPoll(IEventLoop loop, Log log,
         Func<IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>> request,
@@ -53,6 +54,8 @@ internal sealed class SessionManagerPoll
     /// <summary>Asks Windows now, or once the request that is out finishes. Changes while it is out share that one follow-up.</summary>
     public void Refresh()
     {
+        if (_disposed)
+            return;
         if (_pending is not null)
         {
             _refreshRequested = true;
@@ -81,6 +84,22 @@ internal sealed class SessionManagerPoll
         if (!ReferenceEquals(_pending, operation))
             return;
         _warning.Failed(new TimeoutException(NotAnswering));
+        _requestTimeout = _requestTimeout * 2 < LongestRequestTimeout ? _requestTimeout * 2 : LongestRequestTimeout;
+        Retire(operation);
+    }
+
+    /// <summary>Stops asking: the request that is out is cancelled and closed, and no other starts.</summary>
+    public void Dispose()
+    {
+        _disposed = true;
+        _refresh?.Dispose();
+        _refresh = null;
+        if (_pending is { } operation)
+            Retire(operation);
+    }
+
+    private void Retire(IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager> operation)
+    {
         try
         {
             operation.Cancel();
@@ -90,7 +109,6 @@ internal sealed class SessionManagerPoll
             _warning.Failed(e);
         }
 
-        _requestTimeout = _requestTimeout * 2 < LongestRequestTimeout ? _requestTimeout * 2 : LongestRequestTimeout;
         // A hung broker may never deliver Completed after Cancel, so retire the request here; its late callback is ignored.
         Complete(operation, AsyncStatus.Canceled);
     }
@@ -146,6 +164,7 @@ internal sealed class SessionManagerPoll
 
     private void ScheduleRefresh()
     {
-        _refresh = _loop.Schedule(RefreshInterval, Refresh);
+        if (!_disposed)
+            _refresh = _loop.Schedule(RefreshInterval, Refresh);
     }
 }

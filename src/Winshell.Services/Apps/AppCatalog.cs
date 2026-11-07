@@ -341,16 +341,7 @@ internal sealed class AppCatalog(
 
     public string? OpenAppsFolder(string appUserModelId)
     {
-        try
-        {
-            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppIdentity.AppsFolderPath(appUserModelId))
-                { UseShellExecute = true });
-            return null;
-        }
-        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
-        {
-            return e.Message;
-        }
+        return AppIdentity.OpenAppsFolder(appUserModelId);
     }
 }
 

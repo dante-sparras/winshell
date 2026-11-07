@@ -11,10 +11,10 @@ namespace Winshell.Media;
 internal sealed class SmtcSessionLink(
     IEventLoop loop,
     Log log,
-    SmtcSession target,
     GlobalSystemMediaTransportControlsSession session) : ISmtcLink
 {
     private readonly NewestRead _media = new();
+    private SmtcSession? _target;
     private bool _released;
 
     private TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs>?
@@ -28,8 +28,9 @@ internal sealed class SmtcSessionLink(
 
     private GlobalSystemMediaTransportControlsSession _session = session;
 
-    public void Start()
+    public void Start(SmtcSession target)
     {
+        _target = target;
         Hook();
         OnPlaybackInfoChanged(_session, null);
         OnTimelinePropertiesChanged(_session, null);
@@ -66,13 +67,13 @@ internal sealed class SmtcSessionLink(
             try
             {
                 if (!await command(_session).AsTask().ConfigureAwait(false))
-                    loop.Post(() => log.Warn("media", $"{target.AppName} did not accept {what}"));
+                    loop.Post(() => log.Warn("media", $"{_target?.AppName} did not accept {what}"));
             }
 #pragma warning disable CA1031 // A closed session fails with COMException or ObjectDisposedException; nobody awaits this.
             catch (Exception e)
 #pragma warning restore CA1031
             {
-                loop.Post(() => log.Warn("media", $"Cannot {what} on {target.AppName}: {e.Message}"));
+                loop.Post(() => log.Warn("media", $"Cannot {what} on {_target?.AppName}: {e.Message}"));
             }
         }
     }
@@ -121,7 +122,7 @@ internal sealed class SmtcSessionLink(
                 {
                     // Windows throws COMException for a session whose app closed mid-read; anything else is worth a line.
                     if (e is not COMException)
-                        log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
+                        log.Warn("media", $"Cannot read {_target?.AppName}'s track: {e.Message}");
                     if (!_released)
                         _media.End(request);
                 });
@@ -133,7 +134,7 @@ internal sealed class SmtcSessionLink(
     {
         if (_released || !_media.End(request))
             return;
-        target.ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "",
+        _target?.ApplyTrack(properties.Title ?? "", properties.Artist ?? "", properties.AlbumTitle ?? "",
             properties.AlbumArtist ?? "",
             properties.TrackNumber, properties.Genres, properties.Thumbnail);
     }
@@ -157,7 +158,7 @@ internal sealed class SmtcSessionLink(
         if (_released)
             return;
         var controls = info.Controls;
-        target.ApplyPlayback(new SmtcPlayback(info.PlaybackStatus)
+        _target?.ApplyPlayback(new SmtcPlayback(info.PlaybackStatus)
         {
             Rate = info.PlaybackRate ?? 1,
             CanPlay = controls.IsPlayEnabled,
@@ -193,7 +194,7 @@ internal sealed class SmtcSessionLink(
         DateTimeOffset received)
     {
         if (!_released)
-            target.ApplyTimeline(timeline.StartTime, timeline.EndTime, timeline.Position, timeline.LastUpdatedTime,
+            _target?.ApplyTimeline(timeline.StartTime, timeline.EndTime, timeline.Position, timeline.LastUpdatedTime,
                 received);
     }
 }

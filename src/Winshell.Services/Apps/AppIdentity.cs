@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 
 namespace Winshell.Apps;
@@ -18,6 +19,24 @@ internal static class AppIdentity
     public static string AppsFolderPath(string appId)
     {
         return @"shell:AppsFolder\" + appId;
+    }
+
+    /// <summary>
+    /// Opens the app through its <see cref="AppsFolderPath"/>, as Start does. Null when Windows took it, otherwise
+    /// why not.
+    /// </summary>
+    public static string? OpenAppsFolder(string appId)
+    {
+        try
+        {
+            using var _ = Process.Start(new ProcessStartInfo("explorer.exe", AppsFolderPath(appId))
+                { UseShellExecute = true });
+            return null;
+        }
+        catch (Exception e) when (e is Win32Exception or InvalidOperationException or IOException)
+        {
+            return e.Message;
+        }
     }
 
     /// <summary>The program's name without <c>.exe</c> when the id is a program's file name, otherwise null.</summary>
