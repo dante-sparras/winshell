@@ -42,7 +42,7 @@ public sealed class ShellInstanceTests
     {
         var pipe = "winshell-test-" + Guid.NewGuid().ToString("N");
         var loop = new EventQueue();
-        return (pipe, loop, new IpcServer(IpcServer.OpenFirst(pipe), pipe, loop, control));
+        return (pipe, loop, new IpcServer(IpcServer.OpenFirst(pipe), pipe, loop, Log.Default, control));
     }
 
     /// <summary>Runs posted work on a thread of the test's own while the client waits for its answer.</summary>

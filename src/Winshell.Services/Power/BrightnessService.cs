@@ -85,11 +85,11 @@ public sealed class BrightnessService : ObservableObject, IDisposable
     internal BrightnessService(IEventLoop loop, Log log, IBrightnessBackend? backend = null)
     {
         _log = log;
-        _backend = backend ?? new BrightnessBackend();
+        _backend = backend ?? new BrightnessBackend(log);
         _reader = new StateReader<BrightnessSnapshot>(_backend.ReadAsync, Apply, loop,
             new MonitorWarning(() => log, "power"));
         // A monitor's read after its writes end shows what it took.
-        _writer = new BrightnessWriter(_backend.Set, _reader.Request);
+        _writer = new BrightnessWriter(_backend.Set, log, _reader.Request);
         _backend.Changed += _reader.Request;
         _reader.Request();
     }

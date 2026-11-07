@@ -12,7 +12,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `CaptureSession([IEventLoop](winshell.md#ieventloop) loop)` | constructor | A stopped session with no target, which reads frames and raises its events on the loop's thread. |
+| `CaptureSession([IEventLoop](winshell.md#ieventloop) loop, [Log](winshell.md#log) log)` | constructor | A stopped session with no target, which reads frames and raises its events on the loop's thread. |
 | `Error` | string, read-only | Why the last start or export failed, or why a running capture failed. Empty after a successful start or export. |
 | `Frame` | [PixelImage](winshell.md#pixelimage)?, read-only | The latest frame, in physical pixels, or null before one arrives and after a stop. |
 | `FrameInterval` | int | Minimum time between frame reads; 16–1000 ms. Frames stay on D3D until consumed. |

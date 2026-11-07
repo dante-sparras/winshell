@@ -105,11 +105,11 @@ public sealed class PowerService : ObservableObject, IDisposable
     private readonly StateReader<PowerSnapshot> _reader;
     private bool _onBattery;
 
-    internal PowerService(IEventLoop loop, IPowerBackend? backend = null)
+    internal PowerService(IEventLoop loop, Log log, IPowerBackend? backend = null)
     {
-        _backend = backend ?? new PowerBackend();
+        _backend = backend ?? new PowerBackend(log);
         _reader = new StateReader<PowerSnapshot>(_backend.ReadAsync, Apply, loop,
-            new MonitorWarning(() => Log.Default, "power"));
+            new MonitorWarning(() => log, "power"));
         _backend.Changed += _reader.Request;
         _reader.Request();
     }
@@ -153,7 +153,7 @@ public sealed class PowerModeService : ObservableObject, IDisposable
     internal PowerModeService(IEventLoop loop, Log log, IPowerModeBackend? backend = null)
     {
         _log = log;
-        _backend = backend ?? new PowerModeBackend();
+        _backend = backend ?? new PowerModeBackend(log);
         _reader = new StateReader<PowerModeSnapshot>(_backend.ReadAsync, Apply, loop,
             new MonitorWarning(() => log, "power"));
         _backend.Changed += _reader.Request;

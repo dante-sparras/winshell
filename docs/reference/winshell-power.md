@@ -76,7 +76,7 @@ Has the members of [ObservableObject](winshell.md#observableobject).
 
 | Member | Type | Description |
 | --- | --- | --- |
-| `KeepAwake()` | constructor | Creates a keep-awake that is off until Enabled is set. |
+| `KeepAwake([Log](winshell.md#log) log)` | constructor | Creates a keep-awake that is off until Enabled is set. |
 | `Enabled` | bool | Whether this keep-awake holds the screen on and the PC awake. False by default. |
 | `Dispose()` | void | Turns this keep-awake off, so it no longer holds the PC awake. |
 

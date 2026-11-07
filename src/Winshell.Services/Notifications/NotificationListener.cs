@@ -33,6 +33,7 @@ public sealed class NotificationListener : ObservableObject, IDisposable
     internal NotificationListener(IEventLoop loop, Log log)
         : this(loop, log, new WindowsNotificationBackend(), true)
     {
+        TempImageStore.Shared.CleanOldOnce(failure => log.Warn("images", failure));
     }
 
     internal NotificationListener(IEventLoop loop, Log log, INotificationBackend backend, bool monitor = false)

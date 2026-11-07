@@ -27,7 +27,8 @@ internal interface IPowerModeBackend : IDisposable
 /// The Windows power mode (Settings, System, Power). The slider is the public user-configured AC or DC
 /// mode. The effective mode is what Windows is applying, including energy saver and game mode.
 /// </summary>
-internal sealed class PowerModeBackend : IPowerModeBackend
+/// <param name="log">Where a failed power mode callback is reported.</param>
+internal sealed class PowerModeBackend(Log log) : IPowerModeBackend
 {
     /// <summary><c>GUID_POWER_MODE_BEST_EFFICIENCY</c>.</summary>
     internal static readonly Guid BestEfficiency = new("961cc777-2547-4f9d-8174-7d86181b8a7a");
@@ -61,7 +62,7 @@ internal sealed class PowerModeBackend : IPowerModeBackend
             {
                 Volatile.Write(ref _effective, mode);
                 Changed?.Invoke();
-            }, e => Log.Default.Warn("power", e.Message));
+            }, e => log.Warn("power", e.Message));
         }
 
         var effective = EffectiveFrom(Volatile.Read(ref _effective));

@@ -130,7 +130,7 @@ public sealed class NetworkingServiceTests
     {
         var backend = new FakeBackend();
         var loop = new ManualEventLoop();
-        var service = new NetworkingService(loop, backend);
+        var service = new NetworkingService(loop, Log.Default, backend);
 
         backend.Publish(Snapshot(Wifi()));
         Assert.Empty(service.Devices);
@@ -620,7 +620,7 @@ public sealed class NetworkingServiceTests
     {
         public Session(NetworkSnapshot snapshot, IRadioAccess? radioAccess = null)
         {
-            Service = new NetworkingService(Loop, Backend, radioAccess);
+            Service = new NetworkingService(Loop, Log.Default, Backend, radioAccess);
             Show(snapshot);
         }
 

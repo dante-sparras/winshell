@@ -26,8 +26,10 @@ public sealed class CaptureSession : ObservableObject, IDisposable
     /// <summary>
     /// A stopped session with no target, which reads frames and raises its events on the loop's thread.
     /// </summary>
-    public CaptureSession(IEventLoop loop)
-        : this(loop, () => new WindowsCaptureBackend())
+    /// <param name="loop">The loop frames are read and events raised on.</param>
+    /// <param name="log">Where a capture teardown that fails is reported: the shell's log.</param>
+    public CaptureSession(IEventLoop loop, Log log)
+        : this(loop, () => new WindowsCaptureBackend(log))
     {
     }
 
