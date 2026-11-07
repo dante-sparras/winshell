@@ -52,7 +52,6 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             }
         }
 
-        // A failed read is not "this track has no art". Clearing the url here blanks art that already arrived.
         void Skip(string reason)
         {
             loop.Post(() =>

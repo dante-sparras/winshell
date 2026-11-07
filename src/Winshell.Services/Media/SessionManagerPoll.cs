@@ -71,7 +71,6 @@ internal sealed class SessionManagerPoll
         catch (Exception e) when (e is COMException or UnauthorizedAccessException)
         {
             _warning.Failed(e);
-            // A request that started is retired by its timeout.
             if (_pending is null)
                 ScheduleRefresh();
         }
@@ -103,7 +102,6 @@ internal sealed class SessionManagerPoll
             return;
         _timeout?.Dispose();
         _timeout = null;
-        // Only a timeout cancels a request, so any other status means the broker answered.
         if (status != AsyncStatus.Canceled)
             _requestTimeout = FirstRequestTimeout;
         try

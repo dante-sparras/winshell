@@ -64,7 +64,6 @@ internal static class DoctorProject
     {
         if (project is null)
             return new DoctorCheck("build", "Build", CheckStatus.Pass, "No configuration project to build.");
-        // A missing program is Built's failure, so it is not reported twice.
         if (!File.Exists(project.Program))
             return new DoctorCheck("build", "Build", CheckStatus.Pass,
                 $"Nothing to compare until {project.Name} is built.");

@@ -36,7 +36,6 @@ internal sealed record DoctorContext(ShellLocations Locations, string? Path, str
 /// </summary>
 public static class Doctor
 {
-    // Each check reads what it needs, mostly through DoctorProbe, and judges it in a function of its own, so the judging is tested without the PC.
     internal const string BugReports = "https://github.com/enpaze/winshell/issues/new/choose";
 
     internal static IReadOnlyList<DoctorCheck> Run(DoctorContext context)
@@ -194,8 +193,6 @@ public static class Doctor
         }
     }
 
-    // Windows
-
     /// <param name="build">The Windows build number, such as 26100.</param>
     /// <param name="revision">The update revision, the number after the build's dot.</param>
     /// <param name="displayVersion">The version name, such as <c>24H2</c>; null or empty leaves it out.</param>
@@ -222,8 +219,6 @@ public static class Doctor
                 "Update Windows in Settings > Windows Update: Mica, Acrylic and other parts Winshell uses need Windows 11 version 22H2 or later.");
         return new DoctorCheck("windows", "Windows", CheckStatus.Pass, message);
     }
-
-    // .NET
 
     internal static DoctorCheck DotNet(Version version, string description, bool selfContained)
     {
@@ -286,8 +281,6 @@ public static class Doctor
         }
     }
 
-    // Folders
-
     /// <param name="folders">Each folder to write: its name in the message, its path, whether it is writable.</param>
     /// <param name="elevatedInstances">The ids of the running instances that run as administrator.</param>
     /// <param name="asAdministrator">Whether the doctor itself runs as administrator, and so says what an administrator can write.</param>
@@ -313,8 +306,6 @@ public static class Doctor
             $"Winshell can write {string.Join(" and ", folders.Select(f => f.Name))}{(who.Length > 0 ? "." + who : "")}");
     }
 
-    // Notifications
-
     internal static DoctorCheck Notifications(string access)
     {
         return access switch
@@ -332,8 +323,6 @@ public static class Doctor
                 "Install Winshell from its package.")
         };
     }
-
-    // Running instances
 
     internal static DoctorCheck Instances(IReadOnlyList<DoctorInstance> instances)
     {

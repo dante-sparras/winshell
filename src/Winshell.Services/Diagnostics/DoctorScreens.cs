@@ -6,8 +6,6 @@ namespace Winshell.Diagnostics;
 /// <summary>The doctor's two screen checks, App bars and DPI, judged from the facts it reads about each screen.</summary>
 internal static class DoctorScreens
 {
-    // App bars
-
     /// <summary>A screen: its name, its bounds and its work area, in physical pixels.</summary>
     internal sealed record MonitorFacts(
         string Name,
@@ -137,8 +135,6 @@ internal static class DoctorScreens
 
         return covered;
     }
-
-    // DPI
 
     internal static DoctorCheck Dpi(bool perMonitorV2, IReadOnlyList<string> layers,
         IReadOnlyList<MonitorFacts> monitors)

@@ -122,7 +122,6 @@ internal sealed class SmtcSessionLink(
                     // Windows throws COMException for a session whose app closed mid-read; anything else is worth a line.
                     if (e is not COMException)
                         log.Warn("media", $"Cannot read {target.AppName}'s track: {e.Message}");
-                    // Ending the read lets a later poll try again.
                     if (!_released)
                         _media.End(request);
                 });

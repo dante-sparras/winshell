@@ -26,7 +26,6 @@ internal sealed class BookResult
 /// </summary>
 internal sealed class HotkeyBook
 {
-    // How long a sequence waits for its next chord.
     private const long TimeoutMs = 1000;
 
     private readonly Dictionary<OsChord, List<IHotkeyListener>> _os = [];
@@ -161,11 +160,8 @@ internal sealed class HotkeyBook
             _leftDown = false;
         else
             _rightDown = false;
-        // Other modifiers, or a key pressed while Windows was down, make this a modifier release.
         if (used || (modifiers & ~HotkeyModifiers.Win) != 0)
             return;
-        // Finish a sequence that was waiting for this tap before starting one whose first chord is the tap.
-        // Starting first would put the new sequence on the armed list, and finishing clears that list.
         var skip = AdvanceWin(side, nowMs, result);
         FireWin(side, nowMs, result, skip);
         FireWin(WinKeySide.Either, nowMs, result, skip);

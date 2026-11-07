@@ -92,7 +92,6 @@ public sealed class ExplorerTaskbarService : ObservableObject, IDisposable
                 }
                 catch (Exception e) when (e is not OutOfMemoryException)
                 {
-                    // The hide's own failure is the one thrown. Exit tries the restore again.
                     _log.Warn("explorer-taskbar",
                         $"Could not put the taskbar back after hiding it failed: {e.Message}");
                 }

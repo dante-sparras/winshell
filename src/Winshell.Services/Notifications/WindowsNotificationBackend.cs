@@ -178,7 +178,6 @@ internal sealed class WindowsNotificationBackend : INotificationBackend
             appId = info.AppUserModelId;
             var display = info.DisplayInfo;
             appName = display.DisplayName;
-            // The stream stays closed until the icon thread asks. The toast is already in the snapshot.
             logo = new WindowsAppLogo(display);
         }
         catch (Exception e) when (WindowsFailure.IsExpected(e))

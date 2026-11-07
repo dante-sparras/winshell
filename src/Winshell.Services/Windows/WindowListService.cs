@@ -150,10 +150,8 @@ public sealed class WindowListService : ObservableObject, IDisposable
             }
         }
 
-        // Owners are known once every window is.
         foreach (var window in _byHwnd.Values)
             window.SetParent(window.Owner == 0 ? null : _byHwnd.GetValueOrDefault(window.Owner));
-        // A new window goes at the end, so the list stays in the order windows opened.
         foreach (var window in added)
             Windows.Add(window);
         if (_foregroundDirty)

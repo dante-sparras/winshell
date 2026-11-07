@@ -20,7 +20,6 @@ internal sealed class NotificationAppIcons(IEventLoop loop, Log log, Cancellatio
         var thread = new Thread(() =>
         {
             var url = Claim(appKey, label, source);
-            // Posted even after the listener is gone, so a finished read can still release its file.
             loop.Post(() => landed(url));
         })
         {

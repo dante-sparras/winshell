@@ -14,9 +14,7 @@ internal static class DoctorCrashes
 
     internal static DoctorCheck Crashes(IReadOnlyList<CrashRecord> reports, DateTime nowUtc, CrashFileError? fileError)
     {
-        // List already returns newest first: the time in the file name, then the process, then the name.
         var recent = reports.Where(r => nowUtc - r.Written.UtcDateTime <= TimeSpan.FromDays(7)).ToList();
-        // The same window as a report that did read. An older file that cannot be opened is not this check.
         string? recentError = null;
         if (fileError is { } failed && nowUtc - failed.Written.UtcDateTime <= TimeSpan.FromDays(7))
             recentError = $"{failed.Path}: {failed.Message}";
