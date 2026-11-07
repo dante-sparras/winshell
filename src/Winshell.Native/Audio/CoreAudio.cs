@@ -79,14 +79,12 @@ internal static class CoreAudio
     }
 
     /// <summary>
-    /// Releases a COM object's callable wrapper now, not when the GC finds it, with every hand-out it counts, unlike
-    /// <see cref="Com.Release"/>: the audio service takes the same device again when it rereads the list, and releases
-    /// it once. Does nothing for null.
+    /// Gives back one hand-out of a Core Audio object, as <see cref="Com.Release"/> does: a device a node holds stays
+    /// alive while another read's copy of it is released. Does nothing for null.
     /// </summary>
     public static void Release(object? comObject)
     {
-        if (comObject is not null)
-            Marshal.FinalReleaseComObject(comObject);
+        Com.Release(comObject);
     }
 
     /// <summary>Resolves a string like <c>@%SystemRoot%\System32\AudioSrv.Dll,-202</c> to its text.</summary>

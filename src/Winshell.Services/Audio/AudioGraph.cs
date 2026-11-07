@@ -150,25 +150,19 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         foreach (var flow in new[] { EDataFlow.eRender, EDataFlow.eCapture })
         {
             _enumerator.EnumAudioEndpoints(flow, DEVICE_STATE.DEVICE_STATE_ACTIVE, out var devices);
-            devices.GetCount(out var count);
-            for (uint i = 0; i < count; i++)
+            try
             {
-                devices.Item(i, out var device);
-                device.GetId(out var id);
-                present.Add(id);
-                if (_endpoints.ContainsKey(id))
-                    continue;
-                try
+                devices.GetCount(out var count);
+                for (uint i = 0; i < count; i++)
                 {
-                    var node = new EndpointNode(this, device, id, flow == EDataFlow.eRender);
-                    _endpoints[id] = node;
-                    AddNode(node);
-                    node.StartSessions();
+                    devices.Item(i, out var device);
+                    if (!Open(device, flow == EDataFlow.eRender, present))
+                        CoreAudio.Release(device);
                 }
-                catch (COMException e)
-                {
-                    _log.Warn("audio", $"Cannot open audio device {id}: {e.Message}");
-                }
+            }
+            finally
+            {
+                CoreAudio.Release(devices);
             }
         }
 
@@ -182,6 +176,30 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
             node.Release();
             RemoveNode(node);
         }
+    }
+
+    /// <summary>Whether a new endpoint node now holds <paramref name="device"/>.</summary>
+    private bool Open(IMMDevice device, bool render, HashSet<string> present)
+    {
+        device.GetId(out var id);
+        present.Add(id);
+        if (_endpoints.ContainsKey(id))
+            return false;
+        EndpointNode node;
+        try
+        {
+            node = new EndpointNode(this, device, id, render);
+        }
+        catch (COMException e)
+        {
+            _log.Warn("audio", $"Cannot open audio device {id}: {e.Message}");
+            return false;
+        }
+
+        _endpoints[id] = node;
+        AddNode(node);
+        node.StartSessions();
+        return true;
     }
 
     private void ReadDefaults()
@@ -202,8 +220,15 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
     {
         if (_enumerator is null || _enumerator.GetDefaultAudioEndpoint(flow, ERole.eConsole, out var device) != 0)
             return null;
-        device.GetId(out var id);
-        return _endpoints.GetValueOrDefault(id);
+        try
+        {
+            device.GetId(out var id);
+            return _endpoints.GetValueOrDefault(id);
+        }
+        finally
+        {
+            CoreAudio.Release(device);
+        }
     }
 
     /// <summary>

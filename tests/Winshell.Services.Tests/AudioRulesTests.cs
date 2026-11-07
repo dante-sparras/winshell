@@ -31,4 +31,20 @@ public sealed class AudioRulesTests
         node.SetMuted(true);
         Assert.Null(node.KeepRunning());
     }
+
+    [Fact]
+    public void A_device_the_graph_holds_survives_the_reads_it_releases()
+    {
+        var loop = new ManualEventLoop();
+        using var graph = new AudioGraph(loop, new Log());
+        var node = graph.DefaultPlayback;
+        Assert.SkipUnless(node is not null, "This PC has no playback device.");
+
+        graph.RequestSync();
+        loop.Process();
+
+        Assert.Same(node, graph.DefaultPlayback);
+        // The meter is activated from the device the node holds.
+        Assert.NotNull(node.Meter);
+    }
 }
