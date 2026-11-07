@@ -138,7 +138,7 @@ public sealed class NetworkingServiceTests
         loop.Process();
 
         Assert.Empty(service.Devices);
-        Assert.True(backend.Unsubscribed);
+        Assert.True(backend.Disposed);
     }
 
     [Fact]
@@ -650,7 +650,7 @@ public sealed class NetworkingServiceTests
 
     private sealed class FakeBackend : INetworkBackend
     {
-        private Action<NetworkSnapshot>? _listener;
+        public event Action? Changed;
 
         public NetworkSnapshot Current { get; private set; } = NetworkSnapshot.Initial;
 
@@ -686,23 +686,13 @@ public sealed class NetworkingServiceTests
 
         public uint ForgetError { get; set; }
 
-        public bool Unsubscribed { get; private set; }
+        public bool Disposed { get; private set; }
 
-        public IDisposable Subscribe(Action<NetworkSnapshot> listener)
-        {
-            _listener = listener;
-            return new Subscription(this);
-        }
-
+        /// <summary>Makes <paramref name="snapshot"/> what Windows reports, and says it changed.</summary>
         public void Publish(NetworkSnapshot snapshot)
         {
             Current = snapshot;
-            _listener?.Invoke(snapshot);
-        }
-
-        public void Refresh()
-        {
-            Calls.Add("refresh");
+            Changed?.Invoke();
         }
 
         public Task RequestAccessAsync()
@@ -712,10 +702,10 @@ public sealed class NetworkingServiceTests
         }
 
         /// <summary>Reads the radios of the current snapshot again, as Windows would.</summary>
-        public Task RefreshNowAsync()
+        public Task<NetworkSnapshot> ReadAsync(CancellationToken cancellation)
         {
             Current = Current with { Wifi = RadioReading.Read(Current.Wifi.Radios) };
-            return Task.CompletedTask;
+            return Task.FromResult(Current);
         }
 
         public Task ScanAsync(Guid device)
@@ -776,13 +766,9 @@ public sealed class NetworkingServiceTests
             return ConnectGate?.Task ?? Task.FromResult(ConnectError);
         }
 
-        private sealed class Subscription(FakeBackend owner) : IDisposable
+        public void Dispose()
         {
-            public void Dispose()
-            {
-                owner.Unsubscribed = true;
-                owner._listener = null;
-            }
+            Disposed = true;
         }
     }
 }

@@ -53,7 +53,8 @@ internal static unsafe class Wlan
 
     /// <summary>
     /// Calls <paramref name="changed"/> on a wlanapi thread when a WLAN connection or scan changes, and hands
-    /// <paramref name="failed"/> each exception it throws.
+    /// <paramref name="failed"/> each exception it throws, until <see cref="StopListening"/>. The process has one
+    /// listener: a later call replaces it.
     /// </summary>
     internal static void Listen(Action changed, Action<Exception> failed)
     {
@@ -64,6 +65,16 @@ internal static unsafe class Wlan
         // ACM avoids the location consent required by MSM notifications.
         _ = PInvoke.WlanRegisterNotification(handle, WLAN_NOTIFICATION_SOURCES.WLAN_NOTIFICATION_SOURCE_ACM, true,
             &OnNotification, null);
+    }
+
+    /// <summary>Stops the calls <see cref="Listen"/> started. Windows waits for a call already running. Never call it from that call.</summary>
+    internal static void StopListening()
+    {
+        _changed = null;
+        var handle = Handle;
+        if (!handle.IsNull)
+            _ = PInvoke.WlanRegisterNotification(handle, WLAN_NOTIFICATION_SOURCES.WLAN_NOTIFICATION_SOURCE_NONE, true,
+                null, null);
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]

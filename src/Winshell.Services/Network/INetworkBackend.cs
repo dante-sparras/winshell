@@ -1,14 +1,17 @@
 namespace Winshell.Network;
 
-internal interface INetworkBackend
+internal interface INetworkBackend : IDisposable
 {
-    NetworkSnapshot Current { get; }
-    IDisposable Subscribe(Action<NetworkSnapshot> listener);
-    void Refresh();
-    Task RequestAccessAsync();
+    /// <summary>Windows reported a change, or an action changed something. Raised on any thread.</summary>
+    event Action? Changed;
 
-    /// <summary>Reads the adapters, profiles, radios and connectivity now, and publishes the snapshot.</summary>
-    Task RefreshNowAsync();
+    /// <summary>
+    /// Reads the adapters, profiles, radios and connectivity. The first read starts watching Windows until the backend
+    /// is disposed.
+    /// </summary>
+    Task<NetworkSnapshot> ReadAsync(CancellationToken cancellation);
+
+    Task RequestAccessAsync();
 
     Task ScanAsync(Guid device);
     Task<ConnectionFailReason?> ConnectAsync(Guid device, string ssid, string? password);

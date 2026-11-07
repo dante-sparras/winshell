@@ -18,11 +18,10 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     private readonly MonitorWarning _warning;
 
-    // Guards the timer and the read flags. Nothing awaits inside it.
+    // Guards the timer and disposal. Nothing awaits inside it.
     private readonly object _gate = new();
 
-    // Ends with the service, so a read that Windows does not cancel ends at its next check.
-    private readonly CancellationTokenSource _ended = new();
+    private readonly StateReader<BluetoothSnapshot> _reader;
 
     // One radio change and one visibility change run at a time.
     private readonly DeviceAction _radioChange;
@@ -32,10 +31,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
     private BluetoothAdapter? _adapter;
 
     private string _error = "";
-
-    // Someone asked for a read while one ran. What they want to see may be newer than that read.
-    private bool _reading, _readAgain;
-    private long _revision;
     private volatile bool _disposed;
 
     internal BluetoothService(IEventLoop loop, Log log, IBluetoothBackend? backend = null, TimeProvider? time = null,
@@ -48,6 +43,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         _radioChange = new DeviceAction(Post);
         _visibilityChange = new DeviceAction(Post);
         Backend = backend ?? new BluetoothBackend();
+        _reader = new StateReader<BluetoothSnapshot>(ReadAsync, Apply, loop, _warning);
         Backend.Changed += Refresh;
     }
 
@@ -131,93 +127,30 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     internal void Invalidate()
     {
-        Interlocked.Increment(ref _revision);
+        _reader.Invalidate();
     }
 
     /// <summary>Reads the state now, rather than at the next change Windows reports.</summary>
     public void Refresh()
     {
-        _ = RefreshAsync();
+        _reader.Request();
     }
 
-    // One read runs at a time. A request during it reads again when it ends, so the result is never older than the request.
-    internal async Task RefreshAsync()
+    internal Task RefreshAsync()
     {
-        lock (_gate)
-        {
-            if (_disposed)
-                return;
-            if (_reading)
-            {
-                _readAgain = true;
-                return;
-            }
-
-            _reading = true;
-        }
-
-        bool again;
-        do
-        {
-            lock (_gate)
-            {
-                _readAgain = false;
-            }
-
-            try
-            {
-                await ReadAsync().ConfigureAwait(false);
-            }
-            finally
-            {
-                bool close;
-                lock (_gate)
-                {
-                    again = _readAgain && !_disposed;
-                    _reading = again;
-                    close = _disposed && !again;
-                }
-
-                if (close)
-                    CloseBackend();
-            }
-        } while (again);
+        return _reader.ReadAsync();
     }
 
-    private async Task ReadAsync()
+    private async Task<BluetoothSnapshot> ReadAsync(CancellationToken cancellation)
     {
-        var revision = Interlocked.Read(ref _revision);
-        BluetoothSnapshot snapshot;
         try
         {
-            snapshot = await Backend.ReadAsync(_ended.Token).ConfigureAwait(false);
-            _warning.Succeeded();
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-        catch (ObjectDisposedException)
-        {
-            return;
+            return await Backend.ReadAsync(cancellation).ConfigureAwait(false);
         }
         catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
-            snapshot = BluetoothSnapshot.Initial with { Error = e.Message };
+            return BluetoothSnapshot.Initial with { Error = e.Message };
         }
-#pragma warning disable CA1031 // Nobody awaits a refresh, and one failed read must not stop the next.
-        catch (Exception e)
-#pragma warning restore CA1031
-        {
-            _warning.Failed(e);
-            return;
-        }
-
-        Post(() =>
-        {
-            if (revision == Interlocked.Read(ref _revision))
-                Apply(snapshot);
-        });
     }
 
     /// <summary>Starts looking for nearby devices. Needs an adapter that is on.</summary>
@@ -406,27 +339,7 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         StopMonitoring();
         foreach (var device in Devices)
             device.Remove();
-        _ended.Cancel();
-        bool idle;
-        lock (_gate)
-        {
-            idle = !_reading;
-        }
-
         // A read in flight closes the backend when it ends.
-        if (idle)
-            CloseBackend();
-    }
-
-    private void CloseBackend()
-    {
-        try
-        {
-            Backend.Dispose();
-        }
-        finally
-        {
-            _ended.Dispose();
-        }
+        _reader.Stop(Backend.Dispose);
     }
 }

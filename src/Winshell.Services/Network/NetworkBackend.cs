@@ -80,10 +80,8 @@ internal sealed record NetworkSnapshot(
 /// networks from WinRT's WiFiAdapter, which needs the location permission for desktop apps; saved
 /// networks and connection states from wlanapi; connectivity from WinRT's NetworkInformation.
 /// </summary>
-internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetworkBackend
+internal sealed class NetworkBackend : INetworkBackend
 {
-    public static readonly NetworkBackend Instance = new();
-
     private readonly object _lock = new();
     private readonly Dictionary<Guid, WiFiAdapter> _wifiAdapters = [];
     private NetworkAccessStatus _access;
@@ -92,21 +90,52 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
     private IReadOnlySet<Guid>? _wifiIds;
     private readonly ProfileWriteQueue _profileWrites = new();
     private readonly IWlanProfileApi _profiles = WlanProfileApi.Instance;
+    private bool _watching;
 
-    private NetworkBackend()
-        : base(NetworkSnapshot.Initial)
+    public event Action? Changed;
+
+    private void Watch()
     {
+        _watching = true;
+        WinNetworkInformation.NetworkStatusChanged += OnNetworkStatusChanged;
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+        NetworkChange.NetworkAvailabilityChanged += OnNetworkChanged;
+        Wlan.Listen(Refresh, e => Log.Default.Warn("network", e.Message));
     }
 
-    protected override string Category => "network";
-
-    protected override async Task StartAsync()
+    /// <summary>Stops watching Windows and lets go of the radios.</summary>
+    public void Dispose()
     {
-        WinNetworkInformation.NetworkStatusChanged += _ => Refresh();
-        NetworkChange.NetworkAddressChanged += (_, _) => Refresh();
-        NetworkChange.NetworkAvailabilityChanged += (_, _) => Refresh();
-        Wlan.Listen(Refresh, e => Log.Default.Warn("network", e.Message));
-        await RefreshNowAsync().ConfigureAwait(false);
+        if (_watching)
+        {
+            _watching = false;
+            WinNetworkInformation.NetworkStatusChanged -= OnNetworkStatusChanged;
+            NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
+            NetworkChange.NetworkAvailabilityChanged -= OnNetworkChanged;
+            Wlan.StopListening();
+        }
+
+        lock (_lock)
+        {
+            foreach (var radio in _radios)
+                radio.StateChanged -= OnRadioStateChanged;
+            _radios.Clear();
+        }
+    }
+
+    private void Refresh()
+    {
+        Changed?.Invoke();
+    }
+
+    private void OnNetworkStatusChanged(object? sender)
+    {
+        Refresh();
+    }
+
+    private void OnNetworkChanged(object? sender, EventArgs e)
+    {
+        Refresh();
     }
 
     /// <summary>
@@ -166,11 +195,6 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         Refresh();
     }
 
-    Task INetworkBackend.RefreshNowAsync()
-    {
-        return RefreshNowAsync();
-    }
-
     public async Task RequestAccessAsync()
     {
         await _accessGate.WaitAsync().ConfigureAwait(false);
@@ -201,7 +225,6 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         finally
         {
             _accessGate.Release();
-            await RefreshNowAsync().ConfigureAwait(false);
         }
     }
 
@@ -232,8 +255,15 @@ internal sealed class NetworkBackend : SnapshotSource<NetworkSnapshot>, INetwork
         };
     }
 
-    protected override async Task<NetworkSnapshot> ReadAsync()
+    public Task<NetworkSnapshot> ReadAsync(CancellationToken cancellation)
     {
+        return Task.Run(ReadNowAsync, cancellation);
+    }
+
+    private async Task<NetworkSnapshot> ReadNowAsync()
+    {
+        if (!_watching)
+            Watch();
         try
         {
             var snapshot = ReadState();
