@@ -12,7 +12,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     private readonly IEventLoop _loop;
     private readonly INetworkBackend _backend;
     private readonly IRadioAccess _radioAccess;
-    private readonly IDisposable _subscription;
+    private readonly StateReader<NetworkSnapshot> _reader;
     private readonly DeviceAction _access;
     private readonly DeviceAction _wifiSwitch;
     private NetworkSnapshot _snapshot = NetworkSnapshot.Initial;
@@ -23,12 +23,14 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     internal NetworkingService(IEventLoop loop, INetworkBackend? backend = null, IRadioAccess? radioAccess = null)
     {
         _loop = loop;
-        _backend = backend ?? NetworkBackend.Instance;
+        _backend = backend ?? new NetworkBackend();
         _radioAccess = radioAccess ?? WindowsRadioAccess.Instance;
         _access = new DeviceAction(loop.Post);
         _wifiSwitch = new DeviceAction(loop.Post);
-        Apply(_backend.Current);
-        _subscription = _backend.Subscribe(s => _loop.Post(() => Apply(s)));
+        _reader = new StateReader<NetworkSnapshot>(_backend.ReadAsync, Apply, loop,
+            new MonitorWarning(() => Log.Default, "network"));
+        _backend.Changed += _reader.Request;
+        _reader.Request();
     }
 
     /// <summary>An access request or a radio change failed.</summary>
@@ -87,7 +89,7 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     /// <summary>Reads the adapters, profiles, radios and connectivity again soon.</summary>
     public void Refresh()
     {
-        _backend.Refresh();
+        _reader.Request();
     }
 
     /// <summary>Asks Windows for Wi-Fi access, which may show consent UI. Call it from a user action.</summary>
@@ -102,7 +104,15 @@ public sealed class NetworkingService : ObservableObject, IDisposable
             return Task.CompletedTask;
         return _access.RunAsync(() => Changed(nameof(RequestingAccess)), async () =>
         {
-            await _backend.RequestAccessAsync().ConfigureAwait(false);
+            try
+            {
+                await _backend.RequestAccessAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await _reader.ReadAsync().ConfigureAwait(false);
+            }
+
             return null;
         }, error =>
         {
@@ -110,7 +120,6 @@ public sealed class NetworkingService : ObservableObject, IDisposable
                 return;
             _radioError = "";
             Changed(nameof(RequestingAccess));
-            Apply(_backend.Current);
             Set(ref _error, error, nameof(Error));
             if (error.Length > 0)
                 OperationFailed?.Invoke(error);
@@ -128,14 +137,14 @@ public sealed class NetworkingService : ObservableObject, IDisposable
             var error = await RadioSwitch.SetEnabledAsync(RadioKind.WiFi, radios, enabled, _radioAccess)
                 .ConfigureAwait(false);
             if (error is null)
-                await _backend.RefreshNowAsync().ConfigureAwait(false);
+                await _reader.ReadAsync().ConfigureAwait(false);
             return error;
         }, error =>
         {
             if (_disposed)
                 return;
             _radioError = error;
-            Apply(_backend.Current);
+            Apply(_snapshot);
             if (error.Length > 0)
                 OperationFailed?.Invoke(error);
         });
@@ -174,7 +183,8 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     public void Dispose()
     {
         _disposed = true;
-        _subscription.Dispose();
+        _backend.Changed -= _reader.Request;
+        _reader.Stop(_backend.Dispose);
         foreach (var device in Devices)
             device.Remove();
     }

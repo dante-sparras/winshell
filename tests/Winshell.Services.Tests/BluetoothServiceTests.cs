@@ -620,13 +620,15 @@ public sealed class BluetoothServiceTests
         var first = service.RefreshAsync();
         await backend.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
-        await service.RefreshAsync();
+        var second = service.RefreshAsync();
+        var third = service.RefreshAsync();
         Assert.Equal(1, backend.Reads);
+        Assert.False(second.IsCompleted);
         // Resumes the read on this thread, so the refresh finishes without a pool thread.
         backend.Gate.SetResult();
         await first.WaitAsync(TestContext.Current.CancellationToken);
+        await Task.WhenAll(second, third).WaitAsync(TestContext.Current.CancellationToken);
 
-        await Wait.UntilAsync(() => backend.Reads >= 2, "the queued read");
         Assert.Equal(2, backend.Reads);
     }
 
