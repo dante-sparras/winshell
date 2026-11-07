@@ -78,21 +78,26 @@ public sealed class BrightnessMonitor : ObservableObject
 public sealed class BrightnessService : ObservableObject, IDisposable
 {
     private readonly IBrightnessBackend _backend;
-    private readonly INotifyCollectionChanged _screens;
+    private readonly ObservableCollection<ScreenInfo> _screens;
     private readonly StateReader<BrightnessSnapshot> _reader;
     private readonly BrightnessWriter _writer;
     private readonly Log _log;
+    private List<ScreenInfo> _monitorsRead;
     private bool _ready;
 
     /// <param name="loop">The loop readings are applied on.</param>
     /// <param name="log">Where a failed read or write is reported.</param>
-    /// <param name="screens">The shell's screens. When they change, a monitor came, went or changed mode, so the monitors are read again.</param>
+    /// <param name="screens">
+    /// The shell's screens. When a monitor comes, goes or changes mode, the monitors are read again. A work area alone
+    /// moves with every panel and app bar, and reads nothing.
+    /// </param>
     /// <param name="backend">Windows, or a fake in tests.</param>
-    internal BrightnessService(IEventLoop loop, Log log, INotifyCollectionChanged screens,
+    internal BrightnessService(IEventLoop loop, Log log, ObservableCollection<ScreenInfo> screens,
         IBrightnessBackend? backend = null)
     {
         _log = log;
         _screens = screens;
+        _monitorsRead = MonitorsOf(screens);
         _backend = backend ?? new BrightnessBackend(log);
         _reader = new StateReader<BrightnessSnapshot>(_backend.ReadAsync, Apply, loop,
             new MonitorWarning(log, "power"));
@@ -118,7 +123,16 @@ public sealed class BrightnessService : ObservableObject, IDisposable
 
     private void OnScreensChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        var monitors = MonitorsOf(_screens);
+        if (monitors.SequenceEqual(_monitorsRead))
+            return;
+        _monitorsRead = monitors;
         _reader.Request();
+    }
+
+    private static List<ScreenInfo> MonitorsOf(IEnumerable<ScreenInfo> screens)
+    {
+        return [.. screens.Select(s => s with { WorkArea = default })];
     }
 
     /// <summary>Stops following brightness changes.</summary>

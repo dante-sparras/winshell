@@ -224,10 +224,10 @@ The running shell: its screens and services. There is one in a process. Each ser
 | `CachePath(string path)` | string | A path in CacheDir. |
 | `ConfigPath(string path)` | string | A path in ConfigDir. |
 | `DataPath(string path)` | string | A path in DataDir. |
-| `Dispose()` | void | Closes Winshell's notices, stops the services, and closes every window. Quit does this and also ends the shell. |
+| `Dispose()` | void | Closes Winshell's notices, stops the services, and closes every window. One that throws doesn't stop the rest: its exception is thrown once all have stopped. Quit does this and also ends the shell. |
 | `NewHotkey()` | [Hotkey](winshell-input.md#hotkey) | A hotkey that works anywhere in Windows. Set its Hotkey.Sequence, and dispose it to give the keys back. |
 | `NewIdleMonitor()` | [IdleMonitor](winshell-power.md#idlemonitor) | Tells when there has been no input for a while. |
-| `Quit()` | void | Ends the shell. Its windows close and Run returns. |
+| `Quit()` | void | Ends the shell. Its windows close and Run returns. Something that fails to stop is logged and reported, and the shell ends anyway. |
 | `Reload()` | bool | Replaces this instance with a new process of the same program, which takes over once this one has gone. False when that process did not start: the shell then keeps running. |
 | `Run<T>([ShellOptions](#shelloptions)? options = null)` | void, static | Runs a configuration until the shell quits, on this thread, as a Winshell instance: `winshell list`, `log`, `kill`, `reload` and `ipc` reach it. Call it from `Main`, marked `[STAThread]`. The program takes `--no-duplicate` and `-d` on its command line. `--no-duplicate` exits at once when its shell id is already running. `-d` starts this program again and returns, so the caller does not wait, and that start keeps `--after`. T is a ShellConfiguration with a public parameterless constructor. |
 | `StatePath(string path)` | string | A path in StateDir. |

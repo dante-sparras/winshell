@@ -116,28 +116,16 @@ public sealed partial class Shell
     }
 
     /// <summary>
-    /// A service goes before the ones it reads: Winland reads the window list, which reads the virtual desktops.
-    /// Explorer's taskbar may go before or after the tray: its restore moves the tray out of the way itself.
-    /// </summary>
-    private void DisposeServices()
-    {
-        DisposeEach([
-            _winland, _windows, _virtualDesktops, _apps, _audio, _bluetooth, _brightness, _explorerTaskbar, _media,
-            _networking, _notifications, _power, _powerMode, _systemTray, _hotkeys
-        ]);
-    }
-
-    /// <summary>
-    /// Disposes each service in order. One that throws doesn't stop the rest; its exception is thrown once all are
+    /// Disposes each part in order. One that throws doesn't stop the rest; its exception is thrown once all are
     /// disposed, or an <see cref="AggregateException"/> when several threw.
     /// </summary>
-    internal static void DisposeEach(IEnumerable<IDisposable?> services)
+    internal static void DisposeEach(IEnumerable<IDisposable?> parts)
     {
         List<Exception> failures = [];
-        foreach (var service in services)
+        foreach (var part in parts)
             try
             {
-                service?.Dispose();
+                part?.Dispose();
             }
             catch (Exception e)
             {
