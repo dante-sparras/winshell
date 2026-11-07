@@ -191,8 +191,15 @@ internal sealed class WindowsCaptureBackend(Log log) : ICaptureBackend
                 log.Warn("capture", $"Capture teardown: {e.Message}");
             }
 
-            for (var i = 0; i < 2 && pool?.TryGetNextFrame() is { } frame; i++)
-                frame.Dispose();
+            try
+            {
+                for (var i = 0; i < 2 && pool?.TryGetNextFrame() is { } frame; i++)
+                    frame.Dispose();
+            }
+            catch (Exception e) when (CaptureFailure.IsExpected(e))
+            {
+                log.Warn("capture", $"Capture teardown: {e.Message}");
+            }
         }
         finally
         {

@@ -11,6 +11,7 @@ using WinRT;
 using IInspectable = Windows.Win32.System.WinRT.IInspectable;
 using DxgiInterfaceAccess = Windows.Win32.System.WinRT.Direct3D11.IDirect3DDxgiInterfaceAccess;
 using MapFlags = Vortice.Direct3D11.MapFlags;
+using ResultCode = Vortice.DXGI.ResultCode;
 
 namespace Winshell.Native;
 
@@ -18,7 +19,6 @@ namespace Winshell.Native;
 internal static unsafe class CaptureInterop
 {
     private static readonly Guid GraphicsCaptureItemId = new("79c3f95b-31f7-4ec2-a464-632ef5d30760");
-    private const int DXGI_ERROR_WAS_STILL_DRAWING = unchecked((int)0x887a000a);
 
     /// <summary>A capture item for <paramref name="window"/>, or for <paramref name="monitor"/> when the window is zero.</summary>
     public static GraphicsCaptureItem CreateItem(nint window, nint monitor)
@@ -87,7 +87,7 @@ internal static unsafe class CaptureInterop
     public static byte[]? Read(ID3D11DeviceContext context, ID3D11Texture2D staging, int width, int height)
     {
         var result = context.Map(staging, 0, MapMode.Read, MapFlags.DoNotWait, out var mapped);
-        if (result.Code == DXGI_ERROR_WAS_STILL_DRAWING)
+        if (result == ResultCode.WasStillDrawing)
             return null;
         result.CheckError();
         try
