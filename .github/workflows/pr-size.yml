@@ -27,7 +27,6 @@ jobs:
           REPO: ${{ github.repository }}
           PR: ${{ github.event.number }}
         run: |
-          # Lines added plus lines deleted. Files in tests/ count only when the pull request changes nothing else.
           counts=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | "\(.filename)\t\(.additions + .deletions)"')
           lines=$(awk -F'\t' '$1 !~ /^tests\// { n += $2 } END { print n + 0 }' <<<"$counts")
           if [ "$lines" -eq 0 ]; then lines=$(awk -F'\t' '{ n += $2 } END { print n + 0 }' <<<"$counts"); fi

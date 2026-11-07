@@ -62,7 +62,6 @@ internal static partial class ReferencePages
         var docs = assemblies.SelectMany(Docs).DistinctBy(pair => pair.Key).ToDictionary(StringComparer.Ordinal);
         var included = Included(assemblies);
         var pages = new SortedDictionary<string, string>(StringComparer.Ordinal);
-        // Every included type is in a namespace: the seeds are, and so is every public type of the assemblies.
         foreach (var group in included.GroupBy(type => type.Namespace!))
         {
             var file = FileName(group.Key);

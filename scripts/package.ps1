@@ -292,7 +292,6 @@ if ($Verify) {
     foreach ($asset in Get-ReleaseAssetName $Version $Runtime) {
         if (-not (Test-Path -LiteralPath (Join-Path $Out $asset) -PathType Leaf)) { throw "No $asset in $Out" }
     }
-    # SHA256SUMS.txt lists every zip, and each matches its line.
     $listed = @{}
     foreach ($line in (Get-Content -LiteralPath (Join-Path $Out 'SHA256SUMS.txt'))) {
         $hash, $name = $line -split '  ', 2
@@ -310,7 +309,6 @@ if ($Verify) {
         $dir = Assert-Inside (Join-Path $verifyRoot $rid) $Out
         if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
         [IO.Compression.ZipFile]::ExtractToDirectory($zip, $dir)
-        # The apphost, the runtime and the ReadyToRun code are all built for this architecture.
         foreach ($binary in 'winshell.exe', 'hostfxr.dll', 'coreclr.dll', 'winshell.dll') {
             $path = Join-Path $dir $binary
             if (-not (Test-Path -LiteralPath $path)) { throw "$name has no $binary at its root" }
