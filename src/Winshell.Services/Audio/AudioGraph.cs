@@ -129,8 +129,6 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         CoreAudio.Release(_enumerator);
     }
 
-    // Devices
-
     /// <summary>Asks for the device list to be read again, once, on the UI thread.</summary>
     internal void RequestSync()
     {
@@ -207,8 +205,6 @@ internal sealed class AudioGraph : IAudioGraph, IDisposable
         device.GetId(out var id);
         return _endpoints.GetValueOrDefault(id);
     }
-
-    // Sessions
 
     /// <summary>
     /// Shows a session the endpoint started tracking. Windows keeps a System Sounds session on every playback

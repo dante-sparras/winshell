@@ -91,7 +91,6 @@ internal sealed class AppCatalog(
             _started = true;
         }
 
-        // The scan thread is waiting before any watch is armed, so a change cannot arrive with nobody to scan it.
         _scanThread = new Thread(ScanLoop) { IsBackground = true, Name = "App scan" };
         _scanThread.Start();
         Poke(TimeSpan.Zero);
@@ -121,7 +120,6 @@ internal sealed class AppCatalog(
 
         _stop = true;
         _wake.Set();
-        // The scan thread arms watches, so it stops first.
         _scanThread?.Join();
         foreach (var watch in _watches.Values)
             watch.Dispose();

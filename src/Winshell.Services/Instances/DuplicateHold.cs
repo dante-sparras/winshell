@@ -54,7 +54,6 @@ internal readonly struct DuplicateHold : IDisposable
             return default;
         }
 
-        // A shell started without --no-duplicate holds no mutex. Its instance.json is the only record of it.
         if (locations.Instances.List(false)
             .Any(i => string.Equals(i.Info.ShellId, shellId, StringComparison.OrdinalIgnoreCase)))
         {

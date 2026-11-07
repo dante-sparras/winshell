@@ -310,7 +310,6 @@ internal sealed class IpcServer : IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Shutdown, or the request timeout, cancelled the pending read.
         }
     }
 

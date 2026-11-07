@@ -30,7 +30,6 @@ public enum BalloonIcon
 /// </summary>
 public sealed class SystemTray : ObservableObject, IDisposable
 {
-    // The trays of this process with the notification area window open.
     private static readonly ConcurrentDictionary<SystemTray, byte> Opened = new();
 
     private readonly IEventLoop _loop;
@@ -57,7 +56,6 @@ public sealed class SystemTray : ObservableObject, IDisposable
         _icons.Changed += OnChanged;
         _icons.Removed += OnRemoved;
         _icons.Balloon += OnBalloon;
-        // The backend raises these on the loop's thread.
         _backend.TaskbarCreated += OnTaskbarCreated;
         _backend.ExplorerInFront += _backend.Raise;
         _backend.SettingsChanged += UseSettings;

@@ -290,7 +290,6 @@ internal sealed class BluetoothBackend(TimeProvider time) : IBluetoothBackend
 
     internal static IReadOnlyList<BluetoothDeviceInfo> MergeEndpoints(IEnumerable<BluetoothEndpointInfo> endpoints)
     {
-        // Prefer the fresh paired snapshot to a stale discovery event for the same endpoint.
         var unique = endpoints.DistinctBy(e => e.Id).ToArray();
         return unique.GroupBy(e => e.Container is { } container ? "container:" + container :
                     e.Address.Length > 0 ? "address:" + e.Address.ToUpperInvariant() : "endpoint:" + e.Id,

@@ -90,8 +90,6 @@ internal sealed class TempImageStore
             }
 
             _uses.Remove(url);
-            // Delete before letting the lock go. The next claim of these bytes uses the same path, and a delete
-            // that ran after that claim would remove the file while the new claim hands out its url.
             try
             {
                 File.Delete(use.Path);

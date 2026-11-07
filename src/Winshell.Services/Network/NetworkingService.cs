@@ -155,7 +155,6 @@ public sealed class NetworkingService : ObservableObject, IDisposable
     {
         if (_disposed)
             return;
-        // A radio refusal stays until the radios change or a read fails. Reaching the new state clears it.
         if (snapshot.Error.Length > 0 || _snapshot.WifiEnabled != snapshot.WifiEnabled)
             _radioError = "";
         var old = _snapshot;

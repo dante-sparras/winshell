@@ -150,7 +150,6 @@ public sealed class ShellIpc
 
         return new DisposeAction(() =>
         {
-            // A later registration under this name took over, and it stays.
             if (members.Remove(member) && found.IsEmpty)
                 _targets.Remove(target);
         });

@@ -16,14 +16,12 @@ internal sealed class StateReader<T>(
     // Ends with the reader, so a read that Windows does not cancel ends at its next check.
     private readonly CancellationTokenSource _stopping = new();
 
-    // The requests waiting for the next read, completed once that read's reading is on the loop.
     private TaskCompletionSource? _next;
     private bool _reading;
     private int _stopRequested;
     private bool _stopped;
     private Action? _idle;
 
-    // A reading taken before the revision changed is stale and never applied.
     private long _revision;
 
     /// <summary>Reads the state soon.</summary>
@@ -67,7 +65,6 @@ internal sealed class StateReader<T>(
     {
         if (Interlocked.Exchange(ref _stopRequested, 1) == 1)
             return;
-        // Cancelled before the reader counts as stopped, so the token is never disposed before it is cancelled.
         _stopping.Cancel();
         TaskCompletionSource? waiting;
         bool now;
@@ -110,7 +107,6 @@ internal sealed class StateReader<T>(
 
             if (next is null)
             {
-                // Whoever waited for the last read sees the reader closed when it was stopped during that read.
                 try
                 {
                     if (stopped)

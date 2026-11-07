@@ -133,7 +133,6 @@ public sealed class NotificationListener : ObservableObject, IDisposable
         {
             while (!cancellation.IsCancellationRequested)
             {
-                // A failed read tries again sooner than the idle poll.
                 var wait = TimeSpan.FromSeconds(10);
                 try
                 {
@@ -189,7 +188,6 @@ public sealed class NotificationListener : ObservableObject, IDisposable
             var snapshot = await ReadAsync(_stop.Token).ConfigureAwait(false);
             Post(() =>
             {
-                // A read started before dismissal or a permission request must not undo that operation.
                 if (revision == Interlocked.Read(ref _revision) && !_requesting)
                     Apply(snapshot);
             });
@@ -505,7 +503,6 @@ public sealed class Notification : ObservableObject
 
     private void ApplyIcon(string url, int request)
     {
-        // A read that finished after dismissal must not land here, and must not keep the file.
         if (request != _iconRequest)
         {
             TempImageStore.Shared.ReleaseLater(url);

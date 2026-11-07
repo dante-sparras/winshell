@@ -58,7 +58,6 @@ internal sealed class InstanceLog : IDisposable
             }
             finally
             {
-                // The first line to wait starts the timer, as does a warning whose flush failed.
                 if (!waiting && _pending.Length > 0)
                     _timer.Change(_delay, Timeout.InfiniteTimeSpan);
             }
@@ -115,7 +114,6 @@ internal sealed class InstanceLog : IDisposable
     {
         if (_closed || _pending.Length == 0)
             return;
-        // A roll whose reopen failed left no writer; the next flush opens one again.
         _writer ??= Open();
         if (_writer.BaseStream.Length >= _cap)
             Roll();

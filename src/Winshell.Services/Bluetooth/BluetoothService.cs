@@ -17,12 +17,10 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
     private readonly MonitorWarning _warning;
 
-    // Guards the timer and disposal. Nothing awaits inside it.
     private readonly object _gate = new();
 
     private readonly StateReader<BluetoothSnapshot> _reader;
 
-    // One radio change and one visibility change run at a time.
     private readonly DeviceAction _radioChange;
     private readonly DeviceAction _visibilityChange;
     private IDisposable? _poll;
@@ -88,7 +86,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         }
         catch (Exception e) when (WindowsFailure.IsExpected(e))
         {
-            // Without events the timer still reads, only later.
             _warning.Failed(e);
         }
 
@@ -306,7 +303,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
 
         if (snapshot.Adapter is { } adapterInfo)
             _adapter?.Update(adapterInfo);
-        // Not null when a device is built: without an adapter, incoming is empty.
         var adapter = _adapter;
         var incoming = adapter is null ? [] : snapshot.Devices;
         Devices.Sync(incoming, d => d.Key, i => i.Key, i => new BluetoothDevice(this, i, adapter!),
@@ -355,7 +351,6 @@ public sealed class BluetoothService : ObservableObject, IDisposable
         StopMonitoring();
         foreach (var device in Devices)
             device.Remove();
-        // A read in flight closes the backend when it ends.
         _reader.Stop(Backend.Dispose);
     }
 }

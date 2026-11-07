@@ -35,7 +35,6 @@ internal sealed class HotkeyBackend(IEventLoop loop, Action<Exception> failed) :
         var id = _nextId;
         if (!_target.Register(id, (uint)chord.Modifiers | ModNoRepeat, (uint)chord.VirtualKey, out var code))
         {
-            // A refused chord must not leave the window up when it is the only reason the window exists.
             DestroyIfIdle();
             return code == ErrorAlreadyRegistered
                 ? HotkeyClaim.Taken($"{chord.Text} is already in use by Windows or another app.")

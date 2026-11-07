@@ -198,7 +198,6 @@ internal sealed partial class ConfigurationProject
             return found;
         }
 
-        // Several projects in the root is a refusal, not a miss: neither default nor a lone folder may stand in for it.
         if (In(root, out error) is { } atRoot)
             return atRoot;
         if (error is not null)

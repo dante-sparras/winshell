@@ -327,8 +327,6 @@ internal sealed class WindowBackend : IWindowBackend
             TopLevelWindows.Move(hwnd, place.Screen);
     }
 
-    // Requests
-
     /// <summary>Brings a window to the front and focuses it.</summary>
     public void Activate(nint hwnd)
     {

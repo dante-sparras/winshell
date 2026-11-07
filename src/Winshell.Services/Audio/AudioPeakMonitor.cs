@@ -97,7 +97,6 @@ public sealed class AudioPeakMonitor : ObservableObject, IDisposable
             // The device went away; the node is removed shortly.
         }
 
-        // A handler of the change above can have stopped or restarted the monitor.
         if (ReferenceEquals(_meter, meter) && _timer is null)
             _timer = _loop.Schedule(Interval, Tick);
     }

@@ -105,7 +105,6 @@ internal sealed class ExplorerTaskbarBackend : IExplorerTaskbarBackend
         if (!Win32.IsWindow(hwnd))
             return;
         var saved = Saved.Of(hwnd, primary, autohide, Win32.IsWindowVisible(hwnd));
-        // Record it before changing anything, so a failure halfway can still put this window back.
         _saved.Add(saved);
         if (saved.Reserves)
             saved.Removed = AppBars.Remove(hwnd);

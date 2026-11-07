@@ -21,7 +21,6 @@ internal sealed class SmtcSession
     {
     }
 
-    // A test gives it a link that records commands.
     internal SmtcSession(IEventLoop loop, Log log, int id, string appId, string appName,
         Func<SmtcSession, ISmtcLink> link)
     {
@@ -255,7 +254,6 @@ internal sealed class SmtcSession
         var seeked = false;
         if (state != PlaybackState || info.Rate != Rate)
         {
-            // Count the position up to now with the old state, then from now with the new one.
             _position = PositionNow();
             _positionTime = _time.GetUtcNow();
             seeked = true;

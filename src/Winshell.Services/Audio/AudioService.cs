@@ -244,7 +244,6 @@ public sealed class AudioService : ObservableObject, IDisposable
         _graph.DefaultsChanged -= OnDefaultsChanged;
         foreach (var node in Nodes)
             node.Remove();
-        // After the nodes: their peak meters read the graph.
         _graph.Dispose();
     }
 }
