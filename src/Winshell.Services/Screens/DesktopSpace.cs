@@ -57,32 +57,4 @@ internal static class DesktopSpace
 
         return null;
     }
-
-    /// <summary>Where a panel sits inside an area of its monitor, in physical pixels: anchored edges stick to the area, margins and size scale.</summary>
-    public static RECT Anchor(RECT area, PanelPlacement p, double scale)
-    {
-        var ml = (int)Math.Round(p.MarginLeft * scale);
-        var mr = (int)Math.Round(p.MarginRight * scale);
-        var mt = (int)Math.Round(p.MarginTop * scale);
-        var mb = (int)Math.Round(p.MarginBottom * scale);
-        var w = (int)Math.Round(p.Width * scale);
-        var h = (int)Math.Round(p.Height * scale);
-        var (x, width) = Span(area.Left, area.Width, p.Anchors.HasFlag(Edges.Left), p.Anchors.HasFlag(Edges.Right), ml,
-            mr, w);
-        var (y, height) = Span(area.Top, area.Height, p.Anchors.HasFlag(Edges.Top), p.Anchors.HasFlag(Edges.Bottom), mt,
-            mb, h);
-        return new RECT(x, y, x + Math.Max(1, width), y + Math.Max(1, height));
-    }
-
-    private static (int Start, int Length) Span(int start, int length, bool near, bool far, int nearMargin,
-        int farMargin, int size)
-    {
-        if (near && far)
-            return (start + nearMargin, length - nearMargin - farMargin);
-        if (near)
-            return (start + nearMargin, size);
-        if (far)
-            return (start + length - size - farMargin, size);
-        return (start + (length - size) / 2, size);
-    }
 }

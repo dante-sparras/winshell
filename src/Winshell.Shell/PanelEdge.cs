@@ -3,6 +3,21 @@ using Winshell.Native;
 
 namespace Winshell;
 
+/// <summary>Where and how a panel sits on its screen.</summary>
+internal sealed record PanelPlacement(
+    ScreenInfo? Screen,
+    Edges Anchors,
+    double MarginLeft,
+    double MarginTop,
+    double MarginRight,
+    double MarginBottom,
+    double Width,
+    double Height,
+    bool CoversScreen,
+    double ReservedSize,
+    bool AboveWindows,
+    bool Focusable);
+
 /// <summary>
 /// Where a panel sits and which edge of its screen it holds. It chooses the screen, whether to cover it or reserve an
 /// edge or follow the work area, and whether a fullscreen app puts it behind. Explorer's notices about that edge come
@@ -50,7 +65,7 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
             area = found.Area;
         }
 
-        var rect = DesktopSpace.Anchor(area, p, scale);
+        var rect = Anchor(area, p, scale);
         desktop.Move(rect, p.AboveWindows && !desktop.FullscreenOn(found.Id), scale);
         return true;
     }
@@ -160,6 +175,34 @@ internal sealed class PanelEdge(nint window, IPanelDesktop desktop, Action place
             Edges.Right => monitor with { Right = granted.Right, Top = granted.Top, Bottom = granted.Bottom },
             _ => monitor with { Top = granted.Top, Left = granted.Left, Right = granted.Right }
         };
+    }
+
+    /// <summary>Where a panel sits inside an area of its monitor, in physical pixels: anchored edges stick to the area, margins and size scale.</summary>
+    private static RECT Anchor(RECT area, PanelPlacement p, double scale)
+    {
+        var ml = (int)Math.Round(p.MarginLeft * scale);
+        var mr = (int)Math.Round(p.MarginRight * scale);
+        var mt = (int)Math.Round(p.MarginTop * scale);
+        var mb = (int)Math.Round(p.MarginBottom * scale);
+        var w = (int)Math.Round(p.Width * scale);
+        var h = (int)Math.Round(p.Height * scale);
+        var (x, width) = Span(area.Left, area.Width, p.Anchors.HasFlag(Edges.Left), p.Anchors.HasFlag(Edges.Right), ml,
+            mr, w);
+        var (y, height) = Span(area.Top, area.Height, p.Anchors.HasFlag(Edges.Top), p.Anchors.HasFlag(Edges.Bottom), mt,
+            mb, h);
+        return new RECT(x, y, x + Math.Max(1, width), y + Math.Max(1, height));
+    }
+
+    private static (int Start, int Length) Span(int start, int length, bool near, bool far, int nearMargin,
+        int farMargin, int size)
+    {
+        if (near && far)
+            return (start + nearMargin, length - nearMargin - farMargin);
+        if (near)
+            return (start + nearMargin, size);
+        if (far)
+            return (start + length - size - farMargin, size);
+        return (start + (length - size) / 2, size);
     }
 
     /// <summary>Reserves <paramref name="thickness"/> pixels along an edge of a monitor. Returns the area the panel lays out in.</summary>

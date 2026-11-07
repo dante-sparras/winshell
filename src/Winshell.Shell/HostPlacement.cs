@@ -3,6 +3,9 @@ using Winshell.Native;
 
 namespace Winshell;
 
+/// <summary>Where a popup sits, in screen coordinates.</summary>
+internal sealed record PopupPlacement(ScreenInfo? Screen, Rect Rect, bool GrabFocus);
+
 /// <summary>
 /// Where a native window is and whether it shows: its screen, scale, size and place, its z-order, and the parts of it
 /// that take clicks. A panel's screen and edge are <see cref="PanelEdge"/>. A floating window sits on its screen

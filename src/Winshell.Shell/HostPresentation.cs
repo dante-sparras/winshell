@@ -25,6 +25,8 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
     private DesktopWindowXamlSource? _xaml;
     private SystemBackdropConfiguration? _backdropConfig;
     private ISystemBackdropControllerWithTargets? _backdropController;
+    private WindowCorners _corners;
+    private bool _fullscreen;
 
     private nint Handle => host.Handle;
 
@@ -56,9 +58,9 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             // Panels and popups appear without the Windows fade, as layer surfaces do.
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_TRANSITIONS_FORCEDISABLED, 1, 4);
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_EXCLUDED_FROM_PEEK, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, 1, 4);
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, Win32.DWMWA_COLOR_NONE, 4);
         }
+
+        SetCornersAndBorder(WindowBackdrop.None, WindowCorners.Default);
 
         _root.RequestedTheme = platform.RequestedTheme;
         ApplyCaption();
@@ -144,23 +146,31 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
             _backdropController = controller;
         }
 
-        var corner = corners switch
-        {
-            WindowCorners.Square => 1,
-            WindowCorners.Round => 2,
-            WindowCorners.RoundSmall => 3,
-            // A bar along an edge stays square; a popup with a material is a rounded flyout.
-            _ => host.Kind switch
+        SetCornersAndBorder(backdrop, corners);
+    }
+
+    /// <summary>A fullscreen window's corners are square, so it meets the monitor's corners instead of rounding inside them.</summary>
+    internal void SetFullscreen(bool fullscreen)
+    {
+        if (_fullscreen == fullscreen)
+            return;
+        _fullscreen = fullscreen;
+        ApplyCorners();
+    }
+
+    /// <summary>The window's corners, and for a panel or popup its border, which follow its material.</summary>
+    private void SetCornersAndBorder(WindowBackdrop backdrop, WindowCorners corners)
+    {
+        // A bar along an edge stays square; a popup with a material is a rounded flyout.
+        _corners = corners != WindowCorners.Default
+            ? corners
+            : host.Kind switch
             {
-                WindowKind.Floating => 0,
-                WindowKind.Popup when backdrop != WindowBackdrop.None => 2,
-                _ => 1
-            }
-        };
-        if (host.Placement.Frame is { } frame)
-            frame.SetCorners(corner);
-        else
-            Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, corner, 4);
+                WindowKind.Floating => WindowCorners.Default,
+                WindowKind.Popup when backdrop != WindowBackdrop.None => WindowCorners.Round,
+                _ => WindowCorners.Square
+            };
+        ApplyCorners();
         if (host.Kind != WindowKind.Floating)
         {
             // A material window gets Windows' hairline border; a plain one gets none.
@@ -169,6 +179,19 @@ internal sealed class HostPresentation(HostWindow host, ShellPlatform platform) 
                 : Win32.DWMWA_COLOR_NONE;
             Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_BORDER_COLOR, border, 4);
         }
+    }
+
+    private void ApplyCorners()
+    {
+        // DWM_WINDOW_CORNER_PREFERENCE: DWMWCP_DEFAULT, DWMWCP_DONOTROUND, DWMWCP_ROUND, DWMWCP_ROUNDSMALL.
+        var preference = (_fullscreen ? WindowCorners.Square : _corners) switch
+        {
+            WindowCorners.Square => 1,
+            WindowCorners.Round => 2,
+            WindowCorners.RoundSmall => 3,
+            _ => 0
+        };
+        Win32.DwmSetWindowAttribute(Handle, Win32.DWMWA_WINDOW_CORNER_PREFERENCE, preference, 4);
     }
 
     /// <summary>Hands the keyboard to the island, unless it already has it.</summary>
