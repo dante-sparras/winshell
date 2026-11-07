@@ -27,14 +27,14 @@ internal sealed class NoticeWindow : IDisposable
     private bool _pointer;
     private bool _keyboard;
 
-    public NoticeWindow(Notice notice, Action act, Action dismiss, IEventLoop loop)
+    public NoticeWindow(Shell shell, Notice notice, Action act, Action dismiss, IEventLoop loop)
     {
         _loop = loop;
         _timeout = notice.Timeout;
         _dismiss = dismiss;
         var content = Content(notice, act, dismiss);
         content.Measure(new Size(NoticeWidth, double.PositiveInfinity));
-        _window = new PanelWindow
+        _window = new PanelWindow(shell)
         {
             Anchors = Edges.Bottom | Edges.Right,
             Margins = new Thickness(0, 0, 12, 12),

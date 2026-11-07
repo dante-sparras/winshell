@@ -251,6 +251,9 @@ public abstract class ShellWindow : ObservableObject, IDisposable
         HostCreated?.Invoke();
     }
 
+    /// <summary>Makes what places a new native window of this kind. <see cref="ApplyPlacement"/> then goes to it.</summary>
+    internal abstract IWindowPlacer CreatePlacer(HostWindow host, ShellPlatform platform);
+
     /// <summary>Tells the native window where to be. Only called with a host.</summary>
     private protected abstract void ApplyPlacement();
 

@@ -1,7 +1,7 @@
 using Microsoft.Win32;
 using Winshell.Native;
 
-namespace Winshell.Windows;
+namespace Winshell;
 
 /// <summary>
 /// Windows' peek: DWM shows one window at full size and hides the others, until it is told to stop. It stays off

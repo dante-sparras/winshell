@@ -1,6 +1,4 @@
-using Winshell.Windows;
-
-namespace Winshell.Services.Tests;
+namespace Winshell.ShellTests;
 
 /// <summary>What a peek asks of DWM. The calls go to a fake, so no real window is hidden.</summary>
 public class WindowThumbnailPeekTests

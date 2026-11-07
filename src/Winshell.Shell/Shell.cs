@@ -67,7 +67,7 @@ public sealed partial class Shell : IDisposable
             loop,
             log,
             session.Instance.Crashes,
-            (notice, act, dismiss) => new NoticeWindow(notice, act, dismiss, loop),
+            (notice, act, dismiss) => new NoticeWindow(this, notice, act, dismiss, loop),
             path => OpenToRead.Open(path, log),
             ShellNotices.WindowsIsQuiet);
     }

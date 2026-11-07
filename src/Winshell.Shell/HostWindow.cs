@@ -1,4 +1,3 @@
-using Windows.Win32.UI.WindowsAndMessaging;
 using Winshell.Diagnostics;
 using Winshell.Native;
 
@@ -6,7 +5,7 @@ namespace Winshell;
 
 /// <summary>
 /// The native window behind a shell window, and its life. It makes the window's parts, <see cref="Placement"/>, the
-/// <see cref="Placer"/> its kind needs, <see cref="Presentation"/>, <see cref="Focus"/> and <see cref="Messages"/>,
+/// <see cref="Placer"/> its client makes, <see cref="Presentation"/>, <see cref="Focus"/> and <see cref="Messages"/>,
 /// before the window itself, and releases the window, its place and its content when its client disposes it or
 /// Windows destroys it. A window that throws while handling a message stops, and its client makes another.
 /// </summary>
@@ -24,17 +23,13 @@ internal sealed class HostWindow : IDisposable
         Kind = kind;
         Client = client;
         Placement = new HostPlacement(this, platform);
-        Placer = kind switch
-        {
-            WindowKind.Panel => new PanelEdge(new HostPanelDesktop(this, platform)),
-            WindowKind.Popup => new PopupPlacer(this, platform),
-            _ => new FloatingFrame(this, platform)
-        };
+        Placer = client.CreatePlacer(this, platform);
         Presentation = new HostPresentation(this, platform);
         Focus = new WindowFocus(kind, new HostFocusEffects(this, platform));
         Messages = new HostMessages(this, platform);
-        var (style, exStyle) = Styles(kind);
-        _window = NativeWindow.Create(ClassName, style, exStyle, OnWindowMessage, Fail);
+        var (style, exStyle) = Placer.Styles;
+        _window = NativeWindow.Create(ClassName, style, exStyle | WindowFocus.StartingExStyle(kind), OnWindowMessage,
+            Fail);
         Handle = _window.Handle;
         try
         {
@@ -69,20 +64,6 @@ internal sealed class HostWindow : IDisposable
 
     /// <summary>Whether the window has started letting go of its parts. <see cref="Handle"/> turns 0 once it has let go of the window too.</summary>
     internal bool Released { get; private set; }
-
-    internal static (uint Style, uint ExStyle) Styles(WindowKind kind)
-    {
-        return kind switch
-        {
-            WindowKind.Floating => ((uint)(WINDOW_STYLE.WS_OVERLAPPEDWINDOW | WINDOW_STYLE.WS_CLIPCHILDREN),
-                (uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP | (uint)WINDOW_EX_STYLE.WS_EX_APPWINDOW |
-                WindowFocus.StartingExStyle(kind)),
-            _ => ((uint)WINDOW_STYLE.WS_POPUP,
-                (uint)WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP | (uint)WINDOW_EX_STYLE.WS_EX_TOOLWINDOW |
-                (uint)WINDOW_EX_STYLE.WS_EX_TOPMOST |
-                WindowFocus.StartingExStyle(kind))
-        };
-    }
 
     private nint? OnWindowMessage(WindowMessage message)
     {

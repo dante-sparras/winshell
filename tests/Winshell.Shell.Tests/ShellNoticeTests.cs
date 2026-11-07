@@ -247,7 +247,7 @@ public sealed class ShellNoticeTests : IDisposable
         var read = await ShellFixture.On(async shell =>
         {
             var notice = Build();
-            using var window = new NoticeWindow(notice, () => { }, () => { }, shell.Loop);
+            using var window = new NoticeWindow(shell, notice, () => { }, () => { }, shell.Loop);
             var panel = (PanelWindow)shell.Platform.Windows.Single().Client;
             await ShellFixture.LaidOut((FrameworkElement)panel.Content!);
             return (
@@ -269,7 +269,7 @@ public sealed class ShellNoticeTests : IDisposable
     {
         var fits = await ShellFixture.On(async shell =>
         {
-            using var window = new NoticeWindow(Build(), () => { }, () => { }, shell.Loop);
+            using var window = new NoticeWindow(shell, Build(), () => { }, () => { }, shell.Loop);
             var root = (Grid)((PanelWindow)shell.Platform.Windows.Single().Client).Content!;
             var action = ((StackPanel)root.Children[0]).Children.OfType<Button>().Last();
             await ShellFixture.LaidOut(action);
@@ -294,8 +294,8 @@ public sealed class ShellNoticeTests : IDisposable
             var crash = ShellNotices.ForCrash(
                 new CrashReport("r.txt", "x", new InvalidOperationException("no"), false) { Recovery = "Fine." },
                 TimeSpan.FromSeconds(25));
-            using var first = new NoticeWindow(crash, () => { }, () => timed++, loop);
-            using var second = new NoticeWindow(Build(), () => { }, () => untimed++, loop);
+            using var first = new NoticeWindow(shell, crash, () => { }, () => timed++, loop);
+            using var second = new NoticeWindow(shell, Build(), () => { }, () => untimed++, loop);
             loop.Advance(TimeSpan.FromSeconds(26));
             return (timed, untimed);
         });

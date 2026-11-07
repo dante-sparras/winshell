@@ -175,7 +175,7 @@ public sealed class WindowThumbnail : FrameworkElement
             return;
         var source = SourceRect(window.Hwnd, width, height);
         var paint = new ThumbnailPaint(
-            WindowRules.FitPreview(box, source.Width, source.Height),
+            FitPreview(box, source.Width, source.Height),
             source,
             OpacityOf(),
             true);
@@ -191,7 +191,7 @@ public sealed class WindowThumbnail : FrameworkElement
         if (!Win32.IsIconic(hwnd) && Win32.GetWindowRect(hwnd, out var window)
                                   && TopLevelWindows.TryFrameBounds(hwnd, out var frame))
         {
-            var visible = WindowRules.PreviewSource(window, frame);
+            var visible = PreviewSource(window, frame);
             _insets = new RECT(visible.Left, visible.Top, window.Width - visible.Right, window.Height - visible.Bottom);
         }
 
@@ -264,6 +264,38 @@ public sealed class WindowThumbnail : FrameworkElement
         _thumbnail = 0;
         _destination = 0;
         _applied = default;
+    }
+
+    /// <summary>
+    /// The part of a window a preview shows, relative to the window's corner: its visible frame, without the
+    /// invisible borders Windows puts around it for resizing. The whole window when the frame is unknown.
+    /// </summary>
+    internal static RECT PreviewSource(RECT window, RECT frame)
+    {
+        var whole = new RECT(0, 0, Math.Max(0, window.Width), Math.Max(0, window.Height));
+        if (frame.Width <= 0 || frame.Height <= 0 || window.Width <= 0 || window.Height <= 0)
+            return whole;
+        var left = Math.Clamp(frame.Left - window.Left, 0, window.Width);
+        var top = Math.Clamp(frame.Top - window.Top, 0, window.Height);
+        var right = Math.Clamp(frame.Right - window.Left, left, window.Width);
+        var bottom = Math.Clamp(frame.Bottom - window.Top, top, window.Height);
+        return right - left <= 0 || bottom - top <= 0 ? whole : new RECT(left, top, right, bottom);
+    }
+
+    /// <summary>
+    /// Where a preview of a source this many pixels in size goes in a box: as large as fits without being enlarged,
+    /// keeping its shape, and centered. Empty when either has no area.
+    /// </summary>
+    internal static RECT FitPreview(RECT box, int sourceWidth, int sourceHeight)
+    {
+        if (box.Width <= 0 || box.Height <= 0 || sourceWidth <= 0 || sourceHeight <= 0)
+            return default;
+        var scale = Math.Min(1, Math.Min((double)box.Width / sourceWidth, (double)box.Height / sourceHeight));
+        var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
+        var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
+        var left = box.Left + (box.Width - width) / 2;
+        var top = box.Top + (box.Height - height) / 2;
+        return new RECT(left, top, left + width, top + height);
     }
 
     private readonly record struct ThumbnailPaint(RECT Destination, RECT Source, byte Opacity, bool Visible);

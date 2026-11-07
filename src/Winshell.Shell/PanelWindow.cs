@@ -11,6 +11,7 @@ public sealed class PanelWindow : ShellWindow
     private bool _coversScreen;
     private bool _aboveWindows = true;
     private bool _focusable;
+    private PanelEdge? _edge;
 
     /// <summary>A hidden panel of the running shell, anchored to no edge until <see cref="Anchors"/> is set.</summary>
     public PanelWindow()
@@ -93,9 +94,14 @@ public sealed class PanelWindow : ShellWindow
         }
     }
 
+    internal override IWindowPlacer CreatePlacer(HostWindow host, ShellPlatform platform)
+    {
+        return _edge = new PanelEdge(new HostPanelDesktop(host, platform));
+    }
+
     private protected override void ApplyPlacement()
     {
-        ((PanelEdge)Host!.Placer).Set(new PanelPlacement(
+        _edge!.Set(new PanelPlacement(
             Screen,
             _anchors,
             _margins.Left,

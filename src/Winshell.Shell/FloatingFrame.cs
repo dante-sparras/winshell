@@ -31,6 +31,11 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
 
     private nint Handle => host.Handle;
 
+    /// <summary>A normal window's frame, in the taskbar.</summary>
+    public (uint Style, uint ExStyle) Styles => (
+        (uint)(WINDOW_STYLE.WS_OVERLAPPEDWINDOW | WINDOW_STYLE.WS_CLIPCHILDREN),
+        (uint)(WINDOW_EX_STYLE.WS_EX_NOREDIRECTIONBITMAP | WINDOW_EX_STYLE.WS_EX_APPWINDOW));
+
     public void Apply(FloatingPlacement placement)
     {
         if (Handle == 0 || host.Released)
@@ -162,7 +167,7 @@ internal sealed class FloatingFrame(HostWindow host, ShellPlatform platform) : I
             host.Placement.Scale = dpi / 96.0;
             var client = new RECT(0, 0, (int)Math.Round(placement.Width * host.Placement.Scale),
                 (int)Math.Round(placement.Height * host.Placement.Scale));
-            var (style, ex) = HostWindow.Styles(WindowKind.Floating);
+            var (style, ex) = Styles;
             Win32.AdjustWindowRectExForDpi(ref client, style, false, ex, dpi);
             int x, y;
             if (first)
