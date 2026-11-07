@@ -42,7 +42,7 @@ public sealed class TempImageStoreTests
     [Fact]
     public void Cleanup_removes_pictures_older_than_a_day_by_the_store_clock()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         var processFolder = Path.Combine(directory.Path, "1234");
         Directory.CreateDirectory(processFolder);
         var old = Path.Combine(processFolder, new string('a', 32) + ".png");
@@ -61,7 +61,7 @@ public sealed class TempImageStoreTests
     [Fact]
     public void A_file_cleanup_cannot_delete_is_logged_once_and_the_rest_are_still_deleted()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         var processFolder = Path.Combine(directory.Path, "1234");
         Directory.CreateDirectory(processFolder);
         var locked = Path.Combine(processFolder, new string('a', 32) + ".png");
@@ -88,7 +88,7 @@ public sealed class TempImageStoreTests
     [Fact]
     public void The_same_picture_is_one_file_in_this_process_folder_until_its_last_release()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         var store = Store(directory.Path);
         var png = Png(2, 2);
         var url = Claim(store, png);
@@ -109,14 +109,14 @@ public sealed class TempImageStoreTests
     [Fact]
     public void No_picture_is_no_url()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         Assert.Equal("", Claim(Store(directory.Path), []));
     }
 
     [Fact]
     public void A_picture_at_the_pixel_cap_is_stored_and_one_pixel_over_is_not()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         var store = Store(directory.Path);
         var kept = Claim(store, Png(4096, 4096));
         Assert.NotNull(kept);
@@ -131,7 +131,7 @@ public sealed class TempImageStoreTests
     [Fact]
     public void A_file_still_open_at_the_last_release_is_reused()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         var store = Store(directory.Path);
         var png = Png(2, 2);
         var url = Claim(store, png);
@@ -151,7 +151,7 @@ public sealed class TempImageStoreTests
     [Fact]
     public void A_picture_with_no_pixels_is_not_stored()
     {
-        using var directory = Temp();
+        using var directory = new TempFolder();
         Assert.Null(Claim(Store(directory.Path), Png(0, 2)));
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
     }
@@ -161,7 +161,7 @@ public sealed class TempImageStoreTests
     {
         var art = new byte[TempImageStore.MaxBytes + 1];
         Png(2, 2).CopyTo(art, 0);
-        using var directory = Temp();
+        using var directory = new TempFolder();
 
         Assert.Null(Claim(Store(directory.Path), art));
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
@@ -172,7 +172,7 @@ public sealed class TempImageStoreTests
     {
         var svg = Encoding.UTF8.GetBytes(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
-        using var directory = Temp();
+        using var directory = new TempFolder();
 
         Assert.Null(Claim(Store(directory.Path), svg));
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
@@ -188,13 +188,6 @@ public sealed class TempImageStoreTests
         return store.Claim(new MemoryStream(data), TestContext.Current.CancellationToken);
     }
 
-    private static TempDirectory Temp()
-    {
-        var path = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(path);
-        return new TempDirectory(path);
-    }
-
     private static byte[] Png(int width, int height)
     {
         var data = new byte[24];
@@ -203,16 +196,5 @@ public sealed class TempImageStoreTests
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(16), (uint)width);
         BinaryPrimitives.WriteUInt32BigEndian(data.AsSpan(20), (uint)height);
         return data;
-    }
-
-    private sealed class TempDirectory(string path) : IDisposable
-    {
-        public string Path { get; } = path;
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-                Directory.Delete(Path, true);
-        }
     }
 }

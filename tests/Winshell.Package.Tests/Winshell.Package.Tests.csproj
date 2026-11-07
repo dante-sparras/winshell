@@ -5,8 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Winshell.Services\Winshell.Services.csproj" />
-    <!-- The CLI that lists and kills the shell. The shell itself is the program a template builds. -->
-    <ProjectReference Include="..\..\src\Winshell\Winshell.csproj" ReferenceOutputAssembly="false" />
-    <AssemblyMetadata Include="WinshellCli" Value="$(MSBuildThisFileDirectory)..\..\src\Winshell\bin\$(Configuration)\$(TargetFramework)\winshell.exe" />
+    <!-- The CLI that lists and kills the shell, built but not copied: winshell.exe sits beside the winshell.dll its
+         build reports. The shell itself is the program a template builds. -->
+    <ProjectReference Include="..\..\src\Winshell\Winshell.csproj" ReferenceOutputAssembly="false" OutputItemType="WinshellCliAssembly" />
   </ItemGroup>
+  <Target Name="NameWinshellCli" AfterTargets="ResolveProjectReferences" BeforeTargets="GetAssemblyAttributes">
+    <ItemGroup>
+      <AssemblyMetadata Include="WinshellCli" Value="@(WinshellCliAssembly->'%(RootDir)%(Directory)%(Filename).exe')" />
+    </ItemGroup>
+  </Target>
 </Project>

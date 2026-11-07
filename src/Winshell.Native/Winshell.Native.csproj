@@ -9,12 +9,9 @@
     <InternalsVisibleTo Include="Winshell.Core" />
     <InternalsVisibleTo Include="Winshell.Services" />
     <InternalsVisibleTo Include="Winshell.Shell" />
-    <!-- The test projects. Each compiles tests/TestSupport, whose parent process watch calls generated native declarations. -->
-    <InternalsVisibleTo Include="Winshell.Architecture.Tests" />
-    <InternalsVisibleTo Include="Winshell.Core.Tests" />
-    <InternalsVisibleTo Include="Winshell.Package.Tests" />
-    <InternalsVisibleTo Include="Winshell.Services.Tests" />
-    <InternalsVisibleTo Include="Winshell.Shell.Tests" />
-    <InternalsVisibleTo Include="Winshell.Tests" />
+    <!-- Every test project, found by its folder, so a new one needs no line here. Each compiles tests/TestSupport,
+         whose parent process watch asks ProcessImage for this process's parent. -->
+    <WinshellTestProject Include="$(MSBuildThisFileDirectory)..\..\tests\*\*.csproj" />
+    <InternalsVisibleTo Include="@(WinshellTestProject->'%(Filename)')" />
   </ItemGroup>
 </Project>

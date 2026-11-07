@@ -83,7 +83,7 @@ internal static class ProcessImage
     }
 
     /// <summary>The parent process id, or null when the snapshot cannot be read or the process is not in it.</summary>
-    private static uint? ParentOf(uint processId)
+    internal static uint? ParentOf(uint processId)
     {
         var snapshot = PInvoke.CreateToolhelp32Snapshot(CREATE_TOOLHELP_SNAPSHOT_FLAGS.TH32CS_SNAPPROCESS, 0);
         if (snapshot == new HANDLE(-1))
