@@ -1,10 +1,13 @@
 using System.Buffers.Binary;
+using System.Globalization;
 using System.Text;
 
 namespace Winshell.Services.Tests;
 
 public sealed class TempImageStoreTests
 {
+    private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -17,14 +20,14 @@ public sealed class TempImageStoreTests
         Directory.CreateDirectory(elsewhere);
         var outside = Path.Combine(elsewhere, new string('a', 32) + ".png");
         File.WriteAllText(outside, "not the cache's to delete");
-        File.SetLastWriteTimeUtc(outside, DateTime.UtcNow.AddDays(-3));
+        File.SetLastWriteTimeUtc(outside, Now.UtcDateTime.AddDays(-3));
         var link = linkedRoot ? Path.Combine(directory, "linked-cache") : Path.Combine(cache, "1234");
         try
         {
             ChildProcess.Run("cmd.exe", "/c", "mklink", "/J", link, elsewhere).AssertExitCode(0);
             Assert.NotNull(new DirectoryInfo(link).LinkTarget);
 
-            new TempImageStore(linkedRoot ? link : cache).CleanOld();
+            Store(linkedRoot ? link : cache).CleanOld();
 
             Assert.True(File.Exists(outside), "Cleanup followed a junction and removed a file outside the cache.");
         }
@@ -37,76 +40,105 @@ public sealed class TempImageStoreTests
     }
 
     [Fact]
-    public void Cleanup_removes_old_pictures_but_keeps_recent_ones()
+    public void Cleanup_removes_pictures_older_than_a_day_by_the_store_clock()
     {
-        var directory = Path.Combine(Path.GetTempPath(), "winshell-tests", Guid.NewGuid().ToString("N"));
-        var processFolder = Path.Combine(directory, "1234");
+        using var directory = Temp();
+        var processFolder = Path.Combine(directory.Path, "1234");
         Directory.CreateDirectory(processFolder);
         var old = Path.Combine(processFolder, new string('a', 32) + ".png");
         var recent = Path.Combine(processFolder, new string('b', 32) + ".png");
         File.WriteAllText(old, "old");
-        File.SetLastWriteTimeUtc(old, DateTime.UtcNow.AddDays(-3));
+        File.SetLastWriteTimeUtc(old, Now.UtcDateTime.AddDays(-1).AddMinutes(-1));
         File.WriteAllText(recent, "recent");
-        try
+        File.SetLastWriteTimeUtc(recent, Now.UtcDateTime.AddDays(-1).AddMinutes(1));
+
+        Store(directory.Path).CleanOld();
+
+        Assert.False(File.Exists(old));
+        Assert.True(File.Exists(recent));
+    }
+
+    [Fact]
+    public void A_cleanup_that_cannot_delete_is_logged()
+    {
+        using var directory = Temp();
+        var processFolder = Path.Combine(directory.Path, "1234");
+        Directory.CreateDirectory(processFolder);
+        var old = Path.Combine(processFolder, new string('a', 32) + ".png");
+        File.WriteAllText(old, "old");
+        File.SetLastWriteTimeUtc(old, Now.UtcDateTime.AddDays(-3));
+        var messages = new List<string>();
+        var log = new Log { Sink = (_, category, message) => messages.Add($"{category}: {message}") };
+
+        using (new FileStream(old, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            new TempImageStore(directory).CleanOld();
-            Assert.False(File.Exists(old));
-            Assert.True(File.Exists(recent));
+            new TempImageStore(directory.Path, new FakeTimeProvider(Now), log).CleanOld();
         }
-        finally
-        {
-            Directory.Delete(directory, true);
-        }
+
+        var message = Assert.Single(messages);
+        Assert.StartsWith("images: Cannot clean old pictures", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_same_picture_is_one_file_in_this_process_folder_until_its_last_release()
+    {
+        using var directory = Temp();
+        var store = Store(directory.Path);
+        var png = Png(2, 2);
+        var url = Claim(store, png);
+        Assert.NotNull(url);
+        var path = new Uri(url).LocalPath;
+        // Another instance deleting its copy of the same picture must not take this one's.
+        Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            Path.GetFileName(Path.GetDirectoryName(path)));
+        Assert.EndsWith(".png", path, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(url, Claim(store, png));
+
+        store.Release(url);
+        Assert.True(File.Exists(path));
+        store.Release(url);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public void No_picture_is_no_url()
+    {
+        using var directory = Temp();
+        Assert.Equal("", Claim(Store(directory.Path), []));
     }
 
     [Fact]
     public void A_picture_at_the_pixel_cap_is_stored_and_one_pixel_over_is_not()
     {
         using var directory = Temp();
-        var store = new TempImageStore(directory.Path);
-        var kept = store.Store("cap", Png(4096, 4096));
+        var store = Store(directory.Path);
+        var kept = Claim(store, Png(4096, 4096));
         Assert.NotNull(kept);
         Assert.EndsWith(".png", new Uri(kept).LocalPath, StringComparison.OrdinalIgnoreCase);
         Assert.True(File.Exists(new Uri(kept).LocalPath));
 
-        Assert.Null(store.Store("over", Png(4097, 4096)));
-        store.Release("cap");
+        Assert.Null(Claim(store, Png(4097, 4096)));
+        store.Release(kept);
         Assert.False(File.Exists(new Uri(kept).LocalPath));
-    }
-
-    [Fact]
-    public void A_second_use_keeps_the_picture_until_both_are_released()
-    {
-        using var directory = Temp();
-        var store = new TempImageStore(directory.Path);
-        var url = store.Store("logo", Png(2, 2));
-        Assert.NotNull(url);
-        Assert.Equal(url, store.Retain("logo"));
-
-        var path = new Uri(url).LocalPath;
-        store.Release("logo");
-        Assert.True(File.Exists(path));
-        store.Release("logo");
-        Assert.False(File.Exists(path));
     }
 
     [Fact]
     public void A_file_still_open_at_the_last_release_is_reused()
     {
         using var directory = Temp();
-        var store = new TempImageStore(directory.Path);
+        var store = Store(directory.Path);
         var png = Png(2, 2);
-        var url = store.Store("same", png);
+        var url = Claim(store, png);
         Assert.NotNull(url);
         var path = new Uri(url).LocalPath;
         using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
-            store.Release("same");
-            Assert.Equal(url, store.Store("same", png));
+            store.Release(url);
+            Assert.Equal(url, Claim(store, png));
             Assert.Equal(png, File.ReadAllBytes(path));
         }
 
-        store.Release("same");
+        store.Release(url);
         Assert.False(File.Exists(path));
     }
 
@@ -114,21 +146,18 @@ public sealed class TempImageStoreTests
     public void A_picture_with_no_pixels_is_not_stored()
     {
         using var directory = Temp();
-        Assert.Null(new TempImageStore(directory.Path).Store("none", Png(0, 2)));
+        Assert.Null(Claim(Store(directory.Path), Png(0, 2)));
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
     }
 
     [Fact]
-    public async Task A_picture_over_the_byte_cap_is_not_stored()
+    public void A_picture_over_the_byte_cap_is_not_stored()
     {
         var art = new byte[TempImageStore.MaxBytes + 1];
         Png(2, 2).CopyTo(art, 0);
         using var directory = Temp();
-        var store = new TempImageStore(directory.Path);
 
-        Assert.Null(store.Read(new MemoryStream(art), TestContext.Current.CancellationToken));
-        Assert.Null(await store.ReadAsync(new MemoryStream(art), TestContext.Current.CancellationToken));
-        Assert.Null(store.Store("too-big", art));
+        Assert.Null(Claim(Store(directory.Path), art));
         Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
     }
 
@@ -138,10 +167,19 @@ public sealed class TempImageStoreTests
         var svg = Encoding.UTF8.GetBytes(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100000\" height=\"100000\"/>");
         using var directory = Temp();
-        var store = new TempImageStore(directory.Path);
 
-        Assert.Null(store.Store("svg", svg));
-        Assert.False(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories).Any());
+        Assert.Null(Claim(Store(directory.Path), svg));
+        Assert.Empty(Directory.EnumerateFiles(directory.Path, "*", SearchOption.AllDirectories));
+    }
+
+    private static TempImageStore Store(string root)
+    {
+        return new TempImageStore(root, new FakeTimeProvider(Now), Log.Default);
+    }
+
+    private static string? Claim(TempImageStore store, byte[] data)
+    {
+        return store.Claim(new MemoryStream(data), TestContext.Current.CancellationToken);
     }
 
     private static TempDirectory Temp()

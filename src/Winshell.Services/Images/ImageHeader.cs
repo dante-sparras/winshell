@@ -5,42 +5,24 @@ namespace Winshell;
 /// <summary>Reads what kind of picture a file says it is, and how big, without decoding it.</summary>
 internal static class ImageHeader
 {
-    /// <summary>The size in a PNG, JPEG, GIF, BMP or WebP header, or null for anything else.</summary>
-    public static (uint Width, uint Height)? ReadSize(ReadOnlySpan<byte> data)
+    /// <summary>
+    /// The file extension and size a PNG, JPEG, GIF, BMP or WebP header names, or null for anything else and for a
+    /// header cut off before its size.
+    /// </summary>
+    public static (string Extension, uint Width, uint Height)? Read(ReadOnlySpan<byte> data)
     {
-        if (data.StartsWith<byte>([0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A]))
-            return Png(data);
-        if (data.StartsWith<byte>([0xFF, 0xD8, 0xFF]))
-            return Jpeg(data);
-        if (data.StartsWith("GIF87a"u8) || data.StartsWith("GIF89a"u8))
-            return Gif(data);
-        if (data.StartsWith("BM"u8))
-            return Bmp(data);
-        if (data.StartsWith("RIFF"u8) && data.Length >= 12 && data[8..12].SequenceEqual("WEBP"u8))
-            return WebP(data);
-        return null;
-    }
-
-    /// <summary>Whether the data starts like a PNG, JPEG, GIF, BMP or WebP. <paramref name="extension"/> is its file extension.</summary>
-    public static bool TryRead(ReadOnlySpan<byte> data, out string extension, out long width, out long height)
-    {
-        extension = data switch
+        var (extension, size) = data switch
         {
-            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, ..] => ".png",
-            [0xFF, 0xD8, 0xFF, ..] => ".jpg",
-            [(byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'7' or (byte)'9', (byte)'a', ..] => ".gif",
-            [(byte)'B', (byte)'M', ..] => ".bmp",
+            [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A, ..] => (".png", Png(data)),
+            [0xFF, 0xD8, 0xFF, ..] => (".jpg", Jpeg(data)),
+            [(byte)'G', (byte)'I', (byte)'F', (byte)'8', (byte)'7' or (byte)'9', (byte)'a', ..] => (".gif", Gif(data)),
+            [(byte)'B', (byte)'M', ..] => (".bmp", Bmp(data)),
             [
                 (byte)'R', (byte)'I', (byte)'F', (byte)'F', _, _, _, _, (byte)'W', (byte)'E', (byte)'B', (byte)'P', ..
-            ] => ".webp",
-            _ => ""
+            ] => (".webp", WebP(data)),
+            _ => ("", null)
         };
-        width = height = 0;
-        if (extension.Length == 0 || ReadSize(data) is not var (readWidth, readHeight))
-            return false;
-        width = readWidth;
-        height = readHeight;
-        return true;
+        return size is var (width, height) ? (extension, width, height) : null;
     }
 
     private static (uint, uint)? Png(ReadOnlySpan<byte> data)

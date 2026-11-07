@@ -45,8 +45,6 @@ internal sealed class SmtcSessions : IMediaSessions
     {
         if (_instance is not null)
             return _instance;
-        // Old art is older than a day, so cleaning it does not have to finish before the first read.
-        _ = Task.Run(ArtCache.CleanOld);
         // The shell's clock. A session counts playback forward from it while playing.
         return _instance = new SmtcSessions(loop, log, GlobalSystemMediaTransportControlsSessionManager.RequestAsync,
             TimeProvider.System);

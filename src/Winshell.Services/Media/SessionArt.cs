@@ -3,8 +3,8 @@ using Windows.Storage.Streams;
 namespace Winshell.Media;
 
 /// <summary>
-/// One session's track art, read from the thumbnail Windows gives into the <see cref="ArtCache"/>. Only the newest
-/// read is shown; each url it stops showing is released. Lives on the UI thread.
+/// One session's track art, read from the thumbnail Windows gives into the <see cref="TempImageStore"/>. Only the
+/// newest read is shown; each url it stops showing is released. Lives on the UI thread.
 /// </summary>
 /// <param name="loop">Where a finished read is applied.</param>
 /// <param name="missed">Runs with the reason when art cannot be read, once until art arrives again.</param>
@@ -38,9 +38,9 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             {
                 using var stream = await thumbnail.OpenReadAsync().AsTask().ConfigureAwait(false);
                 using var input = stream.AsStreamForRead();
-                var url = await ArtCache.StoreAsync(input).ConfigureAwait(false);
+                var url = await Task.Run(() => TempImageStore.Shared.Claim(input)).ConfigureAwait(false);
                 if (url is null)
-                    Skip("it is not a picture under the size limit");
+                    Skip(TempImageStore.Refused);
                 else
                     loop.Post(() => Set(url, request));
             }
@@ -69,14 +69,14 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
     public void Release()
     {
         _released = true;
-        ArtCache.ReleaseLater(Url);
+        TempImageStore.Shared.ReleaseLater(Url);
     }
 
     private void Set(string url, int request)
     {
         if (_released || !_read.End(request))
         {
-            ArtCache.ReleaseLater(url);
+            TempImageStore.Shared.ReleaseLater(url);
             return;
         }
 
@@ -84,11 +84,11 @@ internal sealed class SessionArt(IEventLoop loop, Action<string> missed, Action 
             _missLogged = false;
         if (url == Url)
         {
-            ArtCache.ReleaseLater(url);
+            TempImageStore.Shared.ReleaseLater(url);
             return;
         }
 
-        ArtCache.ReleaseLater(Url);
+        TempImageStore.Shared.ReleaseLater(Url);
         Url = url;
         changed();
     }

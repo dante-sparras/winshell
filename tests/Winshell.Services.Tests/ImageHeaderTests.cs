@@ -93,9 +93,9 @@ public sealed class ImageHeaderTests
     [Fact]
     public void Pictures_from_real_encoders_give_their_size()
     {
-        Assert.Equal(((uint)3, (uint)2), ImageHeader.ReadSize(Bytes(Png)));
-        Assert.Equal(((uint)3, (uint)2), ImageHeader.ReadSize(Bytes(Jpeg)));
-        Assert.Equal(((uint)3, (uint)2), ImageHeader.ReadSize(Bytes(WebP)));
+        Assert.Equal(((uint)3, (uint)2), Size(Bytes(Png)));
+        Assert.Equal(((uint)3, (uint)2), Size(Bytes(Jpeg)));
+        Assert.Equal(((uint)3, (uint)2), Size(Bytes(WebP)));
     }
 
     [Fact]
@@ -113,28 +113,34 @@ public sealed class ImageHeaderTests
 
     private static string Extension(byte[] data)
     {
-        Assert.True(ImageHeader.TryRead(data, out var extension, out var width, out var height));
-        Assert.True(width > 0);
-        Assert.True(height > 0);
-        return extension;
+        var header = ImageHeader.Read(data);
+        Assert.NotNull(header);
+        Assert.True(header.Value.Width > 0);
+        Assert.True(header.Value.Height > 0);
+        return header.Value.Extension;
+    }
+
+    private static (uint, uint)? Size(ReadOnlySpan<byte> data)
+    {
+        return ImageHeader.Read(data) is var (_, width, height) ? (width, height) : null;
     }
 
     [Fact]
     public void Every_format_reads_its_own_size_fields()
     {
-        Assert.Equal(((uint)8193, (uint)2049), ImageHeader.ReadSize(PngOf(8193, 2049)));
-        Assert.Equal(((uint)640, (uint)480), ImageHeader.ReadSize(GifOf(640, 480)));
-        Assert.Equal(((uint)640, (uint)480), ImageHeader.ReadSize(BmpOf(640, 480)));
-        Assert.Equal(((uint)640, (uint)480), ImageHeader.ReadSize(CoreBmpOf(640, 480)));
-        Assert.Equal(((uint)9000, (uint)2), ImageHeader.ReadSize(LosslessWebP()));
-        Assert.Equal(((uint)20000, (uint)3), ImageHeader.ReadSize(ExtendedWebP()));
+        Assert.Equal(((uint)8193, (uint)2049), Size(PngOf(8193, 2049)));
+        Assert.Equal(((uint)640, (uint)480), Size(GifOf(640, 480)));
+        Assert.Equal(((uint)640, (uint)480), Size(BmpOf(640, 480)));
+        Assert.Equal(((uint)640, (uint)480), Size(CoreBmpOf(640, 480)));
+        Assert.Equal(((uint)9000, (uint)2), Size(LosslessWebP()));
+        Assert.Equal(((uint)20000, (uint)3), Size(ExtendedWebP()));
     }
 
     [Fact]
     public void A_top_down_bitmap_has_a_negative_height()
     {
-        Assert.Equal(((uint)640, (uint)480), ImageHeader.ReadSize(BmpOf(640, -480)));
-        Assert.Equal(((uint)1, (uint)int.MaxValue + 1), ImageHeader.ReadSize(BmpOf(1, int.MinValue)));
+        Assert.Equal(((uint)640, (uint)480), Size(BmpOf(640, -480)));
+        Assert.Equal(((uint)1, (uint)int.MaxValue + 1), Size(BmpOf(1, int.MinValue)));
     }
 
     [Fact]
@@ -144,7 +150,7 @@ public sealed class ImageHeaderTests
         byte[] jpeg =
             [0xFF, 0xD8, .. Segment(0xE1, thumbnail), .. Segment(0xDB, 1, 2, 3), .. JpegFrame(0xC2, 8000, 8000)];
 
-        Assert.Equal(((uint)8000, (uint)8000), ImageHeader.ReadSize(jpeg));
+        Assert.Equal(((uint)8000, (uint)8000), Size(jpeg));
     }
 
     [Theory]
@@ -155,7 +161,7 @@ public sealed class ImageHeaderTests
     {
         byte[] jpeg = [0xFF, 0xD8, .. Segment(marker, 8, 1, 1, 1, 1, 3), .. JpegFrame(0xC0, 32, 16)];
 
-        Assert.Equal(((uint)32, (uint)16), ImageHeader.ReadSize(jpeg));
+        Assert.Equal(((uint)32, (uint)16), Size(jpeg));
     }
 
     [Fact]
@@ -163,8 +169,7 @@ public sealed class ImageHeaderTests
     {
         byte[] jpeg = [0xFF, 0xD8, .. Segment(0xDA, 1, 2, 3), .. JpegFrame(0xC0, 32, 16)];
 
-        Assert.Null(ImageHeader.ReadSize(jpeg));
-        Assert.False(ImageHeader.TryRead(jpeg, out _, out _, out _));
+        Assert.Null(Size(jpeg));
     }
 
     [Fact]
@@ -172,7 +177,7 @@ public sealed class ImageHeaderTests
     {
         byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 0, 0, 0xFF, 0xE0, 0, 0];
 
-        Assert.Null(ImageHeader.ReadSize(jpeg));
+        Assert.Null(Size(jpeg));
     }
 
     [Theory]
@@ -182,16 +187,15 @@ public sealed class ImageHeaderTests
     public void Anything_else_has_no_size(string text)
     {
         var data = Encoding.UTF8.GetBytes(text);
-        Assert.Null(ImageHeader.ReadSize(data));
-        Assert.False(ImageHeader.TryRead(data, out _, out _, out _));
+        Assert.Null(Size(data));
     }
 
     [Fact]
     public void A_webp_with_a_broken_frame_has_no_size()
     {
-        Assert.Null(ImageHeader.ReadSize(Riff("VP8 ", 0, 0, 0, 1, 2, 3)));
-        Assert.Null(ImageHeader.ReadSize(Riff("VP8L", 0x2E, 0, 0, 0, 0)));
-        Assert.Null(ImageHeader.ReadSize(Riff("ABCD", 0, 0, 0, 0, 0)));
+        Assert.Null(Size(Riff("VP8 ", 0, 0, 0, 1, 2, 3)));
+        Assert.Null(Size(Riff("VP8L", 0x2E, 0, 0, 0, 0)));
+        Assert.Null(Size(Riff("ABCD", 0, 0, 0, 0, 0)));
     }
 
     [Fact]
@@ -203,11 +207,11 @@ public sealed class ImageHeaderTests
                      ExtendedWebP()
                  })
         {
-            var whole = ImageHeader.ReadSize(data);
+            var whole = Size(data);
             Assert.NotNull(whole);
             for (var length = 0; length < data.Length; length++)
             {
-                var size = ImageHeader.ReadSize(data.AsSpan(0, length));
+                var size = Size(data.AsSpan(0, length));
                 Assert.True(size is null || size == whole, $"{length} bytes gave {size}");
             }
         }

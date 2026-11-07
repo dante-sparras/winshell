@@ -260,7 +260,7 @@ public sealed class NotificationTests
     [Fact]
     public async Task A_logo_arrives_after_the_notification_and_goes_with_it()
     {
-        var logo = new FakeLogo(Png(2, 2));
+        var logo = new FakeLogo([.. Png(2, 2), .. Guid.NewGuid().ToByteArray()]);
         using var listener = Listener(new FakeBackend(), out var loop);
         var appId = "Mail." + Guid.NewGuid().ToString("N");
 
@@ -275,14 +275,15 @@ public sealed class NotificationTests
 
         Assert.True(notification.Dismiss());
         Assert.Equal("", notification.AppIcon);
-        Assert.False(File.Exists(path));
+        await Wait.UntilAsync(() => !File.Exists(path), "the logo file to go");
     }
 
     [Fact]
     public async Task A_logo_that_finishes_after_dismissal_leaves_no_file()
     {
         using var gate = new ManualResetEventSlim();
-        var logo = new FakeLogo(Png(2, 2), gate);
+        byte[] png = [.. Png(2, 2), .. Guid.NewGuid().ToByteArray()];
+        var logo = new FakeLogo(png, gate);
         using var listener = Listener(new FakeBackend(), out var loop);
         var appId = "Mail." + Guid.NewGuid().ToString("N");
         var posted = 0;
@@ -297,10 +298,11 @@ public sealed class NotificationTests
         loop.Process();
 
         Assert.Equal("", notification.AppIcon);
-        var again = NotificationAppIcons.Read(appId, "Mail", new FakeLogo(null), Log.Default,
-            TestContext.Current.CancellationToken);
-        NotificationAppIcons.Release(again.Hold);
-        Assert.Equal("", again.Url);
+        // The late read let go of its claim, so one more claim's release is the last.
+        var url = TempImageStore.Shared.Claim(new MemoryStream(png), TestContext.Current.CancellationToken);
+        Assert.NotNull(url);
+        TempImageStore.Shared.Release(url);
+        await Wait.UntilAsync(() => !File.Exists(new Uri(url).LocalPath), "the logo file to go");
     }
 
     [Fact]
