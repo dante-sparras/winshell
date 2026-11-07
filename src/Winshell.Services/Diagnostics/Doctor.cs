@@ -51,7 +51,7 @@ public static class Doctor
         ConfigurationProject? Project,
         string? Problem,
         string Folder,
-        string? SignInFolder);
+        string? SignInProject);
 
     /// <summary>
     /// The project <c>winshell doctor</c> checks for the <c>-p</c> and <c>-c</c> the user gave. Neither means the
@@ -62,7 +62,7 @@ public static class Doctor
     {
         var project = ConfigurationProject.Find(path, config, configRoot, out var problem);
         var folder = project?.Folder ?? AskedFolder(configRoot, path, config);
-        return new Chosen(project, problem, folder, project?.Folder);
+        return new Chosen(project, problem, folder, project?.ProjectFile);
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ public static class Doctor
         try
         {
             if (ConfigurationProject.ForProgram(program) is { } own)
-                return new Chosen(own, null, own.Folder, own.Folder);
+                return new Chosen(own, null, own.Folder, own.ProjectFile);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -135,7 +135,7 @@ public static class Doctor
                     return DoctorSignIn.SignIn(SignInEntry.OpenTask()?.State);
                 // A sign-in command with no -p and no -c starts whichever configuration winshell run would, and that
                 // is a different verdict from a configuration the user, or this process, picked.
-                var project = chosen.SignInFolder;
+                var project = chosen.SignInProject;
                 var supervisor = ConfigurationProject.FolderOf(process) is null
                     ? null
                     : WinshellHost.Supervising();
@@ -248,10 +248,10 @@ public static class Doctor
     /// </summary>
     internal static DoctorCheck SignInForProcess(string processPath, string? supervisor, string? command,
         bool turnedOff, string configRoot, Func<string, bool> exists, Func<string, string>? resolve = null,
-        string? projectFolder = null)
+        string? projectFile = null)
     {
         return DoctorSignIn.SignIn(command, turnedOff, SignInEntry.InstallExe(processPath, supervisor), configRoot,
-            exists, resolve, projectFolder);
+            exists, resolve, projectFile);
     }
 
     /// <summary>

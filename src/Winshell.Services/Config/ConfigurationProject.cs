@@ -88,12 +88,36 @@ internal sealed partial class ConfigurationProject
         return FolderOf(program) is { } folder ? Path.Combine(folder, "bin", Output, Path.GetFileName(program)) : null;
     }
 
-    /// <summary>The project whose <see cref="ConfigurationBuild.Run"/> program is <paramref name="program"/>, or null.</summary>
+    /// <summary>
+    /// The project whose <see cref="ConfigurationBuild.Run"/> program is <paramref name="program"/>, or null. A folder
+    /// can hold several projects; this is the one that builds the program.
+    /// </summary>
     public static ConfigurationProject? ForProgram(string program)
     {
-        if (FolderOf(program) is not { } folder || In(folder, out _) is not { } project)
+        if (FolderOf(program) is not { } folder)
             return null;
-        return project.IsProgram(Path.GetFullPath(program)) ? project : null;
+        var full = Path.GetFullPath(program);
+        return Projects(folder).Select(file => new ConfigurationProject(file))
+            .FirstOrDefault(project => project.IsProgram(full));
+    }
+
+    /// <summary>
+    /// What <c>winshell run -p</c> takes to start the project of <paramref name="program"/>: its folder, or the project
+    /// file when the folder holds several projects and so names none of them. A folder that cannot be read, or is not
+    /// there, stands. Null for a program in neither build folder.
+    /// </summary>
+    public static string? RunPath(string program)
+    {
+        if (FolderOf(program) is not { } folder)
+            return null;
+        try
+        {
+            return Projects(folder).Length > 1 && ForProgram(program) is { } project ? project.ProjectFile : folder;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return folder;
+        }
     }
 
     /// <summary>
