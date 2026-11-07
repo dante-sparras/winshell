@@ -29,8 +29,12 @@ internal static class ShellExit
     /// <summary>How long ending an instance waits for its answer to the quit, and then for it to exit.</summary>
     internal sealed record Patience(TimeSpan Ask, TimeSpan Wait)
     {
-        /// <summary><c>winshell kill</c>, <c>winshell reload</c> and <c>winshell dev</c>, while the user waits.</summary>
-        public static readonly Patience Interactive = new(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        /// <summary>
+        /// <c>winshell kill</c>, <c>winshell reload</c> and <c>winshell dev</c>, while the user waits. The ask outlasts
+        /// <see cref="IpcClient.ConnectLimit"/>, so a shell that has not answered by then was reached and has the quit.
+        /// </summary>
+        public static readonly Patience Interactive =
+            new(IpcClient.ConnectLimit + TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5));
 
         /// <summary>Closing the console or signing out, which leaves this process about five seconds for all of it.</summary>
         public static readonly Patience Closing = new(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
@@ -116,8 +120,7 @@ internal static class ShellExit
                 }
                 catch (OperationCanceledException)
                 {
-                    // The shell did not answer in time. An interactive ask outlasts the connection's three seconds, so that
-                    // shell has the quit, and its thread is busy.
+                    // The shell did not answer in time: it has the quit, and its thread is busy.
                     late = true;
                 }
             }

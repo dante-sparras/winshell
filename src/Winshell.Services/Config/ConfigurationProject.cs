@@ -29,7 +29,9 @@ internal enum ConfigurationBuild
 /// </summary>
 internal sealed partial class ConfigurationProject
 {
-    private const int MostErrors = 10;
+    /// <summary>The most lines a build-error notice lists.</summary>
+    internal const int MostErrors = 10;
+
     internal const string NeedsSdk = "Building a configuration needs the .NET SDK, from https://dot.net/download.";
 
     private static readonly TimeSpan BuildLimit = TimeSpan.FromMinutes(10);

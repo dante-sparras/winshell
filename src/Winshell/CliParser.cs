@@ -25,7 +25,7 @@ internal static class CliParser
     internal static string Help(string? command)
     {
         var text = command is not null && Commands.TryGetValue(command, out var entry) ? entry.Usage : Summary;
-        return text.Replace("{version}", CliMetadata.Version, StringComparison.Ordinal)
+        return text.Replace("{version}", Shell.Version, StringComparison.Ordinal)
             .Replace("{config-root}", ShellLocations.Current.ConfigRoot, StringComparison.Ordinal)
             .Replace("{config-override}", ShellLocations.ConfigVariable, StringComparison.Ordinal)
             .Replace("\r\n", "\n", StringComparison.Ordinal)
@@ -207,11 +207,11 @@ internal static class CliParser
         ]),
         Entry("ipc", IpcUsage, WordRule.Subcommand, [.. Instance, JsonOption],
         [
-            new Subcommand("show"),
-            new Subcommand("call", 2, "a target and a function", RawAfter: true),
-            new Subcommand("prop", 3, "\"get\", a target and a property", "get"),
-            new Subcommand("wait", 2, "a target and a signal"),
-            new Subcommand("listen", 2, "a target and a signal")
+            new Subcommand(IpcOps.Show),
+            new Subcommand(IpcOps.Call, 2, "a target and a function", RawAfter: true),
+            new Subcommand(IpcOps.Prop, 3, "\"get\", a target and a property", "get"),
+            new Subcommand(IpcOps.Wait, 2, "a target and a signal"),
+            new Subcommand(IpcOps.Listen, 2, "a target and a signal")
         ]),
         Entry("inspect", InspectUsage, WordRule.Subcommand, Instance,
         [

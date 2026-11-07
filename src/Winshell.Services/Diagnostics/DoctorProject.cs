@@ -4,17 +4,10 @@ namespace Winshell.Diagnostics;
 internal static class DoctorProject
 {
     /// <summary>
-    /// The configuration project in <paramref name="configRoot"/>, or why there is not one: whether it was found,
-    /// whether a file the build would run was downloaded, whether its program has been built, and whether a build
-    /// is needed. Nothing here runs MSBuild.
+    /// The checks of a project the caller found, or of none and <paramref name="problem"/>, why there is not one:
+    /// whether it was found, whether a file the build would run was downloaded, whether its program has been built,
+    /// and whether a build is needed. Nothing here runs MSBuild.
     /// </summary>
-    internal static IReadOnlyList<DoctorCheck> Configuration(string configRoot)
-    {
-        var project = ConfigurationProject.Find(null, null, configRoot, out var problem);
-        return Configuration(project, problem);
-    }
-
-    /// <summary>The same checks for a project the caller has found already, or for none and <paramref name="problem"/>.</summary>
     internal static IReadOnlyList<DoctorCheck> Configuration(ConfigurationProject? project, string? problem)
     {
         return

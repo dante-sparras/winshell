@@ -3,14 +3,13 @@ using System.Diagnostics;
 using System.Security;
 using Microsoft.Win32;
 using Winshell.Native;
-using Winshell.Session;
 
 namespace Winshell.Diagnostics;
 
 /// <summary>
 /// Reads what <see cref="Doctor"/> checks from this PC. Everything here only reads: the registry, files, windows,
 /// screens and processes. <see cref="CanWrite"/> makes one empty file and removes it again. A configuration project is
-/// not read here: <see cref="DoctorProject.Configuration(string)"/> reads the project file itself.
+/// not read here: <see cref="DoctorProject.Configuration"/> reads the project file itself.
 /// </summary>
 internal static class DoctorProbe
 {
@@ -182,11 +181,5 @@ internal static class DoctorProbe
         }
 
         return layers;
-    }
-
-    /// <summary>The file a path names in the end, past symbolic links, or the path itself when it is no link or cannot be read.</summary>
-    public static string ResolveLinks(string path)
-    {
-        return SignInEntry.Resolve(path);
     }
 }

@@ -41,11 +41,8 @@ internal sealed class ShellProcess : IShellChild
     /// </summary>
     public async Task StopAsync()
     {
-        var project = ConfigurationProject.ForProgram(_process.StartInfo.FileName);
-        // Two runs of the same build share that program path, and the newest one is listed first. The child this
-        // supervisor started is the one with its process id; asking the other to quit leaves this one running.
-        var info = project?.InstancesOf(ConfigurationBuild.Run,
-                ShellLocations.Current.Instances.List(false).Select(row => row.Info))
+        // The child's instance is the one with its process id, which no other process can take while this one holds it.
+        var info = ShellLocations.Current.Instances.List(false).Select(row => row.Info)
             .FirstOrDefault(candidate => candidate.Pid == _process.Id);
         _ = await ShellExit.QuitAsync(_process, info, ExitIntent.None, ShellExit.Patience.Closing,
             ShellExit.Ending.Always);

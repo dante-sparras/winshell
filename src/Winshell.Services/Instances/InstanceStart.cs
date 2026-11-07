@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using Winshell.Native;
 
 namespace Winshell;
 
@@ -179,7 +180,11 @@ internal static class InstanceStart
     {
         try
         {
-            StandardHandles.KeepFromChildren();
+            // A child gets a copy of every handle that can be inherited, so a shell left behind would hold its caller's
+            // pipes open until it exits, and out=$(winshell run -d) would wait that long.
+            ProcessConsole.KeepFromChildren(StandardStream.Input);
+            ProcessConsole.KeepFromChildren(StandardStream.Output);
+            ProcessConsole.KeepFromChildren(StandardStream.Error);
             using var child = Process.Start(DetachedStart(program, arguments));
             return null;
         }

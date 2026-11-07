@@ -25,7 +25,7 @@ internal static class Cli
             return HelpCommand.Run(command);
         if (options.ShowVersion)
         {
-            Console.WriteLine($"winshell {CliMetadata.Version}");
+            Console.WriteLine($"winshell {Shell.Version}");
             return 0;
         }
 

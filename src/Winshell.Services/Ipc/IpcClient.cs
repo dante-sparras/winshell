@@ -39,6 +39,9 @@ internal readonly record struct IpcReply(IpcResponse? Response, IpcFailure? Fail
 /// <summary>The side of the control pipe that sends a request to a running instance.</summary>
 internal static class IpcClient
 {
+    /// <summary>How long a request waits for the shell's pipe to accept the connection.</summary>
+    internal static readonly TimeSpan ConnectLimit = TimeSpan.FromSeconds(3);
+
     /// <summary>
     /// Sends one request and returns each answer. A pipe that cannot be reached, a connection that times out, and a
     /// shell this winshell rejects come back as one reply with a failure, and then the stream ends. Cancelling
@@ -115,7 +118,7 @@ internal static class IpcClient
         var connected = false;
         try
         {
-            await client.ConnectAsync(3000, cancel).ConfigureAwait(false);
+            await client.ConnectAsync(ConnectLimit, cancel).ConfigureAwait(false);
             connected = true;
             return new Connection(client, null);
         }

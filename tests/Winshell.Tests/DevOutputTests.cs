@@ -58,14 +58,14 @@ public sealed class DevOutputTests
     }
 
     [Fact]
-    public void A_second_error_joins_the_first_and_the_list_stops_at_five()
+    public void A_second_error_joins_the_first_and_the_list_stops_at_ten()
     {
-        var shown = Enumerable.Range(1, 7).Select(i => _output.Read($"A.cs({i},1): error CS0103: No name {i}"))
+        var shown = Enumerable.Range(1, 12).Select(i => _output.Read($"A.cs({i},1): error CS0103: No name {i}"))
             .ToList();
 
         Assert.Equal("A.cs(1,1): error CS0103: No name 1\nA.cs(2,1): error CS0103: No name 2", shown[1]);
-        Assert.Equal(5, shown[4]!.Split('\n').Length);
-        Assert.Equal([null, null], shown[5..]);
+        Assert.Equal(10, shown[9]!.Split('\n').Length);
+        Assert.Equal([null, null], shown[10..]);
     }
 
     [Fact]
