@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using Windows.Win32;
 using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
@@ -21,27 +20,10 @@ internal sealed class WindowDesktopManager
     }
 
     /// <summary>The manager, or null. <paramref name="hr"/> is negative when Windows could not create it.</summary>
-    internal static unsafe WindowDesktopManager? Create(out int hr)
+    internal static WindowDesktopManager? Create(out int hr)
     {
-        var clsid = ManagerClass;
-        var iid = typeof(IVirtualDesktopManager).GUID;
-        void* created;
-        hr = PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, &iid, &created).Value;
-        var pointer = (nint)created;
-        if (hr < 0 || pointer == 0)
-            return null;
-        try
-        {
-            return new WindowDesktopManager((IVirtualDesktopManager)Marshal.GetObjectForIUnknown(pointer));
-        }
-        catch (InvalidCastException)
-        {
-            return null;
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-        }
+        var manager = Com.Create<IVirtualDesktopManager>(ManagerClass, CLSCTX.CLSCTX_INPROC_SERVER, out hr);
+        return manager is null ? null : new WindowDesktopManager(manager);
     }
 
     /// <summary>The HRESULT of asking which desktop the window is on.</summary>

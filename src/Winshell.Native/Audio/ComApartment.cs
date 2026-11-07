@@ -31,13 +31,6 @@ internal static unsafe class ComApartment
     public static object Restore(nint stream)
     {
         PInvoke.CoGetInterfaceAndReleaseStream((IStream*)stream, out IUnknown* unknown).ThrowOnFailure();
-        try
-        {
-            return Marshal.GetObjectForIUnknown((nint)unknown);
-        }
-        finally
-        {
-            Marshal.Release((nint)unknown);
-        }
+        return Com.Wrap<object>((nint)unknown) ?? throw new InvalidComObjectException();
     }
 }

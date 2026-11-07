@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using Windows.Win32;
 using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
@@ -21,30 +20,12 @@ internal static class DocumentLists
     /// Up to <paramref name="perCategory"/> names from each list. A list that cannot be read is null, and both are
     /// null when the app's lists cannot be opened.
     /// </summary>
-    internal static unsafe (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId,
+    internal static (IReadOnlyList<string>? Recent, IReadOnlyList<string>? Frequent) Read(string appUserModelId,
         int perCategory)
     {
-        var clsid = Clsid;
-        var iid = typeof(IApplicationDocumentLists).GUID;
-        void* created;
-        var hr = PInvoke.CoCreateInstance(&clsid, null, CLSCTX.CLSCTX_INPROC_SERVER, &iid, &created).Value;
-        var pointer = (nint)created;
-        if (hr < 0 || pointer == 0)
+        var lists = Com.Create<IApplicationDocumentLists>(Clsid, CLSCTX.CLSCTX_INPROC_SERVER, out _);
+        if (lists is null)
             return (null, null);
-        IApplicationDocumentLists lists;
-        try
-        {
-            lists = (IApplicationDocumentLists)Marshal.GetObjectForIUnknown(pointer);
-        }
-        catch (InvalidCastException)
-        {
-            return (null, null);
-        }
-        finally
-        {
-            Marshal.Release(pointer);
-        }
-
         try
         {
             if (lists.SetAppID(appUserModelId) < 0)
@@ -53,7 +34,7 @@ internal static class DocumentLists
         }
         finally
         {
-            Marshal.ReleaseComObject(lists);
+            Com.Release(lists);
         }
     }
 
@@ -80,7 +61,7 @@ internal static class DocumentLists
         }
         finally
         {
-            Marshal.ReleaseComObject(array);
+            Com.Release(array);
         }
     }
 
@@ -96,7 +77,7 @@ internal static class DocumentLists
             }
             finally
             {
-                Marshal.ReleaseComObject(item);
+                Com.Release(item);
             }
 
         if (array.GetAt(index, in linkId, out var link) >= 0 && link is not null)
@@ -115,7 +96,7 @@ internal static class DocumentLists
             }
             finally
             {
-                Marshal.ReleaseComObject(link);
+                Com.Release(link);
             }
 
         return null;

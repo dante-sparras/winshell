@@ -48,19 +48,16 @@ internal static unsafe partial class ShellItems
     /// </summary>
     private static TResult? Use<T, TResult>(string parsingName, Func<T, TResult?> use) where T : class
     {
-        if (SHCreateItemFromParsingName(parsingName, 0, typeof(T).GUID, out var pointer) < 0 || pointer == 0)
+        if (SHCreateItemFromParsingName(parsingName, 0, typeof(T).GUID, out var pointer) < 0 ||
+            Com.Wrap<T>(pointer) is not { } item)
             return default;
-        T? item = null;
         try
         {
-            item = (T)Marshal.GetObjectForIUnknown(pointer);
             return use(item);
         }
         finally
         {
-            if (item is not null)
-                Marshal.ReleaseComObject(item);
-            Marshal.Release(pointer);
+            Com.Release(item);
         }
     }
 

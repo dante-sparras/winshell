@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
+using Windows.Win32.System.Com;
 
 namespace Winshell.Native;
 
@@ -20,11 +21,12 @@ internal static class ShellLink
 
     public static ShellLinkInfo? Read(string path)
     {
-        object? link = null;
+        var shell = Com.Create<IShellLinkW>(ClsidShellLink, CLSCTX.CLSCTX_SERVER, out _);
+        if (shell is null)
+            return null;
         try
         {
-            link = Activator.CreateInstance(Type.GetTypeFromCLSID(ClsidShellLink)!);
-            if (link is not IShellLinkW shell || link is not IPersistFile file)
+            if (shell is not IPersistFile file)
                 return null;
             file.Load(path, 0);
             var buffer = new StringBuilder(1024);
@@ -43,7 +45,7 @@ internal static class ShellLink
             buffer.Clear();
             shell.GetDescription(buffer, buffer.Capacity);
             var description = buffer.ToString();
-            var aumid = link is IPropertyStore store
+            var aumid = shell is IPropertyStore store
                 ? PropertyStore.ReadString(store, PropertyStore.AppUserModelId) ?? ""
                 : "";
             return new ShellLinkInfo(target, arguments, workingDirectory, icon, iconIndex, description, aumid);
@@ -55,8 +57,7 @@ internal static class ShellLink
         }
         finally
         {
-            if (link is not null && Marshal.IsComObject(link))
-                Marshal.ReleaseComObject(link);
+            Com.Release(shell);
         }
     }
 
